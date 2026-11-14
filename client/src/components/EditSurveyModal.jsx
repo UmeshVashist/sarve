@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, AlertCircle, Tag, Check } from 'lucide-react';
-import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
 export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
@@ -38,11 +38,29 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
           customAnswers = survey.custom_answers;
         }
       }
-      setFormData({
-        ...customAnswers,
-        ...survey,
-        case_type: survey.case_type ? survey.case_type.split(', ').filter(Boolean) : []
+
+      // Merge local cache if available
+      let localCached = {};
+      try {
+        const utctKey = String(survey.utct_no || '').trim().toLowerCase();
+        if (utctKey) {
+          const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
+          if (localMap[utctKey]) {
+            localCached = localMap[utctKey];
+          }
+        }
+      } catch (e) {}
+
+      const merged = { ...customAnswers, ...localCached, ...survey };
+      // Ensure custom answers aren't overwritten by undefined in survey
+      Object.entries({ ...localCached, ...customAnswers }).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && (merged[k] === undefined || merged[k] === null || merged[k] === '')) {
+          merged[k] = v;
+        }
       });
+
+      merged.case_type = survey.case_type ? (Array.isArray(survey.case_type) ? survey.case_type : survey.case_type.split(', ').filter(Boolean)) : [];
+      setFormData(merged);
       setError('');
     }
   }, [survey]);
@@ -68,10 +86,33 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
     setSaving(true);
 
     try {
+      const customObj = {};
+      Object.keys(formData).forEach((k) => {
+        if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+          if (formData[k] !== undefined && formData[k] !== null && formData[k] !== '') {
+            customObj[k] = formData[k];
+          }
+        }
+      });
+
       const payload = {
         ...formData,
-        case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || '')
+        case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || ''),
+        custom_answers: JSON.stringify(customObj)
       };
+
+      // Cache locally
+      try {
+        const utctKey = String(payload.utct_no || '').trim().toLowerCase();
+        if (utctKey) {
+          const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
+          localMap[utctKey] = { ...payload, ...customObj };
+          localStorage.setItem('local_survey_answers_map', JSON.stringify(localMap));
+          localStorage.setItem(`survey_answers_${utctKey}`, JSON.stringify({ ...payload, ...customObj }));
+        }
+      } catch (storageErr) {
+        console.warn('Could not cache edited survey:', storageErr);
+      }
 
       const res = await fetch(`${API_BASE_URL}/api/survey/${survey.id}`, {
         method: 'PUT',
@@ -81,7 +122,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
       const data = await res.json();
 
       if (data.success) {
-        const savedData = (data.data && data.data.id) ? data.data : { ...payload, id: survey.id };
+        const savedData = (data.data && data.data.id) ? { ...data.data, ...customObj } : { ...payload, ...customObj, id: survey.id };
         if (onSurveyUpdated) onSurveyUpdated(savedData);
         onClose();
       } else {

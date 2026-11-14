@@ -623,6 +623,29 @@
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  max-height: 580px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F1F5F9;
+}
+
+.table-responsive::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }
 
 .sarve-table,
@@ -635,7 +658,11 @@
 
 .sarve-table th,
 .survey-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: #F8FAFC;
+  box-shadow: 0 1.5px 0 var(--sarve-gray-200);
   color: var(--sarve-gray-700);
   font-weight: 700;
   padding: 14px 18px;

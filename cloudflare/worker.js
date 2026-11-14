@@ -12,7 +12,14 @@ const STANDARD_KEYS = [
 ];
 
 function extractCustomAnswers(data, existingCustom = {}) {
-  const custom = { ...existingCustom };
+  let custom = { ...existingCustom };
+  if (data?.custom_answers) {
+    if (typeof data.custom_answers === 'string') {
+      try { custom = { ...custom, ...JSON.parse(data.custom_answers) }; } catch (e) {}
+    } else if (typeof data.custom_answers === 'object') {
+      custom = { ...custom, ...data.custom_answers };
+    }
+  }
   for (const [k, v] of Object.entries(data || {})) {
     if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
       custom[k] = v;

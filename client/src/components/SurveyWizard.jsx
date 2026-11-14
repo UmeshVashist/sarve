@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw } from 'lucide-react';
-import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
 const DEFAULT_FALLBACK_CASE_TYPES = [
@@ -433,11 +433,11 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       const lower = valStr.toLowerCase();
 
       if (!lower) {
-        setError('Please enter or select Yes or No');
+        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
         return;
       }
 
-      if (lower.startsWith('yes')) {
+      if (lower === 'y' || lower.startsWith('yes')) {
         if (!advanceAmount.trim()) {
           setError('Please enter the advance payment amount for Question 11!');
           setTimeout(() => amountInputRef.current?.focus(), 50);
@@ -447,13 +447,13 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
           ...prev,
           advocate_payment_advance: `Yes / ${advanceAmount.trim()}`
         }));
-      } else if (lower.startsWith('no')) {
+      } else if (lower === 'n' || lower.startsWith('no')) {
         setFormData((prev) => ({
           ...prev,
           advocate_payment_advance: 'No'
         }));
       } else {
-        setError('Please enter Only Yes or No');
+        setError("Please enter or select complete 'Yes' or 'No' only.");
         return;
       }
     }
@@ -464,11 +464,11 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       const lower = valStr.toLowerCase();
 
       if (!lower) {
-        setError('Please enter or select Yes or No');
+        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
         return;
       }
 
-      if (lower.startsWith('yes')) {
+      if (lower === 'y' || lower.startsWith('yes')) {
         if (!feesAmount.trim()) {
           setError('Please enter the complete fees amount for Question 16!');
           setTimeout(() => feesAmountInputRef.current?.focus(), 50);
@@ -478,13 +478,13 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
           ...prev,
           complete_fees_total_initially: `Yes / ${feesAmount.trim()}`
         }));
-      } else if (lower.startsWith('no')) {
+      } else if (lower === 'n' || lower.startsWith('no')) {
         setFormData((prev) => ({
           ...prev,
           complete_fees_total_initially: 'No'
         }));
       } else {
-        setError('Please enter Only Yes or No');
+        setError("Please enter or select complete 'Yes' or 'No' only.");
         return;
       }
     }
@@ -511,6 +511,86 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
         }));
       } else {
         setError('Please enter or select only one of: Jail se bahar jaldi jana OR Paise bachana');
+        return;
+      }
+    }
+
+    // Special strict validation for Question 24 (Prisoner psychologic survey)
+    if (isQ24 || currentQ.type === 'psychologic_yesno') {
+      const choice = (q24Choice || '').trim();
+      if (!choice || (choice.toLowerCase() !== 'yes' && choice.toLowerCase() !== 'no')) {
+        setError("Please select complete 'Yes' or 'No' for Question #24 before proceeding.");
+        return;
+      }
+      const choiceNormalized = choice.toLowerCase() === 'yes' ? 'Yes' : 'No';
+      const combined = q24Remarks.trim() ? `${choiceNormalized} - ${q24Remarks.trim()}` : choiceNormalized;
+      setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
+    }
+
+    // Special strict validation for currentQ.type === 'yesno'
+    if (currentQ.type === 'yesno') {
+      const valStr = String(formData[currentQ.key] ?? currentVal ?? '').trim();
+      const lower = valStr.toLowerCase();
+
+      if (!lower) {
+        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
+        return;
+      }
+
+      if (lower === 'y' || lower === 'yes') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Yes' }));
+      } else if (lower === 'n' || lower === 'no') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'No' }));
+      } else {
+        setError("Please enter or select complete 'Yes' or 'No' only.");
+        return;
+      }
+    }
+
+    // Special strict validation for currentQ.type === 'yesno_text' (Q15, Q20, Q21)
+    if (currentQ.type === 'yesno_text') {
+      const valStr = String(formData[currentQ.key] ?? currentVal ?? '').trim();
+      const lower = valStr.toLowerCase();
+
+      if (!lower) {
+        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
+        return;
+      }
+
+      if (lower === 'y' || lower === 'yes') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Yes' }));
+      } else if (lower === 'n' || lower === 'no') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'No' }));
+      } else if (lower.startsWith('yes') || lower.startsWith('no')) {
+        // Valid yes/no response with details
+      } else {
+        setError("Please start with complete 'Yes' or 'No' before proceeding.");
+        return;
+      }
+    }
+
+    // Special strict validation for Q9 or questions with Yes/No in options
+    if (isQ9 || (Array.isArray(currentQ.options) && currentQ.options.includes('Yes') && currentQ.options.includes('No') && currentQ.type !== 'multi-select')) {
+      const valStr = String(formData[currentQ.key] ?? currentVal ?? '').trim();
+      const lower = valStr.toLowerCase();
+
+      if (!lower) {
+        setError("Please enter or select complete 'Yes' or 'No' (or valid option) before proceeding.");
+        return;
+      }
+
+      if (lower === 'y' || lower === 'yes') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Yes' }));
+      } else if (lower === 'n' || lower === 'no') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'No' }));
+      } else if (lower === 'known' || lower === 'k') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Known' }));
+      } else if (lower === 'unknown' || lower === 'u') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Unknown' }));
+      } else if (currentQ.options && currentQ.options.some((o) => o.toLowerCase() === lower)) {
+        // matches one of the options
+      } else {
+        setError("Please enter or select a valid complete option ('Yes' or 'No').");
         return;
       }
     }
@@ -565,10 +645,34 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
     setError('');
 
     try {
+      // 1. Gather all custom question answers into a dedicated object
+      const customObj = {};
+      Object.keys(formData).forEach((k) => {
+        if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+          if (formData[k] !== undefined && formData[k] !== null && formData[k] !== '') {
+            customObj[k] = formData[k];
+          }
+        }
+      });
+
       const payload = {
         ...formData,
-        case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || '')
+        case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || ''),
+        custom_answers: JSON.stringify(customObj)
       };
+
+      // 2. Cache locally to ensure custom questions are permanently preserved on browser
+      try {
+        const utctKey = String(payload.utct_no || '').trim().toLowerCase();
+        if (utctKey) {
+          const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
+          localMap[utctKey] = { ...payload, ...customObj };
+          localStorage.setItem('local_survey_answers_map', JSON.stringify(localMap));
+          localStorage.setItem(`survey_answers_${utctKey}`, JSON.stringify({ ...payload, ...customObj }));
+        }
+      } catch (storageErr) {
+        console.warn('Could not cache survey to localStorage:', storageErr);
+      }
 
       const res = await fetch(`${API_BASE_URL}/api/survey/add`, {
         method: 'POST',
@@ -578,7 +682,8 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       const data = await res.json();
 
       if (data.success) {
-        onSurveySaved(data.data || payload);
+        const savedRecord = { ...payload, ...(data.data || {}), ...customObj };
+        onSurveySaved(savedRecord);
         onClose();
       } else {
         setError(data.message || 'Failed to save survey. Check duplicate UT/CT no.');

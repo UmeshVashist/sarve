@@ -53,7 +53,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
           return [...parsed].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return SURVEY_QUESTIONS;
   });
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +66,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
     setQuestions(sorted);
     try {
       localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   // Modals state
@@ -104,7 +104,27 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
-        setSurveys(data.data);
+        let localMap = {};
+        try {
+          localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
+        } catch (e) {}
+
+        const merged = (data.data || []).filter(Boolean).map((s) => {
+          const utctKey = String(s.utct_no || '').trim().toLowerCase();
+          const cached = localMap[utctKey] || {};
+          let serverCustom = {};
+          if (s.custom_answers) {
+            try {
+              serverCustom = typeof s.custom_answers === 'string' ? JSON.parse(s.custom_answers) : s.custom_answers;
+            } catch (e) {}
+          }
+          return {
+            ...cached,
+            ...s,
+            ...serverCustom
+          };
+        });
+        setSurveys(merged);
       }
     } catch (err) {
       console.error('Failed to load surveys:', err);
@@ -279,12 +299,12 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         <div className="action-buttons-group">
           <button className="btn-add-data" onClick={() => setIsWizardOpen(true)}>
             <Plus size={18} />
-            <span>+ Add Data</span>
+            <span>Add Data</span>
           </button>
 
           <button className="btn-download-excel" onClick={handleDownloadExcel} title="Download Complete Excel Sheet with Question Headers">
             <Download size={18} />
-            <span>Download Excel</span>
+            <span>Download</span>
           </button>
 
           <button

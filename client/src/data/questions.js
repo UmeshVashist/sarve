@@ -254,3 +254,5 @@ export const SURVEY_QUESTIONS = [
   }
 ];
 
+export const STANDARD_KEYS = SURVEY_QUESTIONS.map((q) => q.key);
+
