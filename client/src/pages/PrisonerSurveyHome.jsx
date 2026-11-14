@@ -23,9 +23,24 @@ import EditSurveyModal from '../components/EditSurveyModal';
 import { API_BASE_URL } from '../config';
 import { downloadSurveyExcel } from '../utils/exportExcel';
 
+export const DEFAULT_CASE_TYPES = [
+  { id: 1, name: 'Murder (IPC 302)' },
+  { id: 2, name: 'Theft & Burglary (IPC 379/380)' },
+  { id: 3, name: 'Robbery / Dacoity (IPC 392/395)' },
+  { id: 4, name: 'Bail Application' },
+  { id: 5, name: 'NDPS Act (Narcotics)' },
+  { id: 6, name: 'Cheating & Fraud (IPC 420)' },
+  { id: 7, name: 'Cyber Crime' },
+  { id: 8, name: 'Assault / Attempt to Murder (IPC 307)' },
+  { id: 9, name: 'Matrimonial / Dowry (IPC 498A)' },
+  { id: 10, name: 'Arms Act' },
+  { id: 11, name: 'Economic Offence' },
+  { id: 12, name: 'Other' }
+];
+
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
-  const [caseTypes, setCaseTypes] = useState([]);
+  const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,11 +80,11 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/case-types`);
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         setCaseTypes(data.data);
       }
     } catch (err) {
-      console.error('Failed to fetch case types:', err);
+      console.warn('Failed to fetch case types from server:', err);
     }
   };
 
@@ -424,6 +439,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         caseTypes={caseTypes}
+        onCaseTypeAdded={fetchCaseTypes}
         onSurveySaved={(newSurvey) => {
           setSurveys((prev) => [newSurvey, ...prev]);
         }}

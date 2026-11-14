@@ -4,13 +4,31 @@ import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2
 import { SURVEY_QUESTIONS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
-export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onSurveySaved }) {
+const DEFAULT_FALLBACK_CASE_TYPES = [
+  { id: 'fb-1', name: 'Murder (IPC 302)' },
+  { id: 'fb-2', name: 'Theft & Burglary (IPC 379/380)' },
+  { id: 'fb-3', name: 'Robbery / Dacoity (IPC 392/395)' },
+  { id: 'fb-4', name: 'Bail Application' },
+  { id: 'fb-5', name: 'NDPS Act (Narcotics)' },
+  { id: 'fb-6', name: 'Cheating & Fraud (IPC 420)' },
+  { id: 'fb-7', name: 'Cyber Crime' },
+  { id: 'fb-8', name: 'Assault / Attempt to Murder (IPC 307)' },
+  { id: 'fb-9', name: 'Matrimonial / Dowry (IPC 498A)' },
+  { id: 'fb-10', name: 'Arms Act' },
+  { id: 'fb-11', name: 'Economic Offence' },
+  { id: 'fb-12', name: 'Other' }
+];
+
+export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTypeAdded, onSurveySaved }) {
   const [currentStep, setCurrentStep] = useState(0); // 0 to 23 for questions, 24 for Review Summary
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
   const [checkingUtct, setCheckingUtct] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jumpBackToReview, setJumpBackToReview] = useState(false);
+
+  // Dynamic Case Types state for Q3
+  const [extraCaseTypes, setExtraCaseTypes] = useState([]);
 
   // Question 11: Advance Payment Amount
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -253,23 +271,53 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onSurvey
     setFormData((prev) => ({ ...prev, [currentQ.key]: updated }));
   };
 
+  // Direct Add New Case Type inside Questionnaire (without closing form)
+  const handleAddNewCaseType = async (typeName) => {
+    let name = (typeName || caseTypeSearch).trim();
+    if (!name) {
+      name = window.prompt('Naya Case Type ka naam enter karein (e.g. POCSO Act):');
+      if (!name || !name.trim()) return;
+      name = name.trim();
+    }
+
+    // 1. Add to local extraCaseTypes list
+    setExtraCaseTypes((prev) => [...prev, { id: 'custom-' + Date.now(), name }]);
+
+    // 2. Automatically select it for the current survey
+    handleMultiSelectToggle(name);
+    setCaseTypeSearch('');
+    setShowCaseTypeDropdown(true);
+
+    // 3. Persist to API / Database in background
+    try {
+      await fetch(`${API_BASE_URL}/api/case-types`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      if (onCaseTypeAdded) {
+        onCaseTypeAdded(name);
+      }
+    } catch (err) {
+      console.warn('Could not save case type to API:', err);
+    }
+  };
+
   // Question 3 High-speed entry key handler
   const handleCaseTypeInputKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       const q = caseTypeSearch.trim().toLowerCase();
       if (q) {
-        // Find match in caseTypes list
-        const match = caseTypes.find((t) => t.name.toLowerCase().includes(q));
+        // Find match in all case types list
+        const match = allUniqueCaseTypes.find((t) => t.name.toLowerCase().includes(q));
         if (match) {
           handleMultiSelectToggle(match.name);
           setCaseTypeSearch('');
           setShowCaseTypeDropdown(true);
         } else {
-          // Add custom case type and select
-          handleMultiSelectToggle(caseTypeSearch.trim());
-          setCaseTypeSearch('');
-          setShowCaseTypeDropdown(true);
+          // Add custom case type and select it directly!
+          handleAddNewCaseType(caseTypeSearch.trim());
         }
       } else {
         // If input empty and Enter is pressed:
@@ -536,9 +584,22 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onSurvey
     ? (Array.isArray(formData[currentQ.key]) ? formData[currentQ.key] : formData[currentQ.key].split(', ').filter(Boolean))
     : [];
 
-  const filteredCaseTypes = caseTypes.filter((t) =>
-    t.name.toLowerCase().includes(caseTypeSearch.trim().toLowerCase())
-  );
+  const baseList = (caseTypes && caseTypes.length > 0) ? caseTypes : DEFAULT_FALLBACK_CASE_TYPES;
+  const mergedList = [...baseList, ...extraCaseTypes];
+  const allUniqueCaseTypes = [];
+  const seenNames = new Set();
+  for (const item of mergedList) {
+    const trimmed = (item.name || '').trim();
+    const lower = trimmed.toLowerCase();
+    if (trimmed && !seenNames.has(lower)) {
+      seenNames.add(lower);
+      allUniqueCaseTypes.push({ id: item.id || trimmed, name: trimmed });
+    }
+  }
+
+  const filteredCaseTypes = caseTypeSearch.trim()
+    ? allUniqueCaseTypes.filter((t) => t.name.toLowerCase().includes(caseTypeSearch.trim().toLowerCase()))
+    : allUniqueCaseTypes;
 
   return createPortal(
     <div className="wizard-backdrop animate-fade-in" onKeyDown={handleKeyDown}>
@@ -593,24 +654,46 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onSurvey
                 </div>
               )}
 
-              {/* High Speed Input */}
-              <div style={{ position: 'relative', marginBottom: '12px' }}>
-                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  className="wizard-input-box"
-                  style={{ paddingLeft: '40px' }}
-                  placeholder="Type case name & press Enter to select / add..."
-                  value={caseTypeSearch}
-                  onChange={(e) => {
-                    setCaseTypeSearch(e.target.value);
-                    setShowCaseTypeDropdown(true);
+              {/* High Speed Input & Direct "+ Add Case Type" button */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    className="wizard-input-box"
+                    style={{ paddingLeft: '40px', width: '100%' }}
+                    placeholder="Search or enter new case type..."
+                    value={caseTypeSearch}
+                    onChange={(e) => {
+                      setCaseTypeSearch(e.target.value);
+                      setShowCaseTypeDropdown(true);
+                    }}
+                    onKeyDown={handleCaseTypeInputKeyDown}
+                    onFocus={() => setShowCaseTypeDropdown(true)}
+                    autoFocus
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn-primary-coral"
+                  style={{
+                    padding: '0 16px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    borderRadius: '12px',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer'
                   }}
-                  onKeyDown={handleCaseTypeInputKeyDown}
-                  onFocus={() => setShowCaseTypeDropdown(true)}
-                  autoFocus
-                />
+                  onClick={() => handleAddNewCaseType(caseTypeSearch)}
+                  title="Form band kare bina naya case type add aur select karein"
+                >
+                  <Plus size={16} />
+                  <span>+ Add Case Type</span>
+                </button>
               </div>
 
               {/* Dropdown Toggle Header */}
@@ -657,15 +740,12 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onSurvey
                       <span>No matching type for "{caseTypeSearch}".</span>
                       <button
                         type="button"
-                        className="btn-pill-choice"
-                        style={{ padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => {
-                          handleMultiSelectToggle(caseTypeSearch.trim());
-                          setCaseTypeSearch('');
-                        }}
+                        className="btn-primary-coral"
+                        style={{ padding: '6px 12px', fontSize: '12.5px', borderRadius: '8px' }}
+                        onClick={() => handleAddNewCaseType(caseTypeSearch)}
                       >
                         <Plus size={14} />
-                        <span>Add "{caseTypeSearch.trim()}"</span>
+                        <span>Add "{caseTypeSearch.trim()}" & Select</span>
                       </button>
                     </div>
                   )}
