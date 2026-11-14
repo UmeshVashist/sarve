@@ -7,7 +7,7 @@ account_id = "20df26ef9a86e1b91d30d4ba8de668a7"
 [[d1_databases]]
 binding = "DB"
 database_name = "sarve_d1_database"
-database_id = "your-d1-database-uuid-here"
+database_id = "a598a52d-a593-4206-8a51-4ed263dca84d"
 
 [vars]
 ENVIRONMENT = "production"
