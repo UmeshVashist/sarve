@@ -491,8 +491,8 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         questions={questions}
         onCaseTypeAdded={fetchCaseTypes}
         onSurveySaved={(newSurvey) => {
-          if (newSurvey && typeof newSurvey === 'object') {
-            setSurveys((prev) => [newSurvey, ...(prev || []).filter(Boolean)]);
+          if (newSurvey && typeof newSurvey === 'object' && newSurvey.id) {
+            setSurveys((prev) => [newSurvey, ...(prev || []).filter((s) => s && s.id !== newSurvey.id)]);
           }
           fetchSurveys();
         }}
@@ -532,7 +532,13 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         caseTypes={caseTypes}
         questions={questions}
         onSurveyUpdated={(updated) => {
-          setSurveys((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+          if (updated && updated.id) {
+            setSurveys((prev) => {
+              if (!Array.isArray(prev)) return [updated];
+              return prev.filter(Boolean).map((s) => (s && s.id === updated.id ? { ...s, ...updated } : s));
+            });
+          }
+          fetchSurveys();
         }}
       />
     </div>

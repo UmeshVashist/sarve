@@ -284,12 +284,16 @@ export default {
           console.error('Update error in worker:', e);
         }
 
-        const updatedRecord = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(id).first();
+        const numId = Number(id) || id;
+        const updatedRecord = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(numId).first();
         let updatedCustom = {};
         if (updatedRecord?.custom_answers) {
           try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
         }
-        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: { ...updatedRecord, ...updatedCustom } || d }), {
+        const finalData = updatedRecord
+          ? { ...updatedRecord, ...updatedCustom, id: numId }
+          : { ...d, id: numId };
+        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: finalData }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

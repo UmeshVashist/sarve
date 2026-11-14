@@ -165,23 +165,45 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
     }
   }, [isOpen, currentStep, isReviewMode]);
 
+  const reviewEnteredTimeRef = useRef(0);
+  const keysReleasedRef = useRef(true);
+
+  // Track keyup to ensure Ctrl and Enter keys are released before allowing submit on review
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyUp = (e) => {
+      if (e.key === 'Control' || e.key === 'Enter') {
+        keysReleasedRef.current = true;
+      }
+    };
+    window.addEventListener('keyup', handleKeyUp);
+    return () => window.removeEventListener('keyup', handleKeyUp);
+  }, [isOpen]);
+
   // Global Ctrl + Enter Shortcut listener
   useEffect(() => {
     if (!isOpen) return;
     const handleGlobalKey = (e) => {
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        if (checkingUtct) return; // Prevent multiple requests while verifying
+        e.stopPropagation();
+        if (checkingUtct || isSubmitting) return;
+
         if (isReviewMode) {
+          const timeInReview = Date.now() - reviewEnteredTimeRef.current;
+          // Must have been on review screen for at least 700ms AND keys released after transition
+          if (timeInReview < 700 || !keysReleasedRef.current) {
+            return;
+          }
           handleSubmitSurvey();
         } else {
           handleNext();
         }
       }
     };
-    window.addEventListener('keydown', handleGlobalKey);
-    return () => window.removeEventListener('keydown', handleGlobalKey);
-  });
+    window.addEventListener('keydown', handleGlobalKey, true);
+    return () => window.removeEventListener('keydown', handleGlobalKey, true);
+  }, [isOpen, isReviewMode, checkingUtct, isSubmitting, totalQuestions, currentStep, currentQ, formData]);
 
   if (!isOpen) return null;
 
@@ -467,15 +489,48 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       }
     }
 
+    // Special validation for Question 23 (Priority money vs release)
+    if (isQ23) {
+      const valStr = String(formData.priority_money_vs_release || currentVal || '').trim();
+      const lower = valStr.toLowerCase();
+
+      if (!lower) {
+        setError('Please select or type your priority (Jail se bahar jaldi jana OR Paise bachana)');
+        return;
+      }
+
+      if (lower.startsWith('j') || lower.includes('jail') || lower === '1') {
+        setFormData((prev) => ({
+          ...prev,
+          priority_money_vs_release: 'Jail se bahar jaldi jana'
+        }));
+      } else if (lower.startsWith('p') || lower.includes('paise') || lower === '2') {
+        setFormData((prev) => ({
+          ...prev,
+          priority_money_vs_release: 'Paise bachana'
+        }));
+      } else {
+        setError('Please enter or select only one of: Jail se bahar jaldi jana OR Paise bachana');
+        return;
+      }
+    }
+
     // If user clicked Edit from the review screen, jump right back to review
     if (jumpBackToReview) {
       setJumpBackToReview(false);
+      reviewEnteredTimeRef.current = Date.now();
+      keysReleasedRef.current = false;
       setCurrentStep(totalQuestions);
       return;
     }
 
     // Proceed to next step
     if (currentStep < totalQuestions) {
+      if (currentStep === totalQuestions - 1) {
+        // Entering review mode: lock Ctrl+Enter submit until keys are released and cooldown passes
+        reviewEnteredTimeRef.current = Date.now();
+        keysReleasedRef.current = false;
+      }
       setCurrentStep((prev) => prev + 1);
     }
   };
@@ -491,14 +546,10 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
   const handleKeyDown = (e) => {
     if (checkingUtct) {
       e.preventDefault();
-      return; // Block repeated Enter while verifying
-    }
-    if (e.ctrlKey && e.key === 'Enter') {
-      e.preventDefault();
-      handleNext();
       return;
     }
-    if (e.key === 'Enter' && currentQ.type !== 'textarea' && !isQ3) {
+    // Only handle plain Enter for regular inputs (Ctrl+Enter is handled cleanly by window listener)
+    if (e.key === 'Enter' && !e.ctrlKey && currentQ?.type !== 'textarea' && !isQ3) {
       e.preventDefault();
       handleNext();
     }
@@ -964,24 +1015,53 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
               )}
             </div>
           ) : isQ23 ? (
-            /* QUESTION 23: PRIORITY - ONLY 2 OPTIONS (JAIL SE BAHAR / PAISE BACHANA) */
+            /* QUESTION 23: PRIORITY - TYPE OR CLICK 2 OPTIONS (JAIL SE BAHAR / PAISE BACHANA) */
             <div>
-              <div className="yes-no-options-grid" style={{ gap: '14px' }}>
+              <input
+                ref={inputRef}
+                type="text"
+                className="wizard-input-box"
+                placeholder="Type 'J' (Jail se bahar...) or 'P' (Paise bachana)..."
+                value={currentVal}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const lower = val.trim().toLowerCase();
+                  if (lower.startsWith('j') || lower === '1') {
+                    handleInputChange('Jail se bahar jaldi jana');
+                  } else if (lower.startsWith('p') || lower === '2') {
+                    handleInputChange('Paise bachana');
+                  } else {
+                    handleInputChange(val);
+                  }
+                }}
+                autoFocus
+              />
+              <div className="yes-no-options-grid" style={{ gap: '14px', marginTop: '14px' }}>
                 <button
                   type="button"
                   className={`btn-pill-choice ${currentVal === 'Jail se bahar jaldi jana' ? 'selected' : ''}`}
-                  onClick={() => handleInputChange('Jail se bahar jaldi jana')}
-                  style={{ padding: '16px 14px', fontSize: '15px', fontWeight: 800, borderRadius: '12px' }}
+                  onClick={() => {
+                    setError('');
+                    handleInputChange('Jail se bahar jaldi jana');
+                    setTimeout(() => inputRef.current?.focus(), 50);
+                  }}
+                  style={{ padding: '14px', fontSize: '14.5px', fontWeight: 800, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
-                  Jail se bahar jaldi jana
+                  <CheckCircle2 size={18} style={{ display: currentVal === 'Jail se bahar jaldi jana' ? 'inline' : 'none' }} />
+                  <span>Jail se bahar jaldi jana</span>
                 </button>
                 <button
                   type="button"
                   className={`btn-pill-choice ${currentVal === 'Paise bachana' ? 'selected' : ''}`}
-                  onClick={() => handleInputChange('Paise bachana')}
-                  style={{ padding: '16px 14px', fontSize: '15px', fontWeight: 800, borderRadius: '12px' }}
+                  onClick={() => {
+                    setError('');
+                    handleInputChange('Paise bachana');
+                    setTimeout(() => inputRef.current?.focus(), 50);
+                  }}
+                  style={{ padding: '14px', fontSize: '14.5px', fontWeight: 800, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
-                  Paise bachana
+                  <CheckCircle2 size={18} style={{ display: currentVal === 'Paise bachana' ? 'inline' : 'none' }} />
+                  <span>Paise bachana</span>
                 </button>
               </div>
             </div>

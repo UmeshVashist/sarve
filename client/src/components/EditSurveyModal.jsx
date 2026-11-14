@@ -81,7 +81,8 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
       const data = await res.json();
 
       if (data.success) {
-        onSurveyUpdated(data.data);
+        const savedData = (data.data && data.data.id) ? data.data : { ...payload, id: survey.id };
+        if (onSurveyUpdated) onSurveyUpdated(savedData);
         onClose();
       } else {
         setError(data.message || 'Failed to update survey');
@@ -211,6 +212,23 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                     </div>
                   ) : q.key === 'priority_money_vs_release' ? (
                     <div>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Type 'J' (Jail se bahar jaldi jana) or 'P' (Paise bachana)..."
+                        value={val}
+                        onChange={(e) => {
+                          const lower = e.target.value.trim().toLowerCase();
+                          if (lower.startsWith('j') || lower === '1') {
+                            handleChange(q.key, 'Jail se bahar jaldi jana');
+                          } else if (lower.startsWith('p') || lower === '2') {
+                            handleChange(q.key, 'Paise bachana');
+                          } else {
+                            handleChange(q.key, e.target.value);
+                          }
+                        }}
+                        style={{ marginBottom: '8px' }}
+                      />
                       <div style={{ display: 'flex', gap: '8px' }}>
                         {['Jail se bahar jaldi jana', 'Paise bachana'].map((opt) => (
                           <button
