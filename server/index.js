@@ -599,15 +599,15 @@ app.delete('/api/questions/:id', (req, res) => {
 // Batch reorder / set numbering
 app.post('/api/questions/reorder', (req, res) => {
   try {
-    const { items } = req.body; // array of { id, order_num }
+    const { items } = req.body; // array of { id, order_num, label? }
     if (!Array.isArray(items)) {
       return res.status(400).json({ success: false, message: 'Items array required' });
     }
 
-    const updateStmt = db.prepare('UPDATE questions SET order_num = ? WHERE id = ?');
+    const updateStmt = db.prepare('UPDATE questions SET order_num = ?, label = COALESCE(?, label) WHERE id = ?');
     const updateMany = db.transaction((list) => {
       for (const item of list) {
-        updateStmt.run(Number(item.order_num), item.id);
+        updateStmt.run(Number(item.order_num), item.label || null, item.id);
       }
     });
     updateMany(items);

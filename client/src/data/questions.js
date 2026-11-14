@@ -1,3 +1,11 @@
+// Helper to get formatted label with dynamic question numbering
+export function getQuestionLabel(q, idx) {
+  if (!q) return '';
+  const num = q.order_num !== undefined && q.order_num !== null ? q.order_num : (idx !== undefined ? idx + 1 : '');
+  const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+  return num !== '' ? `${num}) ${cleanLabel}` : cleanLabel;
+}
+
 // All 24 Questions with validations, input types, and notes as specified
 export const SURVEY_QUESTIONS = [
   {

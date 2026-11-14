@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { getQuestionLabel } from '../data/questions';
 
 export default function ManageQuestionsModal({
   isOpen,
@@ -39,6 +40,11 @@ export default function ManageQuestionsModal({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  // Always keep questions sorted by order_num
+  const sortedQuestions = useMemo(() => {
+    return [...questions].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
+
   if (!isOpen) return null;
 
   const showSuccess = (msg) => {
@@ -47,14 +53,14 @@ export default function ManageQuestionsModal({
   };
 
   const handleStartAdd = () => {
-    const nextOrder = questions.length > 0
-      ? Math.max(...questions.map((q) => Number(q.order_num) || 0)) + 1
+    const nextOrder = sortedQuestions.length > 0
+      ? Math.max(...sortedQuestions.map((q) => Number(q.order_num) || 0)) + 1
       : 1;
 
     setEditingQuestion(null);
     setFormData({
       order_num: nextOrder,
-      label: `${nextOrder}) `,
+      label: '',
       placeholder: '',
       type: 'text',
       optionsText: '',
@@ -67,9 +73,12 @@ export default function ManageQuestionsModal({
 
   const handleStartEdit = (q) => {
     setEditingQuestion(q);
+    // Strip leading number prefix so user can edit cleanly
+    const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+
     setFormData({
       order_num: q.order_num ?? '',
-      label: q.label || '',
+      label: cleanLabel,
       placeholder: q.placeholder || '',
       type: q.type || 'text',
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
@@ -101,9 +110,13 @@ export default function ManageQuestionsModal({
         ? formData.optionsText.split(',').map((s) => s.trim()).filter(Boolean)
         : null;
 
+      const orderNum = Number(formData.order_num) || 1;
+      const cleanLabel = formData.label.replace(/^\d+[\)\.\-]\s*/, '').trim();
+      const finalLabel = `${orderNum}) ${cleanLabel}`;
+
       const payload = {
-        order_num: Number(formData.order_num) || 1,
-        label: formData.label.trim(),
+        order_num: orderNum,
+        label: finalLabel,
         placeholder: formData.placeholder ? formData.placeholder.trim() : '',
         type: formData.type || 'text',
         options: options && options.length > 0 ? options : null,
@@ -130,7 +143,7 @@ export default function ManageQuestionsModal({
 
       const data = await res.json();
       if (data.success) {
-        showSuccess(editingQuestion ? 'Question updated successfully!' : 'New question added successfully!');
+        showSuccess(editingQuestion ? `Question #${orderNum} updated successfully!` : `Question #${orderNum} added successfully!`);
         if (onQuestionsUpdated) onQuestionsUpdated();
         setActiveTab('list');
         setEditingQuestion(null);
@@ -145,7 +158,7 @@ export default function ManageQuestionsModal({
   };
 
   const handleDelete = async (q) => {
-    if (!window.confirm(`Are you sure you want to delete question "${q.label}"?`)) {
+    if (!window.confirm(`Are you sure you want to delete question "${getQuestionLabel(q)}"?`)) {
       return;
     }
 
@@ -167,21 +180,24 @@ export default function ManageQuestionsModal({
 
   const handleMove = async (index, direction) => {
     const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= questions.length) return;
+    if (targetIndex < 0 || targetIndex >= sortedQuestions.length) return;
 
-    const copy = [...questions];
+    const copy = [...sortedQuestions];
     const currentItem = copy[index];
     const targetItem = copy[targetIndex];
-
-    // Swap order_num
-    const tempOrder = currentItem.order_num;
-    currentItem.order_num = targetItem.order_num;
-    targetItem.order_num = tempOrder;
 
     copy[index] = targetItem;
     copy[targetIndex] = currentItem;
 
-    const items = copy.map((q, idx) => ({ id: q.id, order_num: idx + 1 }));
+    const items = copy.map((q, idx) => {
+      const newNum = idx + 1;
+      const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      return {
+        id: q.id,
+        order_num: newNum,
+        label: `${newNum}) ${cleanLabel}`
+      };
+    });
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/questions/reorder`, {
@@ -203,12 +219,19 @@ export default function ManageQuestionsModal({
     if (isNaN(parsed) || parsed === q.order_num) return;
 
     try {
-      await fetch(`${API_BASE_URL}/api/questions/${q.id}`, {
+      const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      const newLabel = `${parsed}) ${cleanLabel}`;
+
+      const res = await fetch(`${API_BASE_URL}/api/questions/${q.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_num: parsed })
+        body: JSON.stringify({ order_num: parsed, label: newLabel })
       });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      const data = await res.json();
+      if (data.success && onQuestionsUpdated) {
+        showSuccess(`Question #${parsed} numbering updated!`);
+        onQuestionsUpdated();
+      }
     } catch (err) {
       console.error('Failed to update numbering:', err);
     }
@@ -288,7 +311,7 @@ export default function ManageQuestionsModal({
               className={`tab-btn ${activeTab === 'list' ? 'active' : ''}`}
               onClick={() => { setActiveTab('list'); setEditingQuestion(null); }}
             >
-              <span>All Questions ({questions.length})</span>
+              <span>All Questions ({sortedQuestions.length})</span>
             </button>
             <button
               type="button"
@@ -314,7 +337,7 @@ export default function ManageQuestionsModal({
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <span style={{ fontSize: '13px', color: '#475569' }}>
-                  Use the number box or arrows to set question numbering / order.
+                  Number box me number change karein ya Up/Down arrows se sequence set karein.
                 </span>
                 <button
                   type="button"
@@ -327,20 +350,21 @@ export default function ManageQuestionsModal({
                 </button>
               </div>
 
-              {questions.length === 0 ? (
+              {sortedQuestions.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '36px', color: '#64748B' }}>
                   No questions found in system. Click "Reset to Defaults" below.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '52vh', overflowY: 'auto', paddingRight: '4px' }}>
-                  {questions.map((q, idx) => (
+                  {sortedQuestions.map((q, idx) => (
                     <div key={q.id || idx} className="question-item-card">
                       {/* Numbering and Reorder arrows */}
                       <div className="question-number-box">
                         <input
+                          key={`order_${q.id}_${q.order_num}`}
                           type="number"
                           className="question-num-input"
-                          title="Edit Question Number (click outside to save)"
+                          title="Change number and click outside to save"
                           defaultValue={q.order_num ?? idx + 1}
                           onBlur={(e) => handleDirectOrderBlur(q, e.target.value)}
                         />
@@ -357,7 +381,7 @@ export default function ManageQuestionsModal({
                           <button
                             type="button"
                             className="btn-reorder"
-                            disabled={idx === questions.length - 1}
+                            disabled={idx === sortedQuestions.length - 1}
                             onClick={() => handleMove(idx, 1)}
                             title="Move Down"
                           >
@@ -368,7 +392,7 @@ export default function ManageQuestionsModal({
 
                       {/* Question Content */}
                       <div className="question-info-area">
-                        <div className="question-label-text">{q.label}</div>
+                        <div className="question-label-text">{getQuestionLabel(q, idx)}</div>
                         <div className="question-meta-row">
                           <span className="badge-qtype">{q.type || 'text'}</span>
                           {q.required ? <span className="badge-required">Required</span> : null}
@@ -495,7 +519,7 @@ export default function ManageQuestionsModal({
                     className="form-control"
                     value={formData.label}
                     onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    placeholder="e.g. 25) Do you have a copy of the case diary?"
+                    placeholder="Enter question text (e.g. Do you have a copy of the case diary?)"
                     required
                   />
                 </div>
@@ -588,4 +612,3 @@ export default function ManageQuestionsModal({
     document.body
   );
 }
-

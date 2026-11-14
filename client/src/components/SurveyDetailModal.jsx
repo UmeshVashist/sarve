@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, FileText, Calendar, Printer } from 'lucide-react';
-import { SURVEY_QUESTIONS } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
 
 export default function SurveyDetailModal({ isOpen, onClose, survey, questions = SURVEY_QUESTIONS }) {
   if (!isOpen || !survey) return null;
 
-  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+  const activeQuestions = useMemo(() => {
+    const list = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
 
   const handlePrint = () => {
     window.print();
@@ -44,8 +47,8 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
             return (
               <div key={q.id || idx} className="review-item-card">
                 <div>
-                  <div className="review-item-qnum">Question {q.order_num ?? idx + 1}</div>
-                  <div className="review-item-question">{q.label}</div>
+                  <div className="review-item-qnum">Question #{q.order_num ?? idx + 1}</div>
+                  <div className="review-item-question">{getQuestionLabel(q, idx)}</div>
                   <div>
                     {val !== undefined && val !== null && String(val).trim() !== '' ? (
                       <span className="review-item-answer">{String(val)}</span>

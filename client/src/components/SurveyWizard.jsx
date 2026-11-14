@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw } from 'lucide-react';
-import { SURVEY_QUESTIONS } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
 const DEFAULT_FALLBACK_CASE_TYPES = [
@@ -48,7 +48,12 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
 
   const inputRef = useRef(null);
 
-  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+  // Always sort questions by order_num so changes in Manage Questions instantly reorder "+ Add Data"
+  const activeQuestions = useMemo(() => {
+    const list = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
+
   const totalQuestions = activeQuestions.length;
   const isReviewMode = currentStep === totalQuestions;
   const currentQ = activeQuestions[currentStep];
@@ -551,8 +556,8 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
               return (
                 <div key={q.id || idx} className="review-item-card">
                   <div style={{ flex: 1 }}>
-                    <div className="review-item-qnum">Question {q.order_num ?? idx + 1}</div>
-                    <div className="review-item-question">{q.label}</div>
+                    <div className="review-item-qnum">Question #{q.order_num ?? idx + 1}</div>
+                    <div className="review-item-question">{getQuestionLabel(q, idx)}</div>
                     <div>
                       {displayVal ? (
                         <span className="review-item-answer">{displayVal}</span>
@@ -630,7 +635,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
         <div className="wizard-top-bar">
           <div className="wizard-progress-info">
             <span className="wizard-step-pill">
-              Question {currentStep + 1} of {totalQuestions}
+              Question #{currentQ?.order_num ?? (currentStep + 1)} ({currentStep + 1} of {totalQuestions})
             </span>
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>
               {Math.round(((currentStep + 1) / totalQuestions) * 100)}% Completed
@@ -651,7 +656,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
 
         {/* Question Content */}
         <div className="wizard-body">
-          <div className="wizard-question-label">{currentQ.label}</div>
+          <div className="wizard-question-label">{getQuestionLabel(currentQ, currentStep)}</div>
 
           {/* QUESTION 3: CASE TYPE WITH HIGH-SPEED INPUT + DROPDOWN LIST */}
           {isQ3 ? (

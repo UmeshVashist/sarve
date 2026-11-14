@@ -263,6 +263,68 @@ export default {
         });
       }
 
+      // 9b. Update Question & Numbering
+      if (path.startsWith('/api/questions/') && method === 'PUT') {
+        const id = path.split('/')[3];
+        const body = await request.json();
+        const existing = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(id).first();
+        if (!existing) {
+          return new Response(JSON.stringify({ success: false, message: 'Question not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const newOrderNum = (body.order_num !== undefined && !isNaN(body.order_num)) ? Number(body.order_num) : existing.order_num;
+        const newLabel = body.label !== undefined ? body.label.trim() : existing.label;
+        const newPlaceholder = body.placeholder !== undefined ? body.placeholder.trim() : existing.placeholder;
+        const newType = body.type || existing.type;
+        const newRequired = body.required !== undefined ? (body.required ? 1 : 0) : existing.required;
+        const newNote = body.note !== undefined ? body.note.trim() : existing.note;
+        let optionsStr = existing.options;
+        if (body.options !== undefined) {
+          optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : (typeof body.options === 'string' ? JSON.stringify(body.options.split(',').map((s) => s.trim()).filter(Boolean)) : null);
+        }
+
+        await env.DB.prepare(`
+          UPDATE questions SET
+            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?, required = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, id).run();
+
+        const updated = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(id).first();
+        return new Response(JSON.stringify({ success: true, message: 'Question updated successfully', data: updated }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 9c. Delete Question
+      if (path.startsWith('/api/questions/') && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM questions WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Question deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 9d. Batch Reorder Questions
+      if (path === '/api/questions/reorder' && method === 'POST') {
+        const { items } = await request.json();
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (item.label) {
+              await env.DB.prepare('UPDATE questions SET order_num = ?, label = ? WHERE id = ?').bind(Number(item.order_num), item.label, item.id).run();
+            } else {
+              await env.DB.prepare('UPDATE questions SET order_num = ? WHERE id = ?').bind(Number(item.order_num), item.id).run();
+            }
+          }
+        }
+        const updatedList = await env.DB.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
+        return new Response(JSON.stringify({ success: true, message: 'Reordered successfully', data: updatedList.results }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // 10. Case Types List
       if (path === '/api/case-types' && method === 'GET') {
         const list = await env.DB.prepare('SELECT * FROM case_types ORDER BY name ASC').all();

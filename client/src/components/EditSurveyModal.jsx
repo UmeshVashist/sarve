@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, AlertCircle, Tag, Check } from 'lucide-react';
-import { SURVEY_QUESTIONS } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
 export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
@@ -9,7 +9,10 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+  const activeQuestions = useMemo(() => {
+    const list = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
 
   useEffect(() => {
     if (survey) {
@@ -92,9 +95,9 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
             {activeQuestions.map((q, idx) => {
               const val = formData[q.key] ?? '';
               return (
-                <div key={q.id} className="form-group" style={{ background: '#F8FAFC', padding: '14px 18px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <div key={q.id || idx} className="form-group" style={{ background: '#F8FAFC', padding: '14px 18px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                   <label className="form-label" style={{ fontWeight: 700, fontSize: '13.5px', color: '#1E293B' }}>
-                    {q.label}
+                    {getQuestionLabel(q, idx)}
                   </label>
 
                   {q.type === 'textarea' ? (
