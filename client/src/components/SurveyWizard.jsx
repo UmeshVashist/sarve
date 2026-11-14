@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw } from 'lucide-react';
 import { SURVEY_QUESTIONS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
@@ -137,6 +137,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
     const handleGlobalKey = (e) => {
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
+        if (checkingUtct) return; // Prevent multiple requests while verifying
         if (isReviewMode) {
           handleSubmitSurvey();
         } else {
@@ -334,6 +335,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
   };
 
   const handleNext = async () => {
+    if (checkingUtct) return; // Prevent multiple requests while verifying
     setError('');
 
     // Required check
@@ -445,6 +447,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
   };
 
   const handlePrev = () => {
+    if (checkingUtct) return; // Block going back while verifying
     setError('');
     if (currentStep > 0) {
       setCurrentStep((prev) => prev - 1);
@@ -452,6 +455,10 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
   };
 
   const handleKeyDown = (e) => {
+    if (checkingUtct) {
+      e.preventDefault();
+      return; // Block repeated Enter while verifying
+    }
     if (e.ctrlKey && e.key === 'Enter') {
       e.preventDefault();
       handleNext();
@@ -1047,7 +1054,26 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 placeholder={currentQ.placeholder}
                 value={currentVal}
                 onChange={(e) => handleInputChange(e.target.value)}
+                disabled={checkingUtct}
               />
+              {checkingUtct && currentQ.isUniqueCheck && (
+                <div style={{
+                  marginTop: '10px',
+                  padding: '10px 14px',
+                  background: '#EFF6FF',
+                  color: '#1D4ED8',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 600,
+                  border: '1px solid #BFDBFE'
+                }}>
+                  <RefreshCw size={15} className="spin-icon" />
+                  <span>Checking database for duplicate UT/CT No, please wait...</span>
+                </div>
+              )}
               {currentQ.type === 'yesno_text' && (
                 <div className="yes-no-options-grid">
                   <button
@@ -1093,8 +1119,11 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
             type="button"
             className="btn-wizard-prev"
             onClick={handlePrev}
-            disabled={currentStep === 0}
-            style={{ opacity: currentStep === 0 ? 0.4 : 1, cursor: currentStep === 0 ? 'not-allowed' : 'pointer' }}
+            disabled={currentStep === 0 || checkingUtct}
+            style={{
+              opacity: (currentStep === 0 || checkingUtct) ? 0.4 : 1,
+              cursor: (currentStep === 0 || checkingUtct) ? 'not-allowed' : 'pointer'
+            }}
           >
             <ArrowLeft size={16} />
             <span>Previous</span>
@@ -1106,14 +1135,22 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
             onClick={handleNext}
             disabled={checkingUtct}
           >
-            <span>
-              {checkingUtct
-                ? 'Checking UT/CT No...'
-                : currentStep === totalQuestions - 1
-                ? 'Review Answers (Ctrl + Enter ↵)'
-                : 'Next Question'}
-            </span>
-            <ArrowRight size={16} />
+            {checkingUtct ? (
+              <>
+                <RefreshCw size={16} className="spin-icon" />
+                <span>Verifying UT/CT No...</span>
+              </>
+            ) : currentStep === totalQuestions - 1 ? (
+              <>
+                <span>Review Answers (Ctrl + Enter ↵)</span>
+                <ArrowRight size={16} />
+              </>
+            ) : (
+              <>
+                <span>Next Question</span>
+                <ArrowRight size={16} />
+              </>
+            )}
           </button>
         </div>
       </div>
