@@ -15,7 +15,7 @@ export default function LoginPage({ onLoginSuccess }) {
 
     const cleanUser = username.trim().toLowerCase();
     if (cleanUser === 'sarve') {
-      setError('Username "sarve" is disabled. Please login using new username: meet');
+      setError('Invalid Username or Password! Please use correct credentials.');
       return;
     }
 

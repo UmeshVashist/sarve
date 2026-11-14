@@ -24,7 +24,7 @@ export default {
 
         if (cleanUsername === 'sarve') {
           return new Response(
-            JSON.stringify({ success: false, message: 'Username "sarve" is disabled. Please login with new username: meet' }),
+            JSON.stringify({ success: false, message: 'Invalid Username or Password! Please use correct credentials.' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }

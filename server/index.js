@@ -50,7 +50,7 @@ app.post('/api/auth/login', (req, res) => {
   if (cleanUsername === 'sarve') {
     return res.status(401).json({
       success: false,
-      message: 'Username "sarve" is disabled. Please login with new username: meet'
+      message: 'Invalid Username or Password! Please use correct credentials.'
     });
   }
 
