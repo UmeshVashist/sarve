@@ -291,14 +291,38 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
   // Question 24 Handlers
   const handleSelectQ24Choice = (choice) => {
     setError('');
-    setQ24Choice(choice);
-    const combined = q24Remarks.trim() ? `${choice} - ${q24Remarks.trim()}` : choice;
+    const normalized = (choice.toLowerCase() === 'yes' || choice.toLowerCase() === 'y') ? 'Yes' : (choice.toLowerCase() === 'no' || choice.toLowerCase() === 'n') ? 'No' : choice;
+    setQ24Choice(normalized);
+    const combined = q24Remarks.trim() ? `${normalized} - ${q24Remarks.trim()}` : normalized;
     setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
   };
 
   const handleQ24RemarksChange = (val) => {
+    const trimmed = val.trim();
+    const lower = trimmed.toLowerCase();
+
+    // Auto-detect yes/no typed directly into remarks box
+    if (lower === 'yes' || lower === 'y') {
+      handleSelectQ24Choice('Yes');
+      setQ24Remarks('');
+      return;
+    } else if (lower === 'no' || lower === 'n') {
+      handleSelectQ24Choice('No');
+      setQ24Remarks('');
+      return;
+    } else if (lower.startsWith('yes ') || lower.startsWith('yes -') || lower.startsWith('yes-')) {
+      handleSelectQ24Choice('Yes');
+      setQ24Remarks(trimmed.replace(/^yes\s*[-:/]?\s*/i, ''));
+      return;
+    } else if (lower.startsWith('no ') || lower.startsWith('no -') || lower.startsWith('no-')) {
+      handleSelectQ24Choice('No');
+      setQ24Remarks(trimmed.replace(/^no\s*[-:/]?\s*/i, ''));
+      return;
+    }
+
     setQ24Remarks(val);
-    const combined = q24Choice ? (val.trim() ? `${q24Choice} - ${val.trim()}` : q24Choice) : val;
+    const activeChoice = q24Choice || (lower.startsWith('yes') ? 'Yes' : lower.startsWith('no') ? 'No' : '');
+    const combined = activeChoice ? (trimmed ? `${activeChoice} - ${trimmed}` : activeChoice) : val;
     setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
   };
 
@@ -518,12 +542,13 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
 
     // Special strict validation for Question 24 (Prisoner psychologic survey)
     if (isQ24 || currentQ.type === 'psychologic_yesno') {
-      const choice = (q24Choice || '').trim();
-      if (!choice || (choice.toLowerCase() !== 'yes' && choice.toLowerCase() !== 'no')) {
-        setError("Please select complete 'Yes' or 'No' for Question #24 before proceeding.");
+      const choice = (q24Choice || '').trim().toLowerCase();
+      if (!choice || (choice !== 'yes' && choice !== 'no' && choice !== 'y' && choice !== 'n')) {
+        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
         return;
       }
-      const choiceNormalized = choice.toLowerCase() === 'yes' ? 'Yes' : 'No';
+      const choiceNormalized = (choice === 'yes' || choice === 'y') ? 'Yes' : 'No';
+      setQ24Choice(choiceNormalized);
       const combined = q24Remarks.trim() ? `${choiceNormalized} - ${q24Remarks.trim()}` : choiceNormalized;
       setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
     }
@@ -1174,10 +1199,30 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
           ) : isQ24 ? (
             /* QUESTION 24: PRISONER PSYCHOLOGIC SURVEY (YES / NO OPTION + REMARKS) */
             <div>
-              <div className="yes-no-options-grid" style={{ marginBottom: '16px' }}>
+              <input
+                ref={inputRef}
+                type="text"
+                className="wizard-input-box"
+                placeholder="Type 'Yes' or 'No'"
+                value={q24Choice}
+                autoFocus
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const lower = val.toLowerCase().trim();
+                  if (lower === 'y' || lower === 'yes') {
+                    handleSelectQ24Choice('Yes');
+                  } else if (lower === 'n' || lower === 'no') {
+                    handleSelectQ24Choice('No');
+                  } else {
+                    setError('');
+                    setQ24Choice(val);
+                  }
+                }}
+              />
+              <div className="yes-no-options-grid">
                 <button
                   type="button"
-                  className={`btn-yes-choice ${q24Choice === 'Yes' ? 'selected' : ''}`}
+                  className={`btn-yes-choice ${String(q24Choice).toLowerCase() === 'yes' ? 'selected' : ''}`}
                   onClick={() => handleSelectQ24Choice('Yes')}
                 >
                   <CheckCircle2 size={18} />
@@ -1185,7 +1230,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
                 </button>
                 <button
                   type="button"
-                  className={`btn-no-choice ${q24Choice === 'No' ? 'selected' : ''}`}
+                  className={`btn-no-choice ${String(q24Choice).toLowerCase() === 'no' ? 'selected' : ''}`}
                   onClick={() => handleSelectQ24Choice('No')}
                 >
                   <X size={18} />
@@ -1193,17 +1238,18 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
                 </button>
               </div>
 
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                Psychological State / Survey Remarks (Optional):
-              </label>
-              <textarea
-                ref={inputRef}
-                rows={3}
-                className="wizard-input-box"
-                placeholder="Enter psychological state, behavioral remarks..."
-                value={q24Remarks}
-                onChange={(e) => handleQ24RemarksChange(e.target.value)}
-              />
+              <div style={{ marginTop: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Psychological State / Survey Remarks (Optional):
+                </label>
+                <textarea
+                  rows={3}
+                  className="wizard-input-box"
+                  placeholder="Enter psychological state, behavioral remarks..."
+                  value={q24Remarks}
+                  onChange={(e) => handleQ24RemarksChange(e.target.value)}
+                />
+              </div>
             </div>
           ) : currentQ.type === 'textarea' ? (
             <textarea

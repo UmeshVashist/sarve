@@ -106,3 +106,4 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
 
   return '';
 }
+

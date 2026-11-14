@@ -377,14 +377,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                 <th>Prisoner Name</th>
                 <th>Case Type</th>
                 <th>Total Cases</th>
-                <th>Advance Payment</th>
-                <th>High Court Adv.</th>
-                <th>Priority</th>
-                {customQuestionsList.map((cq, idx) => (
-                  <th key={cq.id || cq.key || idx}>
-                    {getQuestionLabel(cq, 24 + idx)}
-                  </th>
-                ))}
+                <th>Times in Jail</th>
                 <th>Survey Date</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
@@ -392,7 +385,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10 + customQuestionsList.length} style={{ textAlign: 'center', padding: '36px' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#64748B' }}>
                       <RefreshCw size={18} className="animate-spin" />
                       <span>Loading prisoner surveys...</span>
@@ -401,7 +394,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                 </tr>
               ) : surveys.length === 0 ? (
                 <tr>
-                  <td colSpan={10 + customQuestionsList.length}>
+                  <td colSpan={8}>
                     <div className="empty-state-box">
                       <div className="empty-icon">
                         <Users size={32} />
@@ -424,8 +417,6 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
               ) : (
                 validSurveys.map((survey, index) => {
                   const caseTypeArr = survey?.case_type ? survey.case_type.split(', ') : [];
-                  const advPaymentLower = (survey?.advocate_payment_advance || '').toLowerCase();
-                  const highCourtLower = (survey?.high_court_advocate || '').toLowerCase();
 
                   return (
                     <tr key={survey?.id || index}>
@@ -453,51 +444,11 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                         </div>
                       </td>
                       <td style={{ fontWeight: 600 }}>{survey.total_cases ?? '-'}</td>
-                      <td>
-                        {advPaymentLower.startsWith('yes') ? (
-                          <span className="pill-yes">{survey.advocate_payment_advance}</span>
-                        ) : advPaymentLower === 'no' ? (
-                          <span className="pill-no">No</span>
-                        ) : (
-                          <span>{survey.advocate_payment_advance || '-'}</span>
-                        )}
+                      <td style={{ fontWeight: 600, color: '#1E293B' }}>
+                        {survey.times_in_jail !== undefined && survey.times_in_jail !== null && survey.times_in_jail !== ''
+                          ? survey.times_in_jail
+                          : '-'}
                       </td>
-                      <td>
-                        {highCourtLower === 'yes' ? (
-                          <span className="pill-yes">Yes</span>
-                        ) : highCourtLower === 'no' ? (
-                          <span className="pill-no">No</span>
-                        ) : (
-                          <span>{survey.high_court_advocate || '-'}</span>
-                        )}
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '12.5px', color: '#334155' }}>
-                          {survey.priority_money_vs_release || '-'}
-                        </span>
-                      </td>
-                      {customQuestionsList.map((cq, idx) => {
-                        const ans = resolveAnswerForRecord(survey, cq, questions);
-                        return (
-                          <td key={cq.id || cq.key || idx}>
-                            <span
-                              style={{
-                                fontSize: '13px',
-                                color: '#1E293B',
-                                fontWeight: 500,
-                                maxWidth: '220px',
-                                display: 'inline-block',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                              title={ans || ''}
-                            >
-                              {ans || '-'}
-                            </span>
-                          </td>
-                        );
-                      })}
                       <td style={{ fontSize: '12.5px', color: '#64748B' }}>
                         {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '-'}
                       </td>
