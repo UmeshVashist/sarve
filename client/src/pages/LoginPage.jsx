@@ -3,8 +3,8 @@ import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, ArrowRight } from 'l
 import { API_BASE_URL } from '../config';
 
 export default function LoginPage({ onLoginSuccess }) {
-  const [username, setUsername] = useState('sarve');
-  const [password, setPassword] = useState('New@1020');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,14 +50,6 @@ export default function LoginPage({ onLoginSuccess }) {
           <p className="login-desc">Sign in to access Prison & Advocate Survey Portals</p>
         </div>
 
-        {/* Credentials Reminder */}
-        <div className="login-hint-box">
-          <div>
-            Login: <code>sarve</code> | Pass: <code>New@1020</code>
-          </div>
-          <span style={{ fontSize: '11px', color: '#166534', fontWeight: 600 }}>Default</span>
-        </div>
-
         {error && (
           <div className="error-banner animate-fade-in">
             <AlertCircle size={18} />
@@ -73,7 +65,7 @@ export default function LoginPage({ onLoginSuccess }) {
               <input
                 type="text"
                 className="form-control"
-                placeholder="Enter username (sarve)"
+                placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -89,7 +81,7 @@ export default function LoginPage({ onLoginSuccess }) {
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="form-control"
-                placeholder="Enter password (New@1020)"
+                placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
