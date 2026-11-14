@@ -44,10 +44,30 @@ export const DEFAULT_CASE_TYPES = [
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
-  const [questions, setQuestions] = useState(SURVEY_QUESTIONS);
+  const [questions, setQuestions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('survey_questions_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return [...parsed].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+        }
+      }
+    } catch (e) {}
+    return SURVEY_QUESTIONS;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const handleQuestionsChange = (newQuestionsList) => {
+    if (!Array.isArray(newQuestionsList)) return;
+    const sorted = [...newQuestionsList].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    setQuestions(sorted);
+    try {
+      localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
+    } catch (e) {}
+  };
 
   // Modals state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -68,7 +88,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       const res = await fetch(`${API_BASE_URL}/api/questions`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        setQuestions(data.data);
+        handleQuestionsChange(data.data);
       }
     } catch (err) {
       console.warn('Failed to load questions from server:', err);
@@ -492,6 +512,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         isOpen={isQuestionsOpen}
         onClose={() => setIsQuestionsOpen(false)}
         questions={questions}
+        onUpdateQuestions={handleQuestionsChange}
         onQuestionsUpdated={fetchQuestions}
       />
 

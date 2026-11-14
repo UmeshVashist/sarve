@@ -1,7 +1,9 @@
 // Helper to get formatted label with dynamic question numbering
 export function getQuestionLabel(q, idx) {
   if (!q) return '';
-  const num = q.order_num !== undefined && q.order_num !== null ? q.order_num : (idx !== undefined ? idx + 1 : '');
+  const num = (q.order_num !== undefined && q.order_num !== null && !isNaN(q.order_num))
+    ? Number(q.order_num)
+    : (idx !== undefined ? idx + 1 : '');
   const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
   return num !== '' ? `${num}) ${cleanLabel}` : cleanLabel;
 }
@@ -10,6 +12,7 @@ export function getQuestionLabel(q, idx) {
 export const SURVEY_QUESTIONS = [
   {
     id: 1,
+    order_num: 1,
     key: 'utct_no',
     label: '1) UT/CT No.',
     placeholder: 'e.g. UT/2026/104 or CT/2026/89',
@@ -20,6 +23,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 2,
+    order_num: 2,
     key: 'name',
     label: '2) Name',
     placeholder: 'Enter prisoner full name',
@@ -29,6 +33,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 3,
+    order_num: 3,
     key: 'case_type',
     label: '3) Case type / how you type of advocate to hire',
     placeholder: 'Select one or more case types',
@@ -38,6 +43,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 4,
+    order_num: 4,
     key: 'total_cases',
     label: '4) Total number of cases',
     placeholder: 'e.g. 1, 2, 3',
@@ -47,6 +53,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 5,
+    order_num: 5,
     key: 'case_duration',
     label: '5) How long these cases are running',
     placeholder: 'e.g. 6 Months, 2 Years, 1 Year 4 Months',
@@ -56,6 +63,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 6,
+    order_num: 6,
     key: 'total_advocates_hired',
     label: '6) Total advocate hired till date',
     placeholder: 'e.g. 0, 1, 2',
@@ -65,6 +73,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 7,
+    order_num: 7,
     key: 'times_in_jail',
     label: '7) How many time come to jail',
     placeholder: 'e.g. 1, 2, 3',
@@ -74,6 +83,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 8,
+    order_num: 8,
     key: 'advocate_name_number',
     label: '8) Advocate name and number',
     placeholder: 'e.g. Adv. R.K. Gupta (+91 9876543210)',
@@ -83,6 +93,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 9,
+    order_num: 9,
     key: 'known_unknown_advocate',
     label: '9) Known / unknown Advocate',
     placeholder: 'Known or Unknown',
@@ -92,6 +103,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 10,
+    order_num: 10,
     key: 'high_court_advocate',
     label: '10) High court advocate',
     placeholder: 'Yes or No',
@@ -101,6 +113,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 11,
+    order_num: 11,
     key: 'advocate_payment_advance',
     label: '11) Advocate payment advance',
     placeholder: "Type 'Yes' or 'No'",
@@ -110,6 +123,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 12,
+    order_num: 12,
     key: 'first_advocate_by_io',
     label: '12) First Advocate hired by IO',
     placeholder: 'Yes or No',
@@ -119,6 +133,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 13,
+    order_num: 13,
     key: 'know_case_process',
     label: '13) Do you know process, when case started, first and next step',
     placeholder: 'Yes or No',
@@ -128,6 +143,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 14,
+    order_num: 14,
     key: 'lawyer_collects_details_evidence',
     label: '14) Does your lawyer ask, all details about your case, and collect evidence',
     placeholder: 'Yes or No',
@@ -137,6 +153,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 15,
+    order_num: 15,
     key: 'know_fees_reasonable',
     label: '15) How do you know, lawyer jo fees le raha hai, vo sahi hai',
     placeholder: 'Yes or No / Details',
@@ -146,6 +163,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 16,
+    order_num: 16,
     key: 'complete_fees_total_initially',
     label: '16) Does it give, complete fees total, initially',
     placeholder: "Type 'Yes' or 'No'",
@@ -155,6 +173,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 17,
+    order_num: 17,
     key: 'work_transparency_tracking',
     label: '17) Work transparency and tracking of lawyer work',
     placeholder: 'Yes or No',
@@ -164,6 +183,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 18,
+    order_num: 18,
     key: 'know_legal_step_correct',
     label: '18) Kya apko pata hai, jo legal step lawyer process kar raha hai, vo sab sahi hai, kuch miss toh nahi kar raha',
     placeholder: 'Yes or No',
@@ -173,6 +193,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 19,
+    order_num: 19,
     key: 'case_prolonged_expensive',
     label: '19) Because of some extra unwanted step, kya lawyer ki wajah se, case lamba chala aur expensive ho gaya',
     placeholder: 'Yes or No',
@@ -182,6 +203,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 20,
+    order_num: 20,
     key: 'pairvi_knowledge_reason',
     label: '20) Parivi karwane ko knowledge hai ya nahi, aur kyun parivi karta hai',
     placeholder: 'Yes or No / Details',
@@ -191,6 +213,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 21,
+    order_num: 21,
     key: 'court_docs_fees_timing',
     label: '21) Court ke doc kyun nikalte hai, and uski fees pata hai, aur kya vo aapko time pe miljate hai',
     placeholder: 'Yes or No / Details',
@@ -200,6 +223,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 22,
+    order_num: 22,
     key: 'know_trustworthy_platform',
     label: '22) Do you know any platform, jo aapko pairvi karne wala de, and jo guarantee de ki, jo adv provide karega, jo trustworthy hoga',
     placeholder: 'Yes or No',
@@ -209,6 +233,7 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 23,
+    order_num: 23,
     key: 'priority_money_vs_release',
     label: '23) Your priority, ki paise bachana hai ya jail se bahar jaldi jana hai',
     placeholder: 'Select priority',

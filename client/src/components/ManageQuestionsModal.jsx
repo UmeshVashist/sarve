@@ -14,12 +14,13 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import { getQuestionLabel } from '../data/questions';
+import { getQuestionLabel, SURVEY_QUESTIONS } from '../data/questions';
 
 export default function ManageQuestionsModal({
   isOpen,
   onClose,
   questions = [],
+  onUpdateQuestions,
   onQuestionsUpdated
 }) {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'add' | 'edit'
@@ -50,6 +51,21 @@ export default function ManageQuestionsModal({
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 3500);
+  };
+
+  // Helper to sync changes locally immediately and then in background to server
+  const applyQuestionsUpdate = (newList, message = '') => {
+    const sorted = [...newList].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    if (onUpdateQuestions) {
+      onUpdateQuestions(sorted);
+    }
+    try {
+      localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
+    } catch (e) {}
+
+    if (message) {
+      showSuccess(message);
+    }
   };
 
   const handleStartAdd = () => {
@@ -95,6 +111,95 @@ export default function ManageQuestionsModal({
     setActiveTab('list');
   };
 
+  // Change individual question number directly (input blur or enter)
+  const handleUpdateOrderNumber = async (q, newOrderVal) => {
+    const parsed = parseInt(newOrderVal, 10);
+    if (isNaN(parsed) || parsed < 1) return;
+
+    const currentIndex = sortedQuestions.findIndex((item) => item.id === q.id);
+    if (currentIndex === -1) return;
+    const currentNum = sortedQuestions[currentIndex].order_num ?? (currentIndex + 1);
+    if (parsed === currentNum) return;
+
+    // Bound target index
+    const targetIndex = Math.max(0, Math.min(parsed - 1, sortedQuestions.length - 1));
+    if (targetIndex === currentIndex) return;
+
+    const copy = [...sortedQuestions];
+    const [removed] = copy.splice(currentIndex, 1);
+    copy.splice(targetIndex, 0, removed);
+
+    // Reassign sequential order numbers & updated labels
+    const reordered = copy.map((item, idx) => {
+      const newNum = idx + 1;
+      const cleanLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      return {
+        ...item,
+        order_num: newNum,
+        label: `${newNum}) ${cleanLabel}`
+      };
+    });
+
+    applyQuestionsUpdate(reordered, `Question moved to position #${targetIndex + 1}!`);
+
+    // Sync to server in background
+    try {
+      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: reordered.map((item) => ({
+            id: item.id,
+            order_num: item.order_num,
+            label: item.label
+          }))
+        })
+      });
+      if (onQuestionsUpdated) onQuestionsUpdated();
+    } catch (err) {
+      console.warn('API reorder sync warning:', err);
+    }
+  };
+
+  // Reorder using Up / Down arrows
+  const handleMove = async (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= sortedQuestions.length) return;
+
+    const copy = [...sortedQuestions];
+    const [removed] = copy.splice(index, 1);
+    copy.splice(targetIndex, 0, removed);
+
+    const reordered = copy.map((item, idx) => {
+      const newNum = idx + 1;
+      const cleanLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      return {
+        ...item,
+        order_num: newNum,
+        label: `${newNum}) ${cleanLabel}`
+      };
+    });
+
+    applyQuestionsUpdate(reordered, `Question moved to #${targetIndex + 1}!`);
+
+    try {
+      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: reordered.map((item) => ({
+            id: item.id,
+            order_num: item.order_num,
+            label: item.label
+          }))
+        })
+      });
+      if (onQuestionsUpdated) onQuestionsUpdated();
+    } catch (err) {
+      console.warn('API reorder sync warning:', err);
+    }
+  };
+
   const handleSaveForm = async (e) => {
     e.preventDefault();
     setError('');
@@ -110,149 +215,202 @@ export default function ManageQuestionsModal({
         ? formData.optionsText.split(',').map((s) => s.trim()).filter(Boolean)
         : null;
 
-      const orderNum = Number(formData.order_num) || 1;
       const cleanLabel = formData.label.replace(/^\d+[\)\.\-]\s*/, '').trim();
-      const finalLabel = `${orderNum}) ${cleanLabel}`;
 
-      const payload = {
-        order_num: orderNum,
-        label: finalLabel,
-        placeholder: formData.placeholder ? formData.placeholder.trim() : '',
-        type: formData.type || 'text',
-        options: options && options.length > 0 ? options : null,
-        note: formData.note ? formData.note.trim() : '',
-        required: formData.required ? 1 : 0
-      };
+      let reordered = [];
+      let serverPayload = null;
 
-      let res;
       if (editingQuestion) {
-        // Update existing question
-        res = await fetch(`${API_BASE_URL}/api/questions/${editingQuestion.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      } else {
-        // Create new question
-        res = await fetch(`${API_BASE_URL}/api/questions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
+        const oldIndex = sortedQuestions.findIndex((item) => item.id === editingQuestion.id);
+        const targetOrder = Number(formData.order_num) || (oldIndex + 1);
+        const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length - 1));
 
-      const data = await res.json();
-      if (data.success) {
-        showSuccess(editingQuestion ? `Question #${orderNum} updated successfully!` : `Question #${orderNum} added successfully!`);
-        if (onQuestionsUpdated) onQuestionsUpdated();
+        const updatedItem = {
+          ...editingQuestion,
+          placeholder: formData.placeholder ? formData.placeholder.trim() : '',
+          type: formData.type || 'text',
+          options: options && options.length > 0 ? options : null,
+          note: formData.note ? formData.note.trim() : '',
+          required: formData.required ? 1 : 0,
+          label: cleanLabel
+        };
+
+        const copy = [...sortedQuestions];
+        if (oldIndex !== -1) {
+          copy.splice(oldIndex, 1);
+        }
+        copy.splice(targetIndex, 0, updatedItem);
+
+        reordered = copy.map((item, idx) => {
+          const newNum = idx + 1;
+          const cLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+          return {
+            ...item,
+            order_num: newNum,
+            label: `${newNum}) ${cLabel}`
+          };
+        });
+
+        applyQuestionsUpdate(reordered, `Question #${targetIndex + 1} updated successfully!`);
         setActiveTab('list');
         setEditingQuestion(null);
+
+        serverPayload = {
+          order_num: targetIndex + 1,
+          label: `${targetIndex + 1}) ${cleanLabel}`,
+          placeholder: formData.placeholder ? formData.placeholder.trim() : '',
+          type: formData.type || 'text',
+          options: options && options.length > 0 ? options : null,
+          note: formData.note ? formData.note.trim() : '',
+          required: formData.required ? 1 : 0
+        };
+
+        await fetch(`${API_BASE_URL}/api/questions/${editingQuestion.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(serverPayload)
+        });
+
+        await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: reordered.map((item) => ({
+              id: item.id,
+              order_num: item.order_num,
+              label: item.label
+            }))
+          })
+        });
       } else {
-        setError(data.message || 'Failed to save question');
+        const targetOrder = Number(formData.order_num) || (sortedQuestions.length + 1);
+        const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length));
+        const tempId = 'custom_' + Date.now();
+
+        const newQ = {
+          id: tempId,
+          key: `custom_${Date.now()}`,
+          placeholder: formData.placeholder ? formData.placeholder.trim() : '',
+          type: formData.type || 'text',
+          options: options && options.length > 0 ? options : null,
+          note: formData.note ? formData.note.trim() : '',
+          required: formData.required ? 1 : 0,
+          label: cleanLabel,
+          is_custom: true
+        };
+
+        const copy = [...sortedQuestions];
+        copy.splice(targetIndex, 0, newQ);
+
+        reordered = copy.map((item, idx) => {
+          const newNum = idx + 1;
+          const cLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+          return {
+            ...item,
+            order_num: newNum,
+            label: `${newNum}) ${cLabel}`
+          };
+        });
+
+        applyQuestionsUpdate(reordered, `New Question added at #${targetIndex + 1}!`);
+        setActiveTab('list');
+        setEditingQuestion(null);
+
+        serverPayload = {
+          order_num: targetIndex + 1,
+          label: `${targetIndex + 1}) ${cleanLabel}`,
+          placeholder: formData.placeholder ? formData.placeholder.trim() : '',
+          type: formData.type || 'text',
+          options: options && options.length > 0 ? options : null,
+          note: formData.note ? formData.note.trim() : '',
+          required: formData.required ? 1 : 0
+        };
+
+        const res = await fetch(`${API_BASE_URL}/api/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(serverPayload)
+        });
+        const resData = await res.json();
+        if (resData.success && resData.data) {
+          const finalized = reordered.map((item) =>
+            item.id === tempId ? { ...item, id: resData.data.id } : item
+          );
+          applyQuestionsUpdate(finalized);
+          await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: finalized.map((item) => ({
+                id: item.id,
+                order_num: item.order_num,
+                label: item.label
+              }))
+            })
+          });
+        }
       }
+
+      if (onQuestionsUpdated) onQuestionsUpdated();
     } catch (err) {
-      setError(err.message || 'Server connection error');
+      console.warn('API sync warning:', err);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (q) => {
-    if (!window.confirm(`Are you sure you want to delete question "${getQuestionLabel(q)}"?`)) {
+    if (!window.confirm(`Are you sure you want to delete Question #${q.order_num || ''}: "${getQuestionLabel(q)}"?`)) {
       return;
     }
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/questions/${q.id}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
-        showSuccess('Question deleted successfully!');
-        if (onQuestionsUpdated) onQuestionsUpdated();
-      } else {
-        alert(data.message || 'Failed to delete question');
-      }
-    } catch (err) {
-      alert('Error connecting to server');
-    }
-  };
-
-  const handleMove = async (index, direction) => {
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= sortedQuestions.length) return;
-
-    const copy = [...sortedQuestions];
-    const currentItem = copy[index];
-    const targetItem = copy[targetIndex];
-
-    copy[index] = targetItem;
-    copy[targetIndex] = currentItem;
-
-    const items = copy.map((q, idx) => {
+    const filtered = sortedQuestions.filter((item) => item.id !== q.id);
+    const reordered = filtered.map((item, idx) => {
       const newNum = idx + 1;
-      const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      const clean = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
       return {
-        id: q.id,
+        ...item,
         order_num: newNum,
-        label: `${newNum}) ${cleanLabel}`
+        label: `${newNum}) ${clean}`
       };
     });
 
+    applyQuestionsUpdate(reordered, 'Question deleted successfully!');
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+      await fetch(`${API_BASE_URL}/api/questions/${q.id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
+        body: JSON.stringify({
+          items: reordered.map((item) => ({
+            id: item.id,
+            order_num: item.order_num,
+            label: item.label
+          }))
+        })
       });
-      const data = await res.json();
-      if (data.success && onQuestionsUpdated) {
-        onQuestionsUpdated();
-      }
+      if (onQuestionsUpdated) onQuestionsUpdated();
     } catch (err) {
-      console.error('Failed to reorder:', err);
-    }
-  };
-
-  const handleDirectOrderBlur = async (q, newOrderVal) => {
-    const parsed = parseInt(newOrderVal, 10);
-    if (isNaN(parsed) || parsed === q.order_num) return;
-
-    try {
-      const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
-      const newLabel = `${parsed}) ${cleanLabel}`;
-
-      const res = await fetch(`${API_BASE_URL}/api/questions/${q.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_num: parsed, label: newLabel })
-      });
-      const data = await res.json();
-      if (data.success && onQuestionsUpdated) {
-        showSuccess(`Question #${parsed} numbering updated!`);
-        onQuestionsUpdated();
-      }
-    } catch (err) {
-      console.error('Failed to update numbering:', err);
+      console.warn('API delete sync warning:', err);
     }
   };
 
   const handleResetDefaults = async () => {
-    if (!window.confirm('Reset all questions to default 24 questions? Custom questions will be removed.')) {
+    if (!window.confirm('Reset all questions to default 24 questions? Custom questions and numbering will be restored.')) {
       return;
     }
 
+    applyQuestionsUpdate(SURVEY_QUESTIONS, 'Questions reset to default 24 successfully!');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/questions/reset`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showSuccess('Questions reset to default 24 successfully!');
-        if (onQuestionsUpdated) onQuestionsUpdated();
-      } else {
-        alert(data.message || 'Failed to reset questions');
-      }
+      localStorage.removeItem('survey_questions_list');
+    } catch (e) {}
+
+    try {
+      await fetch(`${API_BASE_URL}/api/questions/reset`, { method: 'POST' });
+      if (onQuestionsUpdated) onQuestionsUpdated();
     } catch (err) {
-      alert('Error connecting to server');
+      console.warn('API reset sync warning:', err);
     }
   };
 
@@ -337,7 +495,7 @@ export default function ManageQuestionsModal({
             <div style={{ marginTop: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <span style={{ fontSize: '13px', color: '#475569' }}>
-                  Number box me number change karein ya Up/Down arrows se sequence set karein.
+                  Number change karke <strong>Enter</strong> dabayein ya <strong>↑/↓</strong> arrows se position badlein.
                 </span>
                 <button
                   type="button"
@@ -364,9 +522,15 @@ export default function ManageQuestionsModal({
                           key={`order_${q.id}_${q.order_num}`}
                           type="number"
                           className="question-num-input"
-                          title="Change number and click outside to save"
+                          title="Change number and press Enter or click outside"
                           defaultValue={q.order_num ?? idx + 1}
-                          onBlur={(e) => handleDirectOrderBlur(q, e.target.value)}
+                          onBlur={(e) => handleUpdateOrderNumber(q, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleUpdateOrderNumber(q, e.target.value);
+                            }
+                          }}
                         />
                         <div className="question-reorder-btns">
                           <button
@@ -374,7 +538,7 @@ export default function ManageQuestionsModal({
                             className="btn-reorder"
                             disabled={idx === 0}
                             onClick={() => handleMove(idx, -1)}
-                            title="Move Up"
+                            title="Move Up (Pehle le jayein)"
                           >
                             <ArrowUp size={14} />
                           </button>
@@ -383,7 +547,7 @@ export default function ManageQuestionsModal({
                             className="btn-reorder"
                             disabled={idx === sortedQuestions.length - 1}
                             onClick={() => handleMove(idx, 1)}
-                            title="Move Down"
+                            title="Move Down (Neeche le jayein)"
                           >
                             <ArrowDown size={14} />
                           </button>

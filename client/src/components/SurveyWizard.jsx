@@ -50,9 +50,23 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
 
   // Always sort questions by order_num so changes in Manage Questions instantly reorder "+ Add Data"
   const activeQuestions = useMemo(() => {
-    const list = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
+    if (!list) {
+      try {
+        const saved = localStorage.getItem('survey_questions_list');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+      list = SURVEY_QUESTIONS;
+    }
     return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
-  }, [questions]);
+  }, [questions, isOpen]);
 
   const totalQuestions = activeQuestions.length;
   const isReviewMode = currentStep === totalQuestions;
@@ -532,7 +546,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
         <div className="review-summary-card">
           <div className="review-summary-header">
             <div>
-              <div className="review-summary-title">Review All 24 Questions & Answers</div>
+              <div className="review-summary-title">Review All {totalQuestions} Questions & Answers</div>
               <div className="review-summary-subtitle">
                 Please verify the survey answers below. Press <strong>Ctrl + Enter</strong> or click Submit to save.
               </div>
@@ -587,7 +601,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
               onClick={() => setCurrentStep(totalQuestions - 1)}
             >
               <ArrowLeft size={16} />
-              <span>Back to Q24</span>
+              <span>Back to Previous Question</span>
             </button>
 
             <button

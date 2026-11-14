@@ -7,8 +7,21 @@ export function downloadSurveyExcel(records, filename = 'Prisoner_Survey_Report.
     return;
   }
 
-  const sortedQuestions = Array.isArray(customQuestions) && customQuestions.length > 0
-    ? [...customQuestions].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+  let qList = Array.isArray(customQuestions) && customQuestions.length > 0 ? customQuestions : null;
+  if (!qList) {
+    try {
+      const saved = localStorage.getItem('survey_questions_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          qList = parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  const sortedQuestions = qList
+    ? [...qList].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
     : null;
 
   // Format each row with question headers

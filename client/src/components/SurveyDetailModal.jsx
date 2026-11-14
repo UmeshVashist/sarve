@@ -7,9 +7,23 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
   if (!isOpen || !survey) return null;
 
   const activeQuestions = useMemo(() => {
-    const list = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
+    if (!list) {
+      try {
+        const saved = localStorage.getItem('survey_questions_list');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+      list = SURVEY_QUESTIONS;
+    }
     return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
-  }, [questions]);
+  }, [questions, isOpen]);
 
   const handlePrint = () => {
     window.print();

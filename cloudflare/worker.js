@@ -325,6 +325,47 @@ export default {
         });
       }
 
+      // 9e. Reset Questions to Default 24
+      if (path === '/api/questions/reset' && method === 'POST') {
+        await env.DB.prepare('DELETE FROM questions').run();
+        const defaultQueries = [
+          [1, 'utct_no', '1) UT/CT No.', 'e.g. UT/2026/104 or CT/2026/89', 'text', null, 1, 'Note:- Unique ID. System will verify against database before proceeding.', 0],
+          [2, 'name', '2) Name', 'Enter prisoner full name', 'text', null, 1, 'Note:- Please enter prisoner full name.', 0],
+          [3, 'case_type', '3) Case type / how you type of advocate to hire', 'Select one or more case types', 'multi-select', null, 1, 'Note:- You can select multiple case types from the dropdown managed on the home page.', 0],
+          [4, 'total_cases', '4) Total number of cases', 'e.g. 1, 2, 3', 'number', null, 1, 'Note:- Input only Numbers', 0],
+          [5, 'case_duration', '5) How long these cases are running', 'e.g. 6 Months, 2 Years, 1 Year 4 Months', 'text', null, 1, 'Note:- Specify duration (months / years).', 0],
+          [6, 'total_advocates_hired', '6) Total advocate hired till date', 'e.g. 0, 1, 2', 'number', null, 1, 'Note:- Input only Numbers', 0],
+          [7, 'times_in_jail', '7) How many time come to jail', 'e.g. 1, 2, 3', 'number', null, 1, 'Note:- Input only Numbers', 0],
+          [8, 'advocate_name_number', '8) Advocate name and number', 'e.g. Adv. R.K. Gupta (+91 9876543210)', 'text', null, 0, 'Note:- Enter current or previous advocate name and phone number.', 0],
+          [9, 'known_unknown_advocate', '9) Known / unknown Advocate', 'Known or Unknown', 'yesno_or_choice', '["Known","Unknown","Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [10, 'high_court_advocate', '10) High court advocate', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [11, 'advocate_payment_advance', '11) Advocate payment advance', 'Type \'Yes\' or \'No\'', 'yesno_advance', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [12, 'first_advocate_by_io', '12) First Advocate hired by IO', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [13, 'know_case_process', '13) Do you know process, when case started, first and next step', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [14, 'lawyer_collects_details_evidence', '14) Does your lawyer ask, all details about your case, and collect evidence', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [15, 'know_fees_reasonable', '15) How do you know, lawyer jo fees le raha hai, vo sahi hai', 'Yes or No / Details', 'yesno_text', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [16, 'complete_fees_total_initially', '16) Does it give, complete fees total, initially', 'Type \'Yes\' or \'No\'', 'yesno_advance', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No (If Yes, specify complete fees amount)', 0],
+          [17, 'work_transparency_tracking', '17) Work transparency and tracking of lawyer work', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [18, 'know_legal_step_correct', '18) Kya apko pata hai, jo legal step lawyer process kar raha hai, vo sab sahi hai, kuch miss toh nahi kar raha', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [19, 'case_prolonged_expensive', '19) Because of some extra unwanted step, kya lawyer ki wajah se, case lamba chala aur expensive ho gaya', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [20, 'pairvi_knowledge_reason', '20) Parivi karwane ko knowledge hai ya nahi, aur kyun parivi karta hai', 'Yes or No / Details', 'yesno_text', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [21, 'court_docs_fees_timing', '21) Court ke doc kyun nikalte hai, and uski fees pata hai, aur kya vo aapko time pe miljate hai', 'Yes or No / Details', 'yesno_text', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [22, 'know_trustworthy_platform', '22) Do you know any platform, jo aapko pairvi karne wala de, and jo guarantee de ki, jo adv provide karega, jo trustworthy hoga', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls enter Only Yes or No', 0],
+          [23, 'priority_money_vs_release', '23) Your priority, ki paise bachana hai ya jail se bahar jaldi jana hai', 'Select priority', 'choice_text', '["Jail se bahar jaldi jana","Paise bachana"]', 0, 'Note:- Please select only one of the 2 options: Jail se bahar jaldi jana OR Paise bachana', 0],
+          [24, 'prisoner_psychologic_survey', '24) Prisoner psychologic according Survey', 'Select Yes or No, and add remarks (optional)...', 'psychologic_yesno', '["Yes","No"]', 0, 'Note:- Pls select Yes or No (Remarks optional)', 0]
+        ];
+        for (const q of defaultQueries) {
+          await env.DB.prepare(`
+            INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(...q).run();
+        }
+        const resetList = await env.DB.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
+        return new Response(JSON.stringify({ success: true, message: 'Reset to default 24 questions', data: resetList.results }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // 10. Case Types List
       if (path === '/api/case-types' && method === 'GET') {
         const list = await env.DB.prepare('SELECT * FROM case_types ORDER BY name ASC').all();
