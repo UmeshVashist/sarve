@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Download,
@@ -22,9 +22,10 @@ import CaseTypesModal from '../components/CaseTypesModal';
 import SurveyDetailModal from '../components/SurveyDetailModal';
 import EditSurveyModal from '../components/EditSurveyModal';
 import ManageQuestionsModal from '../components/ManageQuestionsModal';
-import { SURVEY_QUESTIONS } from '../data/questions';
+import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 import { downloadSurveyExcel } from '../utils/exportExcel';
+import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 
 export const DEFAULT_CASE_TYPES = [
   { id: 1, name: 'Murder (IPC 302)' },
@@ -224,6 +225,13 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const advancePaymentCount = validSurveys.filter((s) => (s?.advocate_payment_advance || '').toLowerCase().startsWith('yes')).length;
   const releasePriorityCount = validSurveys.filter((s) => (s?.priority_money_vs_release || '').toLowerCase().includes('jail')).length;
 
+  // Dynamic custom questions list (e.g. Question 25 Remark)
+  const customQuestionsList = useMemo(() => {
+    return (questions || [])
+      .filter((q) => q.is_custom || !STANDARD_KEYS.includes(q.key))
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
+
   return (
     <div className="survey-page-container animate-fade-in">
       {/* Top Nav */}
@@ -372,6 +380,11 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                 <th>Advance Payment</th>
                 <th>High Court Adv.</th>
                 <th>Priority</th>
+                {customQuestionsList.map((cq, idx) => (
+                  <th key={cq.id || cq.key || idx}>
+                    {getQuestionLabel(cq, 24 + idx)}
+                  </th>
+                ))}
                 <th>Survey Date</th>
                 <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
@@ -379,7 +392,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '36px' }}>
+                  <td colSpan={10 + customQuestionsList.length} style={{ textAlign: 'center', padding: '36px' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#64748B' }}>
                       <RefreshCw size={18} className="animate-spin" />
                       <span>Loading prisoner surveys...</span>
@@ -388,7 +401,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                 </tr>
               ) : surveys.length === 0 ? (
                 <tr>
-                  <td colSpan={10}>
+                  <td colSpan={10 + customQuestionsList.length}>
                     <div className="empty-state-box">
                       <div className="empty-icon">
                         <Users size={32} />
@@ -463,6 +476,28 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                           {survey.priority_money_vs_release || '-'}
                         </span>
                       </td>
+                      {customQuestionsList.map((cq, idx) => {
+                        const ans = resolveAnswerForRecord(survey, cq, questions);
+                        return (
+                          <td key={cq.id || cq.key || idx}>
+                            <span
+                              style={{
+                                fontSize: '13px',
+                                color: '#1E293B',
+                                fontWeight: 500,
+                                maxWidth: '220px',
+                                display: 'inline-block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title={ans || ''}
+                            >
+                              {ans || '-'}
+                            </span>
+                          </td>
+                        );
+                      })}
                       <td style={{ fontSize: '12.5px', color: '#64748B' }}>
                         {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '-'}
                       </td>

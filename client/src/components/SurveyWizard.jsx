@@ -73,6 +73,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
   const currentQ = activeQuestions[currentStep];
 
   const isQ3 = currentQ?.key === 'case_type';
+  const isQ9 = currentQ?.key === 'known_unknown_advocate';
   const isQ11 = currentQ?.key === 'advocate_payment_advance';
   const isQ16 = currentQ?.key === 'complete_fees_total_initially';
   const isQ23 = currentQ?.key === 'priority_money_vs_release';
@@ -569,8 +570,8 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       }
     }
 
-    // Special strict validation for Q9 or questions with Yes/No in options
-    if (isQ9 || (Array.isArray(currentQ.options) && currentQ.options.includes('Yes') && currentQ.options.includes('No') && currentQ.type !== 'multi-select')) {
+    // Special strict validation for Q9 or custom questions with Yes/No in options
+    if (isQ9 || (!isQ11 && !isQ16 && !isQ23 && !isQ24 && currentQ.type !== 'yesno' && currentQ.type !== 'yesno_text' && Array.isArray(currentQ.options) && currentQ.options.includes('Yes') && currentQ.options.includes('No') && currentQ.type !== 'multi-select')) {
       const valStr = String(formData[currentQ.key] ?? currentVal ?? '').trim();
       const lower = valStr.toLowerCase();
 

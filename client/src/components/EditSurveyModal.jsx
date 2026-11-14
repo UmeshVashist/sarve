@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Save, AlertCircle, Tag, Check } from 'lucide-react';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
+import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 
 export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
   const [formData, setFormData] = useState({});
@@ -56,6 +57,16 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
       Object.entries({ ...localCached, ...customAnswers }).forEach(([k, v]) => {
         if (v !== undefined && v !== null && (merged[k] === undefined || merged[k] === null || merged[k] === '')) {
           merged[k] = v;
+        }
+      });
+
+      // Ensure every custom question gets resolved if not directly keyed
+      activeQuestions.forEach((q) => {
+        if (merged[q.key] === undefined || merged[q.key] === null || String(merged[q.key]).trim() === '') {
+          const resolved = resolveAnswerForRecord(survey, q, activeQuestions);
+          if (resolved) {
+            merged[q.key] = resolved;
+          }
         }
       });
 

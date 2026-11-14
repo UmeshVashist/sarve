@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, FileText, Calendar, Printer } from 'lucide-react';
 import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
+import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 
 export default function SurveyDetailModal({ isOpen, onClose, survey, questions = SURVEY_QUESTIONS }) {
   if (!isOpen || !survey) return null;
@@ -57,18 +58,7 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
 
         <div className="review-summary-list">
           {activeQuestions.map((q, idx) => {
-            let val = survey[q.key];
-            if ((val === undefined || val === null || val === '') && survey.custom_answers) {
-              try {
-                const ca = typeof survey.custom_answers === 'string' ? JSON.parse(survey.custom_answers) : survey.custom_answers;
-                if (ca && ca[q.key] !== undefined && ca[q.key] !== null) {
-                  val = ca[q.key];
-                }
-              } catch (e) {}
-            }
-            if (Array.isArray(val)) {
-              val = val.join(', ');
-            }
+            const val = resolveAnswerForRecord(survey, q, activeQuestions);
             return (
               <div key={q.id || idx} className="review-item-card">
                 <div>
