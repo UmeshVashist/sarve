@@ -1,4 +1,26 @@
 // Cloudflare Worker API for Survey Portal using Cloudflare D1
+const STANDARD_KEYS = [
+  'utct_no', 'name', 'case_type', 'total_cases', 'case_duration',
+  'total_advocates_hired', 'times_in_jail', 'advocate_name_number',
+  'known_unknown_advocate', 'high_court_advocate', 'advocate_payment_advance',
+  'first_advocate_by_io', 'know_case_process', 'lawyer_collects_details_evidence',
+  'know_fees_reasonable', 'complete_fees_total_initially',
+  'work_transparency_tracking', 'know_legal_step_correct',
+  'case_prolonged_expensive', 'pairvi_knowledge_reason',
+  'court_docs_fees_timing', 'know_trustworthy_platform',
+  'priority_money_vs_release', 'prisoner_psychologic_survey'
+];
+
+function extractCustomAnswers(data, existingCustom = {}) {
+  const custom = { ...existingCustom };
+  for (const [k, v] of Object.entries(data || {})) {
+    if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+      custom[k] = v;
+    }
+  }
+  return JSON.stringify(custom);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -145,35 +167,76 @@ export default {
           );
         }
 
-        await env.DB.prepare(`
-          INSERT INTO prisoner_surveys (
-            utct_no, name, case_type, total_cases, case_duration,
-            total_advocates_hired, times_in_jail, advocate_name_number,
-            known_unknown_advocate, high_court_advocate, advocate_payment_advance,
-            first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
-            know_fees_reasonable, complete_fees_total_initially,
-            work_transparency_tracking, know_legal_step_correct,
-            case_prolonged_expensive, pairvi_knowledge_reason,
-            court_docs_fees_timing, know_trustworthy_platform,
-            priority_money_vs_release, prisoner_psychologic_survey
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
-          Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
-          Number(d.times_in_jail) || 0, d.advocate_name_number || '', d.known_unknown_advocate || '',
-          d.high_court_advocate || '', d.advocate_payment_advance || '', d.first_advocate_by_io || '',
-          d.know_case_process || '', d.lawyer_collects_details_evidence || '', d.know_fees_reasonable || '',
-          d.complete_fees_total_initially || '', d.work_transparency_tracking || '', d.know_legal_step_correct || '',
-          d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '', d.court_docs_fees_timing || '',
-          d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || ''
-        ).run();
+        const customJson = extractCustomAnswers(d);
+
+        try {
+          await env.DB.prepare(`
+            INSERT INTO prisoner_surveys (
+              utct_no, name, case_type, total_cases, case_duration,
+              total_advocates_hired, times_in_jail, advocate_name_number,
+              known_unknown_advocate, high_court_advocate, advocate_payment_advance,
+              first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
+              know_fees_reasonable, complete_fees_total_initially,
+              work_transparency_tracking, know_legal_step_correct,
+              case_prolonged_expensive, pairvi_knowledge_reason,
+              court_docs_fees_timing, know_trustworthy_platform,
+              priority_money_vs_release, prisoner_psychologic_survey,
+              custom_answers
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+            Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+            Number(d.times_in_jail) || 0, d.advocate_name_number || '', d.known_unknown_advocate || '',
+            d.high_court_advocate || '', d.advocate_payment_advance || '', d.first_advocate_by_io || '',
+            d.know_case_process || '', d.lawyer_collects_details_evidence || '', d.know_fees_reasonable || '',
+            d.complete_fees_total_initially || '', d.work_transparency_tracking || '', d.know_legal_step_correct || '',
+            d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '', d.court_docs_fees_timing || '',
+            d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || '',
+            customJson
+          ).run();
+        } catch (insertErr) {
+          try {
+            await env.DB.prepare("ALTER TABLE prisoner_surveys ADD COLUMN custom_answers TEXT DEFAULT '{}'").run();
+            await env.DB.prepare(`
+              INSERT INTO prisoner_surveys (
+                utct_no, name, case_type, total_cases, case_duration,
+                total_advocates_hired, times_in_jail, advocate_name_number,
+                known_unknown_advocate, high_court_advocate, advocate_payment_advance,
+                first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
+                know_fees_reasonable, complete_fees_total_initially,
+                work_transparency_tracking, know_legal_step_correct,
+                case_prolonged_expensive, pairvi_knowledge_reason,
+                court_docs_fees_timing, know_trustworthy_platform,
+                priority_money_vs_release, prisoner_psychologic_survey,
+                custom_answers
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+              Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+              Number(d.times_in_jail) || 0, d.advocate_name_number || '', d.known_unknown_advocate || '',
+              d.high_court_advocate || '', d.advocate_payment_advance || '', d.first_advocate_by_io || '',
+              d.know_case_process || '', d.lawyer_collects_details_evidence || '', d.know_fees_reasonable || '',
+              d.complete_fees_total_initially || '', d.work_transparency_tracking || '', d.know_legal_step_correct || '',
+              d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '', d.court_docs_fees_timing || '',
+              d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || '',
+              customJson
+            ).run();
+          } catch (retryErr) {
+            console.error('Insert error in worker:', retryErr);
+          }
+        }
 
         const savedRecord = await env.DB.prepare(
           'SELECT * FROM prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
         ).bind(d.utct_no).first();
 
+        let savedCustom = {};
+        if (savedRecord?.custom_answers) {
+          try { savedCustom = JSON.parse(savedRecord.custom_answers); } catch (e) {}
+        }
+
         return new Response(
-          JSON.stringify({ success: true, message: 'Saved successfully', data: savedRecord || d }),
+          JSON.stringify({ success: true, message: 'Saved successfully', data: { ...savedRecord, ...savedCustom } || d }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -183,33 +246,50 @@ export default {
         const id = path.split('/')[3];
         const d = await request.json();
 
-        await env.DB.prepare(`
-          UPDATE prisoner_surveys SET
-            utct_no = ?, name = ?, case_type = ?, total_cases = ?, case_duration = ?,
-            total_advocates_hired = ?, times_in_jail = ?, advocate_name_number = ?,
-            known_unknown_advocate = ?, high_court_advocate = ?, advocate_payment_advance = ?,
-            first_advocate_by_io = ?, know_case_process = ?, lawyer_collects_details_evidence = ?,
-            know_fees_reasonable = ?, complete_fees_total_initially = ?,
-            work_transparency_tracking = ?, know_legal_step_correct = ?,
-            case_prolonged_expensive = ?, pairvi_knowledge_reason = ?,
-            court_docs_fees_timing = ?, know_trustworthy_platform = ?,
-            priority_money_vs_release = ?, prisoner_psychologic_survey = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).bind(
-          d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
-          Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
-          Number(d.times_in_jail) || 0, d.advocate_name_number || '', d.known_unknown_advocate || '',
-          d.high_court_advocate || '', d.advocate_payment_advance || '', d.first_advocate_by_io || '',
-          d.know_case_process || '', d.lawyer_collects_details_evidence || '', d.know_fees_reasonable || '',
-          d.complete_fees_total_initially || '', d.work_transparency_tracking || '', d.know_legal_step_correct || '',
-          d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '', d.court_docs_fees_timing || '',
-          d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || '',
-          id
-        ).run();
+        const existing = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(id).first();
+        let existingCustom = {};
+        if (existing?.custom_answers) {
+          try { existingCustom = JSON.parse(existing.custom_answers); } catch (e) {}
+        }
+        const customJson = extractCustomAnswers(d, existingCustom);
+
+        try {
+          await env.DB.prepare(`
+            UPDATE prisoner_surveys SET
+              utct_no = ?, name = ?, case_type = ?, total_cases = ?, case_duration = ?,
+              total_advocates_hired = ?, times_in_jail = ?, advocate_name_number = ?,
+              known_unknown_advocate = ?, high_court_advocate = ?, advocate_payment_advance = ?,
+              first_advocate_by_io = ?, know_case_process = ?, lawyer_collects_details_evidence = ?,
+              know_fees_reasonable = ?, complete_fees_total_initially = ?,
+              work_transparency_tracking = ?, know_legal_step_correct = ?,
+              case_prolonged_expensive = ?, pairvi_knowledge_reason = ?,
+              court_docs_fees_timing = ?, know_trustworthy_platform = ?,
+              priority_money_vs_release = ?, prisoner_psychologic_survey = ?,
+              custom_answers = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).bind(
+            d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+            Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+            Number(d.times_in_jail) || 0, d.advocate_name_number || '', d.known_unknown_advocate || '',
+            d.high_court_advocate || '', d.advocate_payment_advance || '', d.first_advocate_by_io || '',
+            d.know_case_process || '', d.lawyer_collects_details_evidence || '', d.know_fees_reasonable || '',
+            d.complete_fees_total_initially || '', d.work_transparency_tracking || '', d.know_legal_step_correct || '',
+            d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '', d.court_docs_fees_timing || '',
+            d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || '',
+            customJson,
+            id
+          ).run();
+        } catch (e) {
+          console.error('Update error in worker:', e);
+        }
 
         const updatedRecord = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(id).first();
-        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: updatedRecord || d }), {
+        let updatedCustom = {};
+        if (updatedRecord?.custom_answers) {
+          try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
+        }
+        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: { ...updatedRecord, ...updatedCustom } || d }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

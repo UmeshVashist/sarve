@@ -57,7 +57,18 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
 
         <div className="review-summary-list">
           {activeQuestions.map((q, idx) => {
-            const val = survey[q.key];
+            let val = survey[q.key];
+            if ((val === undefined || val === null || val === '') && survey.custom_answers) {
+              try {
+                const ca = typeof survey.custom_answers === 'string' ? JSON.parse(survey.custom_answers) : survey.custom_answers;
+                if (ca && ca[q.key] !== undefined && ca[q.key] !== null) {
+                  val = ca[q.key];
+                }
+              } catch (e) {}
+            }
+            if (Array.isArray(val)) {
+              val = val.join(', ');
+            }
             return (
               <div key={q.id || idx} className="review-item-card">
                 <div>

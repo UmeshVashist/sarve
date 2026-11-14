@@ -286,10 +286,11 @@ export default function ManageQuestionsModal({
         const targetOrder = Number(formData.order_num) || (sortedQuestions.length + 1);
         const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length));
         const tempId = 'custom_' + Date.now();
+        const customKey = `custom_${Date.now()}`;
 
         const newQ = {
           id: tempId,
-          key: `custom_${Date.now()}`,
+          key: customKey,
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
@@ -317,6 +318,7 @@ export default function ManageQuestionsModal({
         setEditingQuestion(null);
 
         serverPayload = {
+          key: customKey,
           order_num: targetIndex + 1,
           label: `${targetIndex + 1}) ${cleanLabel}`,
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
@@ -334,7 +336,9 @@ export default function ManageQuestionsModal({
         const resData = await res.json();
         if (resData.success && resData.data) {
           const finalized = reordered.map((item) =>
-            item.id === tempId ? { ...item, id: resData.data.id } : item
+            item.id === tempId
+              ? { ...item, id: resData.data.id, key: resData.data.key || customKey }
+              : item
           );
           applyQuestionsUpdate(finalized);
           await fetch(`${API_BASE_URL}/api/questions/reorder`, {

@@ -30,7 +30,16 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
 
   useEffect(() => {
     if (survey) {
+      let customAnswers = {};
+      if (survey.custom_answers) {
+        if (typeof survey.custom_answers === 'string') {
+          try { customAnswers = JSON.parse(survey.custom_answers); } catch (e) {}
+        } else if (typeof survey.custom_answers === 'object') {
+          customAnswers = survey.custom_answers;
+        }
+      }
       setFormData({
+        ...customAnswers,
         ...survey,
         case_type: survey.case_type ? survey.case_type.split(', ').filter(Boolean) : []
       });

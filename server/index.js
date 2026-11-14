@@ -361,8 +361,21 @@ app.get('/api/survey/export/excel', (req, res) => {
     // Map records to rows dynamically based on questions configured
     const excelRows = records.map((r, index) => {
       const row = { 'S.No': index + 1 };
-      questions.forEach((q) => {
-        row[q.label] = (r[q.key] !== undefined && r[q.key] !== null) ? r[q.key] : '';
+      questions.forEach((q, idx) => {
+        const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+        const header = `${q.order_num ?? idx + 1}) ${cleanLabel}`;
+        let val = r[q.key];
+        if (val === undefined || val === null || val === '') {
+          if (r.custom_answers) {
+            try {
+              const ca = JSON.parse(r.custom_answers);
+              if (ca[q.key] !== undefined && ca[q.key] !== null) val = ca[q.key];
+            } catch (e) {}
+          }
+        }
+        if (val === undefined || val === null) val = '';
+        if (Array.isArray(val)) val = val.join(', ');
+        row[header] = val;
       });
       row['Survey Date & Time'] = r.created_at || '';
       return row;
@@ -372,8 +385,10 @@ app.get('/api/survey/export/excel', (req, res) => {
 
     // Calculate dynamic column widths
     const colWidths = [{ wch: 6 }];
-    questions.forEach((q) => {
-      colWidths.push({ wch: Math.min(Math.max(q.label.length + 4, 18), 45) });
+    questions.forEach((q, idx) => {
+      const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+      const header = `${q.order_num ?? idx + 1}) ${cleanLabel}`;
+      colWidths.push({ wch: Math.min(Math.max(header.length + 4, 18), 45) });
     });
     colWidths.push({ wch: 22 });
     worksheet['!cols'] = colWidths;
