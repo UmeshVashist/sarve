@@ -1,0 +1,14 @@
+name = "sarve-portal-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+account_id = "20df26ef9a86e1b91d30d4ba8de668a7"
+
+# Cloudflare D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "sarve_d1_database"
+database_id = "your-d1-database-uuid-here"
+
+[vars]
+ENVIRONMENT = "production"
+
