@@ -12,6 +12,13 @@ export default function LoginPage({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const cleanUser = username.trim().toLowerCase();
+    if (cleanUser === 'sarve') {
+      setError('Username "sarve" is disabled. Please login using new username: meet');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -28,9 +35,9 @@ export default function LoginPage({ onLoginSuccess }) {
         setError(data.message || 'Invalid username or password!');
       }
     } catch (err) {
-      // Fallback local check if offline
-      if (username === 'sarve' && password === 'New@1020') {
-        onLoginSuccess({ username: 'sarve', role: 'Administrator' });
+      // Fallback local check if offline (ONLY case-insensitive meet)
+      if (cleanUser === 'meet' && password === 'New@1020') {
+        onLoginSuccess({ username: 'meet', role: 'Administrator', displayName: 'Survey Admin' });
       } else {
         setError('Server connection failed or invalid credentials. Check if backend is running.');
       }
@@ -46,7 +53,7 @@ export default function LoginPage({ onLoginSuccess }) {
           <div className="login-icon-box">
             <ShieldCheck size={32} />
           </div>
-          <h1 className="login-title">Sarve Portal Login</h1>
+          <h1 className="login-title">Survey Portal Login</h1>
           <p className="login-desc">Sign in to access Prison & Advocate Survey Portals</p>
         </div>
 

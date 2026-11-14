@@ -4,19 +4,19 @@ export default function DashboardPage({ onSelectOption }) {
   const options = [
     {
       id: 'prisoner',
-      title: 'Prisoner Sarve',
+      title: 'Prisoner Survey',
       tag: 'Active Module',
       isPrimary: true
     },
     {
       id: 'advocate',
-      title: 'Advocate Sarve',
+      title: 'Advocate Survey',
       tag: 'Coming Soon',
       isPrimary: false
     },
     {
       id: 'citizen',
-      title: 'Citizen Sarve',
+      title: 'Citizen Survey',
       tag: 'Coming Soon',
       isPrimary: false
     },

@@ -1,4 +1,4 @@
-// Cloudflare Worker API for Sarve Portal using Cloudflare D1
+// Cloudflare Worker API for Survey Portal using Cloudflare D1
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -20,13 +20,21 @@ export default {
       // 1. Auth Login (Authenticated via Database)
       if (path === '/api/auth/login' && method === 'POST') {
         const { username, password } = await request.json();
+        const cleanUsername = (username || '').trim().toLowerCase();
+
+        if (cleanUsername === 'sarve') {
+          return new Response(
+            JSON.stringify({ success: false, message: 'Username "sarve" is disabled. Please login with new username: meet' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         // 1. Check users table in D1 Database
         let user = null;
         try {
           user = await env.DB.prepare(
-            'SELECT id, username, role FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM(?)) AND password = ?'
-          ).bind(username, password).first();
+            'SELECT id, username, role FROM users WHERE LOWER(TRIM(username)) = ? AND password = ?'
+          ).bind(cleanUsername, password).first();
         } catch (dbErr) {
           console.warn('Users table query failed or not created yet:', dbErr);
         }
@@ -35,20 +43,20 @@ export default {
           return new Response(
             JSON.stringify({
               success: true,
-              token: 'sarve-auth-d1-token-' + user.id,
-              user: { id: user.id, username: user.username, role: user.role || 'Administrator' }
+              token: 'survey-auth-d1-token-' + user.id,
+              user: { id: user.id, username: user.username, role: user.role || 'Administrator', displayName: 'Survey Admin' }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Fallback for default credential if table is pending
-        if (username === 'sarve' && password === 'New@1020') {
+        // Fallback for default credential if table is pending (supports any case like meet, Meet, MEET)
+        if (cleanUsername === 'meet' && password === 'New@1020') {
           return new Response(
             JSON.stringify({
               success: true,
-              token: 'sarve-auth-cloudflare-d1-token',
-              user: { username: 'sarve', role: 'Administrator' }
+              token: 'survey-auth-cloudflare-d1-token',
+              user: { username: 'meet', role: 'Administrator', displayName: 'Survey Admin' }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -60,7 +68,7 @@ export default {
         );
       }
 
-      // 2. Check UT/CT uniqueness (supports query param ?no=... or path)
+      // 2. Check UT/CT uniqueness
       if (path.startsWith('/api/survey/check-utct') && method === 'GET') {
         const utctNo = (url.searchParams.get('no') || url.searchParams.get('utctNo') || decodeURIComponent(path.split('/')[4] || '')).trim();
         const existing = await env.DB.prepare(
@@ -90,8 +98,16 @@ export default {
           result = await env.DB.prepare('SELECT * FROM prisoner_surveys ORDER BY id DESC').all();
         }
 
+        const data = (result.results || []).map((r) => {
+          let custom = {};
+          if (r.custom_answers) {
+            try { custom = JSON.parse(r.custom_answers); } catch (e) {}
+          }
+          return { ...r, ...custom };
+        });
+
         return new Response(
-          JSON.stringify({ success: true, count: result.results.length, data: result.results }),
+          JSON.stringify({ success: true, count: data.length, data }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -106,7 +122,11 @@ export default {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
-        return new Response(JSON.stringify({ success: true, data: survey }), {
+        let custom = {};
+        if (survey.custom_answers) {
+          try { custom = JSON.parse(survey.custom_answers); } catch (e) {}
+        }
+        return new Response(JSON.stringify({ success: true, data: { ...survey, ...custom } }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
@@ -125,7 +145,7 @@ export default {
           );
         }
 
-        const res = await env.DB.prepare(`
+        await env.DB.prepare(`
           INSERT INTO prisoner_surveys (
             utct_no, name, case_type, total_cases, case_duration,
             total_advocates_hired, times_in_jail, advocate_name_number,
@@ -203,7 +223,47 @@ export default {
         });
       }
 
-      // 8. Case Types List
+      // 8. Questions List
+      if (path === '/api/questions' && method === 'GET') {
+        try {
+          const list = await env.DB.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
+          const data = (list.results || []).map((q) => {
+            let options = null;
+            if (q.options) {
+              try { options = JSON.parse(q.options); } catch (e) { options = q.options.split(','); }
+            }
+            return { ...q, required: Boolean(q.required), is_custom: Boolean(q.is_custom), options };
+          });
+          return new Response(JSON.stringify({ success: true, data }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, message: e.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // 9. Add Question
+      if (path === '/api/questions' && method === 'POST') {
+        const body = await request.json();
+        const maxOrder = (await env.DB.prepare('SELECT MAX(order_num) as m FROM questions').first())?.m || 0;
+        const orderNum = body.order_num ? Number(body.order_num) : (maxOrder + 1);
+        const key = body.key || `custom_${Date.now()}`;
+        const optionsStr = body.options ? JSON.stringify(body.options) : null;
+
+        await env.DB.prepare(`
+          INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `).bind(orderNum, key, body.label, body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '').run();
+
+        const created = await env.DB.prepare('SELECT * FROM questions WHERE key = ?').bind(key).first();
+        return new Response(JSON.stringify({ success: true, data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 10. Case Types List
       if (path === '/api/case-types' && method === 'GET') {
         const list = await env.DB.prepare('SELECT * FROM case_types ORDER BY name ASC').all();
         return new Response(
@@ -212,7 +272,7 @@ export default {
         );
       }
 
-      // 9. Add Case Type
+      // 11. Add Case Type
       if (path === '/api/case-types' && method === 'POST') {
         const { name } = await request.json();
         await env.DB.prepare('INSERT OR IGNORE INTO case_types (name) VALUES (?)').bind(name.trim()).run();
@@ -221,7 +281,7 @@ export default {
         });
       }
 
-      // 10. Delete Case Type
+      // 12. Delete Case Type
       if (path.startsWith('/api/case-types/') && method === 'DELETE') {
         const id = path.split('/')[3];
         await env.DB.prepare('DELETE FROM case_types WHERE id = ?').bind(id).run();

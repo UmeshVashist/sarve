@@ -5,9 +5,9 @@ export default function Navbar({ user, onLogout, onHomeClick }) {
   return (
     <header className="app-header">
       <div className="header-brand" onClick={onHomeClick} title="Go to Dashboard">
-        <span className="brand-badge">SARVE</span>
+        <span className="brand-badge">SURVEY</span>
         <div>
-          <div className="brand-title">Legal Sarve Portal</div>
+          <div className="brand-title">Legal Survey Portal</div>
           <div className="brand-subtitle">Prisoner & Advocacy Field Survey System</div>
         </div>
       </div>

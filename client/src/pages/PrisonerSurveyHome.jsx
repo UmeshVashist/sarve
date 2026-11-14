@@ -14,12 +14,15 @@ import {
   X,
   Scale,
   CreditCard,
-  Clock
+  Clock,
+  HelpCircle
 } from 'lucide-react';
 import SurveyWizard from '../components/SurveyWizard';
 import CaseTypesModal from '../components/CaseTypesModal';
 import SurveyDetailModal from '../components/SurveyDetailModal';
 import EditSurveyModal from '../components/EditSurveyModal';
+import ManageQuestionsModal from '../components/ManageQuestionsModal';
+import { SURVEY_QUESTIONS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 import { downloadSurveyExcel } from '../utils/exportExcel';
 
@@ -41,6 +44,7 @@ export const DEFAULT_CASE_TYPES = [
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
+  const [questions, setQuestions] = useState(SURVEY_QUESTIONS);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,14 +52,28 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   // Modals state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isCaseTypesOpen, setIsCaseTypesOpen] = useState(false);
+  const [isQuestionsOpen, setIsQuestionsOpen] = useState(false);
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
 
-  // Fetch surveys and case types on mount
+  // Fetch surveys, case types, and questions on mount
   useEffect(() => {
     fetchSurveys();
     fetchCaseTypes();
+    fetchQuestions();
   }, []);
+
+  const fetchQuestions = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/questions`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        setQuestions(data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load questions from server:', err);
+    }
+  };
 
   const fetchSurveys = async (query = '') => {
     setLoading(true);
@@ -156,7 +174,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
     const filename = searchQuery
       ? `Prisoner_Survey_Filtered_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`
       : 'Prisoner_Survey_Report.xlsx';
-    downloadSurveyExcel(surveys, filename);
+    downloadSurveyExcel(surveys, filename, questions);
   };
 
   // Quick stats calculations (Completely safe against null/undefined records)
@@ -182,6 +200,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
               setRefreshing(true);
               fetchSurveys(searchQuery);
               fetchCaseTypes();
+              fetchQuestions();
             }}
             title="Refresh Data"
           >
@@ -256,6 +275,15 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
             <Tag size={17} />
             <span>Manage Case Types ({caseTypes.length})</span>
           </button>
+
+          <button
+            className="btn-manage-questions"
+            onClick={() => setIsQuestionsOpen(true)}
+            title="Add, edit, delete, and set numbering for survey questions"
+          >
+            <HelpCircle size={17} />
+            <span>Manage Questions ({questions.length})</span>
+          </button>
         </div>
 
         {/* Search Bar */}
@@ -293,7 +321,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         </div>
 
         <div className="table-responsive">
-          <table className="sarve-table">
+          <table className="survey-table sarve-table">
             <thead>
               <tr>
                 <th style={{ width: '60px' }}>#</th>
@@ -440,6 +468,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         caseTypes={caseTypes}
+        questions={questions}
         onCaseTypeAdded={fetchCaseTypes}
         onSurveySaved={(newSurvey) => {
           if (newSurvey && typeof newSurvey === 'object') {
@@ -458,11 +487,20 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         onDeleteCaseType={handleDeleteCaseType}
       />
 
+      {/* Manage Survey Questions Modal */}
+      <ManageQuestionsModal
+        isOpen={isQuestionsOpen}
+        onClose={() => setIsQuestionsOpen(false)}
+        questions={questions}
+        onQuestionsUpdated={fetchQuestions}
+      />
+
       {/* View Survey Detail Modal */}
       <SurveyDetailModal
         isOpen={!!selectedSurveyForDetail}
         onClose={() => setSelectedSurveyForDetail(null)}
         survey={selectedSurveyForDetail}
+        questions={questions}
       />
 
       {/* Edit Survey Modal */}
@@ -471,6 +509,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         onClose={() => setSelectedSurveyForEdit(null)}
         survey={selectedSurveyForEdit}
         caseTypes={caseTypes}
+        questions={questions}
         onSurveyUpdated={(updated) => {
           setSurveys((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         }}

@@ -4,10 +4,12 @@ import { X, Save, AlertCircle, Tag, Check } from 'lucide-react';
 import { SURVEY_QUESTIONS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 
-export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], onSurveyUpdated }) {
+export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
 
   useEffect(() => {
     if (survey) {
@@ -87,7 +89,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
           <div className="review-summary-list" style={{ padding: '24px 28px' }}>
-            {SURVEY_QUESTIONS.map((q, idx) => {
+            {activeQuestions.map((q, idx) => {
               const val = formData[q.key] ?? '';
               return (
                 <div key={q.id} className="form-group" style={{ background: '#F8FAFC', padding: '14px 18px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
@@ -270,6 +272,22 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                           >
                             No
                           </button>
+                        </div>
+                      )}
+
+                      {Array.isArray(q.options) && q.options.length > 0 && q.type !== 'yesno' && q.type !== 'yesno_text' && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                          {q.options.map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              className={`btn-action-icon ${String(val).toLowerCase() === String(opt).toLowerCase() ? 'view' : ''}`}
+                              style={{ width: 'auto', padding: '4px 12px', fontSize: '12px', fontWeight: 600 }}
+                              onClick={() => handleChange(q.key, opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>

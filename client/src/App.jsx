@@ -7,30 +7,42 @@ import './App.css';
 
 export default function App() {
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('sarve_user');
-    return saved ? JSON.parse(saved) : null;
+    const saved = localStorage.getItem('survey_user') || localStorage.getItem('sarve_user');
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && (parsed.username === 'sarve' || parsed.username === 'meet')) {
+        return { ...parsed, username: 'meet' };
+      }
+      return parsed;
+    } catch (e) {
+      return null;
+    }
   });
 
   // Remember current screen across page reloads (Stay on Prisoner Survey if reloaded!)
   const [currentScreen, setCurrentScreen] = useState(() => {
-    return localStorage.getItem('sarve_current_screen') || 'dashboard';
+    return localStorage.getItem('survey_current_screen') || localStorage.getItem('sarve_current_screen') || 'dashboard';
   });
   const [toastMessage, setToastMessage] = useState('');
 
   const navigateTo = (screen) => {
     setCurrentScreen(screen);
-    localStorage.setItem('sarve_current_screen', screen);
+    localStorage.setItem('survey_current_screen', screen);
   };
 
   const handleLoginSuccess = (userData) => {
-    setUser(userData);
-    localStorage.setItem('sarve_user', JSON.stringify(userData));
+    const updatedUser = { ...userData, username: 'meet' };
+    setUser(updatedUser);
+    localStorage.setItem('survey_user', JSON.stringify(updatedUser));
     navigateTo('dashboard');
   };
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('survey_user');
     localStorage.removeItem('sarve_user');
+    localStorage.removeItem('survey_current_screen');
     localStorage.removeItem('sarve_current_screen');
     setCurrentScreen('dashboard');
   };
@@ -40,11 +52,11 @@ export default function App() {
       navigateTo('prisoner');
     } else {
       const labels = {
-        advocate: 'Advocate Sarve',
-        citizen: 'Citizen Sarve',
+        advocate: 'Advocate Survey',
+        citizen: 'Citizen Survey',
         other: 'Other Survey'
       };
-      setToastMessage(`${labels[optionId] || optionId} portal module is currently in development and will be activated in the next phase! Please explore "Prisoner Sarve".`);
+      setToastMessage(`${labels[optionId] || optionId} portal module is currently in development and will be activated in the next phase! Please explore "Prisoner Survey".`);
       setTimeout(() => setToastMessage(''), 5000);
     }
   };

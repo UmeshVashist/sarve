@@ -1,7 +1,7 @@
 {
-  "name": "sarve-project",
+  "name": "survey-project",
   "version": "1.0.0",
-  "description": "Full-stack Sarve Portal in React and Node.js with SQLite / Cloudflare D1 integration",
+  "description": "Full-stack Survey Portal in React and Node.js with SQLite / Cloudflare D1 integration",
   "main": "server/index.js",
   "scripts": {
     "server": "node server/index.js",

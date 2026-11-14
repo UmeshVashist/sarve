@@ -19,8 +19,8 @@ const DEFAULT_FALLBACK_CASE_TYPES = [
   { id: 'fb-12', name: 'Other' }
 ];
 
-export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTypeAdded, onSurveySaved }) {
-  const [currentStep, setCurrentStep] = useState(0); // 0 to 23 for questions, 24 for Review Summary
+export default function SurveyWizard({ isOpen, onClose, caseTypes = [], questions = SURVEY_QUESTIONS, onCaseTypeAdded, onSurveySaved }) {
+  const [currentStep, setCurrentStep] = useState(0); // 0 to N-1 for questions, N for Review Summary
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
   const [checkingUtct, setCheckingUtct] = useState(false);
@@ -48,9 +48,10 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
 
   const inputRef = useRef(null);
 
-  const totalQuestions = SURVEY_QUESTIONS.length; // 24
+  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
+  const totalQuestions = activeQuestions.length;
   const isReviewMode = currentStep === totalQuestions;
-  const currentQ = SURVEY_QUESTIONS[currentStep];
+  const currentQ = activeQuestions[currentStep];
 
   const isQ3 = currentQ?.key === 'case_type';
   const isQ11 = currentQ?.key === 'advocate_payment_advance';
@@ -544,13 +545,13 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
           )}
 
           <div className="review-summary-list">
-            {SURVEY_QUESTIONS.map((q, idx) => {
+            {activeQuestions.map((q, idx) => {
               const val = formData[q.key];
               const displayVal = Array.isArray(val) ? val.join(', ') : val;
               return (
-                <div key={q.id} className="review-item-card">
+                <div key={q.id || idx} className="review-item-card">
                   <div style={{ flex: 1 }}>
-                    <div className="review-item-qnum">Question {idx + 1}</div>
+                    <div className="review-item-qnum">Question {q.order_num ?? idx + 1}</div>
                     <div className="review-item-question">{q.label}</div>
                     <div>
                       {displayVal ? (
@@ -1039,13 +1040,13 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 </button>
               </div>
             </div>
-          ) : currentQ.type === 'yesno_or_choice' ? (
+          ) : (currentQ.type === 'choice_text' || currentQ.type === 'yesno_or_choice') && Array.isArray(currentQ.options) && currentQ.options.length > 0 ? (
             <div>
               <input
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder={currentQ.placeholder}
+                placeholder={currentQ.placeholder || 'Select option or enter value...'}
                 value={currentVal}
                 onChange={(e) => handleInputChange(e.target.value)}
                 autoFocus
@@ -1055,12 +1056,34 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                   <button
                     key={opt}
                     type="button"
-                    className={`btn-pill-choice ${currentVal.toLowerCase() === opt.toLowerCase() ? 'selected' : ''}`}
+                    className={`btn-pill-choice ${String(currentVal).toLowerCase() === String(opt).toLowerCase() ? 'selected' : ''}`}
                     onClick={() => handleInputChange(opt)}
                   >
                     <span>{opt}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : currentQ.type === 'multi-select' && !isQ3 && Array.isArray(currentQ.options) && currentQ.options.length > 0 ? (
+            <div>
+              <div className="multi-select-container">
+                {currentQ.options.map((opt) => {
+                  const arr = Array.isArray(formData[currentQ.key])
+                    ? formData[currentQ.key]
+                    : (formData[currentQ.key] || '').split(', ').filter(Boolean);
+                  const isSel = arr.includes(opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleMultiSelectToggle(opt)}
+                    >
+                      {isSel && <Check size={14} />}
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (

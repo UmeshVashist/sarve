@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom';
 import { X, User, FileText, Calendar, Printer } from 'lucide-react';
 import { SURVEY_QUESTIONS } from '../data/questions';
 
-export default function SurveyDetailModal({ isOpen, onClose, survey }) {
+export default function SurveyDetailModal({ isOpen, onClose, survey, questions = SURVEY_QUESTIONS }) {
   if (!isOpen || !survey) return null;
+
+  const activeQuestions = Array.isArray(questions) && questions.length > 0 ? questions : SURVEY_QUESTIONS;
 
   const handlePrint = () => {
     window.print();
@@ -37,16 +39,16 @@ export default function SurveyDetailModal({ isOpen, onClose, survey }) {
         </div>
 
         <div className="review-summary-list">
-          {SURVEY_QUESTIONS.map((q, idx) => {
+          {activeQuestions.map((q, idx) => {
             const val = survey[q.key];
             return (
-              <div key={q.id} className="review-item-card">
+              <div key={q.id || idx} className="review-item-card">
                 <div>
-                  <div className="review-item-qnum">Question {idx + 1}</div>
+                  <div className="review-item-qnum">Question {q.order_num ?? idx + 1}</div>
                   <div className="review-item-question">{q.label}</div>
                   <div>
-                    {val ? (
-                      <span className="review-item-answer">{val}</span>
+                    {val !== undefined && val !== null && String(val).trim() !== '' ? (
+                      <span className="review-item-answer">{String(val)}</span>
                     ) : (
                       <span className="review-item-answer empty">Not specified</span>
                     )}

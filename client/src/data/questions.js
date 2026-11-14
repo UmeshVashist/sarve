@@ -210,8 +210,9 @@ export const SURVEY_QUESTIONS = [
   },
   {
     id: 24,
+    order_num: 24,
     key: 'prisoner_psychologic_survey',
-    label: '24) Prisoner psychologic according sarve',
+    label: '24) Prisoner psychologic according Survey',
     placeholder: 'Select Yes or No, and add remarks (optional)...',
     type: 'psychologic_yesno',
     options: ['Yes', 'No'],

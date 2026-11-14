@@ -9,33 +9,74 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// 1. Auth Endpoint (Authenticated via SQLite database)
+const STANDARD_KEYS = [
+  'utct_no', 'name', 'case_type', 'total_cases', 'case_duration',
+  'total_advocates_hired', 'times_in_jail', 'advocate_name_number',
+  'known_unknown_advocate', 'high_court_advocate', 'advocate_payment_advance',
+  'first_advocate_by_io', 'know_case_process', 'lawyer_collects_details_evidence',
+  'know_fees_reasonable', 'complete_fees_total_initially',
+  'work_transparency_tracking', 'know_legal_step_correct',
+  'case_prolonged_expensive', 'pairvi_knowledge_reason',
+  'court_docs_fees_timing', 'know_trustworthy_platform',
+  'priority_money_vs_release', 'prisoner_psychologic_survey'
+];
+
+function formatSurvey(r) {
+  if (!r) return null;
+  let custom = {};
+  if (r.custom_answers) {
+    try {
+      custom = JSON.parse(r.custom_answers);
+    } catch (e) {}
+  }
+  return { ...r, ...custom };
+}
+
+function extractCustomAnswers(data, existingCustom = {}) {
+  const custom = { ...existingCustom };
+  for (const [k, v] of Object.entries(data)) {
+    if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+      custom[k] = v;
+    }
+  }
+  return JSON.stringify(custom);
+}
+
+// 1. Auth Endpoint (Authenticated via SQLite database - supports any case like meet, Meet, MEET)
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
-  
-  const user = db.prepare('SELECT id, username, role FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM(?)) AND password = ?').get(username, password);
+  const cleanUsername = (username || '').trim().toLowerCase();
+
+  if (cleanUsername === 'sarve') {
+    return res.status(401).json({
+      success: false,
+      message: 'Username "sarve" is disabled. Please login with new username: meet'
+    });
+  }
+
+  const user = db.prepare('SELECT id, username, role FROM users WHERE LOWER(TRIM(username)) = ? AND password = ?').get(cleanUsername, password);
   if (user) {
     return res.json({
       success: true,
-      token: 'sarve-auth-session-token-' + user.id,
+      token: 'survey-auth-session-token-' + user.id,
       user: {
         id: user.id,
         username: user.username,
         role: user.role || 'Administrator',
-        displayName: 'Sarve Admin'
+        displayName: 'Survey Admin'
       }
     });
   }
 
-  // Fallback for default admin
-  if (username === 'sarve' && password === 'New@1020') {
+  // Fallback for default admin (case-insensitive meet)
+  if (cleanUsername === 'meet' && password === 'New@1020') {
     return res.json({
       success: true,
-      token: 'sarve-auth-session-token-default',
+      token: 'survey-auth-session-token-default',
       user: {
-        username: 'sarve',
+        username: 'meet',
         role: 'Administrator',
-        displayName: 'Sarve Admin'
+        displayName: 'Survey Admin'
       }
     });
   }
@@ -87,15 +128,17 @@ app.get('/api/survey/list', (req, res) => {
       name LIKE ? OR 
       case_type LIKE ? OR 
       advocate_name_number LIKE ? OR
-      prisoner_psychologic_survey LIKE ?
+      prisoner_psychologic_survey LIKE ? OR
+      custom_answers LIKE ?
     `;
     const searchPattern = `%${search}%`;
-    params = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern];
+    params = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern];
   }
 
   query += ' ORDER BY id DESC';
 
-  const surveys = db.prepare(query).all(...params);
+  const rows = db.prepare(query).all(...params);
+  const surveys = rows.map(formatSurvey);
   res.json({ success: true, count: surveys.length, data: surveys });
 });
 
@@ -105,7 +148,7 @@ app.get('/api/survey/:id', (req, res) => {
   if (!survey) {
     return res.status(404).json({ success: false, message: 'Survey not found' });
   }
-  res.json({ success: true, data: survey });
+  res.json({ success: true, data: formatSurvey(survey) });
 });
 
 // 5. Add new Survey
@@ -128,6 +171,8 @@ app.post('/api/survey/add', (req, res) => {
       });
     }
 
+    const customJson = extractCustomAnswers(data);
+
     const insert = db.prepare(`
       INSERT INTO prisoner_surveys (
         utct_no, name, case_type, total_cases, case_duration,
@@ -138,7 +183,8 @@ app.post('/api/survey/add', (req, res) => {
         work_transparency_tracking, know_legal_step_correct,
         case_prolonged_expensive, pairvi_knowledge_reason,
         court_docs_fees_timing, know_trustworthy_platform,
-        priority_money_vs_release, prisoner_psychologic_survey
+        priority_money_vs_release, prisoner_psychologic_survey,
+        custom_answers
       ) VALUES (
         @utct_no, @name, @case_type, @total_cases, @case_duration,
         @total_advocates_hired, @times_in_jail, @advocate_name_number,
@@ -148,7 +194,8 @@ app.post('/api/survey/add', (req, res) => {
         @work_transparency_tracking, @know_legal_step_correct,
         @case_prolonged_expensive, @pairvi_knowledge_reason,
         @court_docs_fees_timing, @know_trustworthy_platform,
-        @priority_money_vs_release, @prisoner_psychologic_survey
+        @priority_money_vs_release, @prisoner_psychologic_survey,
+        @custom_answers
       )
     `);
 
@@ -176,11 +223,12 @@ app.post('/api/survey/add', (req, res) => {
       court_docs_fees_timing: data.court_docs_fees_timing || '',
       know_trustworthy_platform: data.know_trustworthy_platform || '',
       priority_money_vs_release: data.priority_money_vs_release || '',
-      prisoner_psychologic_survey: data.prisoner_psychologic_survey || ''
+      prisoner_psychologic_survey: data.prisoner_psychologic_survey || '',
+      custom_answers: customJson
     });
 
     const newRecord = db.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').get(result.lastInsertRowid);
-    res.json({ success: true, message: 'Prisoner survey saved successfully!', data: newRecord });
+    res.json({ success: true, message: 'Prisoner survey saved successfully!', data: formatSurvey(newRecord) });
   } catch (err) {
     console.error('Error adding survey:', err);
     res.status(500).json({ success: false, message: err.message || 'Internal server error' });
@@ -193,7 +241,7 @@ app.put('/api/survey/:id', (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
-    const existing = db.prepare('SELECT id FROM prisoner_surveys WHERE id = ?').get(id);
+    const existing = db.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').get(id);
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Survey not found' });
     }
@@ -205,6 +253,12 @@ app.put('/api/survey/:id', (req, res) => {
         return res.status(400).json({ success: false, message: `UT/CT No. "${data.utct_no}" already exists in another record!` });
       }
     }
+
+    let existingCustom = {};
+    if (existing.custom_answers) {
+      try { existingCustom = JSON.parse(existing.custom_answers); } catch (e) {}
+    }
+    const customJson = extractCustomAnswers(data, existingCustom);
 
     const update = db.prepare(`
       UPDATE prisoner_surveys SET
@@ -232,6 +286,7 @@ app.put('/api/survey/:id', (req, res) => {
         know_trustworthy_platform = @know_trustworthy_platform,
         priority_money_vs_release = @priority_money_vs_release,
         prisoner_psychologic_survey = @prisoner_psychologic_survey,
+        custom_answers = @custom_answers,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = @id
     `);
@@ -261,11 +316,12 @@ app.put('/api/survey/:id', (req, res) => {
       court_docs_fees_timing: data.court_docs_fees_timing || '',
       know_trustworthy_platform: data.know_trustworthy_platform || '',
       priority_money_vs_release: data.priority_money_vs_release || '',
-      prisoner_psychologic_survey: data.prisoner_psychologic_survey || ''
+      prisoner_psychologic_survey: data.prisoner_psychologic_survey || '',
+      custom_answers: customJson
     });
 
     const updatedRecord = db.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').get(id);
-    res.json({ success: true, message: 'Survey updated successfully!', data: updatedRecord });
+    res.json({ success: true, message: 'Survey updated successfully!', data: formatSurvey(updatedRecord) });
   } catch (err) {
     console.error('Error updating survey:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -285,7 +341,7 @@ app.delete('/api/survey/:id', (req, res) => {
   }
 });
 
-// 8. Download Excel with Question Headers
+// 8. Dynamic Download Excel with Question Headers
 app.get('/api/survey/export/excel', (req, res) => {
   try {
     const search = (req.query.q || '').trim();
@@ -299,80 +355,36 @@ app.get('/api/survey/export/excel', (req, res) => {
     }
     query += ' ORDER BY id ASC';
 
-    const records = db.prepare(query).all(...params);
+    const records = db.prepare(query).all(...params).map(formatSurvey);
+    const questions = db.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
 
-    // Map records to rows where keys are exact question texts
+    // Map records to rows dynamically based on questions configured
     const excelRows = records.map((r, index) => {
-      return {
-        'S.No': index + 1,
-        '1) UT/CT No.': r.utct_no || '',
-        '2) Name': r.name || '',
-        '3) Case type / how you type of advocate to hire': r.case_type || '',
-        '4) Total number of cases': r.total_cases ?? '',
-        '5) How long these cases are running': r.case_duration || '',
-        '6) Total advocate hired till date': r.total_advocates_hired ?? '',
-        '7) How many time come to jail': r.times_in_jail ?? '',
-        '8) Advocate name and number': r.advocate_name_number || '',
-        '9) Known / unknown Advocate': r.known_unknown_advocate || '',
-        '10) High court advocate': r.high_court_advocate || '',
-        '11) Advocate payment advance': r.advocate_payment_advance || '',
-        '12) First Advocate hired by IO': r.first_advocate_by_io || '',
-        '13) Do you know process, when case started, first and next step': r.know_case_process || '',
-        '14) Does your lawyer ask, all details about your case, and collect evidence': r.lawyer_collects_details_evidence || '',
-        '15) How do you know, lawyer jo fees le raha hai, vo sahi hai': r.know_fees_reasonable || '',
-        '16) Does it give, complete fees total, initially': r.complete_fees_total_initially || '',
-        '17) Work transparency and tracking of lawyer work': r.work_transparency_tracking || '',
-        '18) Kya apko pata hai, jo legal step lawyer process kar raha hai, vo sab sahi hai, kuch miss toh nahi kar raha': r.know_legal_step_correct || '',
-        '19) Because of some extra unwanted step, kya lawyer ki wajah se, case lamba chala aur expensive ho gaya': r.case_prolonged_expensive || '',
-        '20) Parivi karwane ko knowledge hai ya nahi, aur kyun parivi karta hai': r.pairvi_knowledge_reason || '',
-        '21) Court ke doc kyun nikalte hai, and uski fees pata hai, aur kya vo aapko time pe miljate hai': r.court_docs_fees_timing || '',
-        '22) Do you know any platform, jo aapko pairvi karne wala de, and jo guarantee de ki, jo adv provide karega, jo trustworthy hoga': r.know_trustworthy_platform || '',
-        '23) Your priority, ki paise bachana hai ya jail se bahar jaldi jana hai': r.priority_money_vs_release || '',
-        '24) Prisoner psychologic according sarve': r.prisoner_psychologic_survey || '',
-        'Survey Date & Time': r.created_at || ''
-      };
+      const row = { 'S.No': index + 1 };
+      questions.forEach((q) => {
+        row[q.label] = (r[q.key] !== undefined && r[q.key] !== null) ? r[q.key] : '';
+      });
+      row['Survey Date & Time'] = r.created_at || '';
+      return row;
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
 
-    // Auto calculate column widths
-    const colWidths = [
-      { wch: 6 },  // S.No
-      { wch: 18 }, // UT/CT No
-      { wch: 22 }, // Name
-      { wch: 35 }, // Case Type
-      { wch: 20 }, // Total cases
-      { wch: 25 }, // How long
-      { wch: 22 }, // Total advocates
-      { wch: 22 }, // Times in jail
-      { wch: 30 }, // Advocate name & no
-      { wch: 22 }, // Known/unknown
-      { wch: 20 }, // High court adv
-      { wch: 28 }, // 11) Advocate payment advance
-      { wch: 22 }, // First adv by IO
-      { wch: 35 }, // Q13
-      { wch: 35 }, // Q14
-      { wch: 35 }, // Q15
-      { wch: 30 }, // Q16
-      { wch: 30 }, // Q17
-      { wch: 40 }, // Q18
-      { wch: 40 }, // Q19
-      { wch: 35 }, // Q20
-      { wch: 38 }, // Q21
-      { wch: 40 }, // Q22
-      { wch: 35 }, // Q23
-      { wch: 40 }, // Q24
-      { wch: 22 }  // Created At
-    ];
+    // Calculate dynamic column widths
+    const colWidths = [{ wch: 6 }];
+    questions.forEach((q) => {
+      colWidths.push({ wch: Math.min(Math.max(q.label.length + 4, 18), 45) });
+    });
+    colWidths.push({ wch: 22 });
     worksheet['!cols'] = colWidths;
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Prisoner Sarve Data');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Prisoner Survey Data');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="Prisoner_Sarve_Report_${Date.now()}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="Prisoner_Survey_Report_${Date.now()}.xlsx"`);
     res.send(buffer);
   } catch (err) {
     console.error('Error exporting excel:', err);
@@ -421,9 +433,242 @@ app.delete('/api/case-types/:id', (req, res) => {
   }
 });
 
+// 10. Questions CRUD & Numbering Management
+app.get('/api/questions', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
+    const formatted = rows.map((q) => {
+      let options = null;
+      if (q.options) {
+        try {
+          options = JSON.parse(q.options);
+        } catch (e) {
+          options = q.options.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+      }
+      return {
+        ...q,
+        required: Boolean(q.required),
+        is_custom: Boolean(q.is_custom),
+        options
+      };
+    });
+    res.json({ success: true, count: formatted.length, data: formatted });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/questions', (req, res) => {
+  try {
+    let { order_num, label, placeholder, type, options, required, note, key } = req.body;
+    if (!label || !label.trim()) {
+      return res.status(400).json({ success: false, message: 'Question label / text is required' });
+    }
+
+    // Determine order_num
+    if (!order_num || isNaN(order_num)) {
+      const maxOrder = db.prepare('SELECT MAX(order_num) as max_o FROM questions').get().max_o;
+      order_num = (maxOrder || 0) + 1;
+    } else {
+      order_num = Number(order_num);
+    }
+
+    // Format options as JSON string
+    let optionsStr = null;
+    if (Array.isArray(options)) {
+      optionsStr = JSON.stringify(options);
+    } else if (typeof options === 'string' && options.trim()) {
+      optionsStr = JSON.stringify(options.split(',').map((s) => s.trim()).filter(Boolean));
+    }
+
+    // Generate unique key if not supplied
+    if (!key || !key.trim()) {
+      const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 30);
+      key = `custom_${slug}_${Date.now()}`;
+    } else {
+      key = key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+      const existingKey = db.prepare('SELECT id FROM questions WHERE key = ?').get(key);
+      if (existingKey) {
+        key = `${key}_${Date.now()}`;
+      }
+    }
+
+    const insert = db.prepare(`
+      INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `);
+
+    const result = insert.run(
+      order_num,
+      key,
+      label.trim(),
+      placeholder ? placeholder.trim() : '',
+      type || 'text',
+      optionsStr,
+      required ? 1 : 0,
+      note ? note.trim() : ''
+    );
+
+    const created = db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid);
+    res.json({
+      success: true,
+      message: 'Question added successfully',
+      data: {
+        ...created,
+        required: Boolean(created.required),
+        options: optionsStr ? JSON.parse(optionsStr) : null
+      }
+    });
+  } catch (err) {
+    console.error('Error adding question:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/questions/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Question not found' });
+    }
+
+    let { order_num, label, placeholder, type, options, required, note } = req.body;
+
+    const newOrderNum = (order_num !== undefined && !isNaN(order_num)) ? Number(order_num) : existing.order_num;
+    const newLabel = label !== undefined ? label.trim() : existing.label;
+    const newPlaceholder = placeholder !== undefined ? placeholder.trim() : existing.placeholder;
+    const newType = type || existing.type;
+    const newRequired = required !== undefined ? (required ? 1 : 0) : existing.required;
+    const newNote = note !== undefined ? note.trim() : existing.note;
+
+    let optionsStr = existing.options;
+    if (options !== undefined) {
+      if (Array.isArray(options)) {
+        optionsStr = JSON.stringify(options);
+      } else if (typeof options === 'string') {
+        optionsStr = JSON.stringify(options.split(',').map((s) => s.trim()).filter(Boolean));
+      } else {
+        optionsStr = null;
+      }
+    }
+
+    db.prepare(`
+      UPDATE questions SET
+        order_num = ?,
+        label = ?,
+        placeholder = ?,
+        type = ?,
+        options = ?,
+        required = ?,
+        note = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, id);
+
+    const updated = db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
+    res.json({
+      success: true,
+      message: 'Question updated successfully',
+      data: {
+        ...updated,
+        required: Boolean(updated.required),
+        options: optionsStr ? JSON.parse(optionsStr) : null
+      }
+    });
+  } catch (err) {
+    console.error('Error updating question:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/questions/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = db.prepare('DELETE FROM questions WHERE id = ?').run(id);
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'Question not found' });
+    }
+    res.json({ success: true, message: 'Question deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Batch reorder / set numbering
+app.post('/api/questions/reorder', (req, res) => {
+  try {
+    const { items } = req.body; // array of { id, order_num }
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, message: 'Items array required' });
+    }
+
+    const updateStmt = db.prepare('UPDATE questions SET order_num = ? WHERE id = ?');
+    const updateMany = db.transaction((list) => {
+      for (const item of list) {
+        updateStmt.run(Number(item.order_num), item.id);
+      }
+    });
+    updateMany(items);
+
+    const updatedList = db.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
+    res.json({ success: true, message: 'Question numbering updated successfully', data: updatedList });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Reset questions to default 24
+app.post('/api/questions/reset', (req, res) => {
+  try {
+    db.prepare('DELETE FROM questions').run();
+    // Re-run db init seed
+    const { initDB } = require('./db');
+    // Note: initDB was already executed, we can re-insert defaults
+    const defaultQuestions = [
+      { order_num: 1, key: 'utct_no', label: '1) UT/CT No.', placeholder: 'e.g. UT/2026/104 or CT/2026/89', type: 'text', required: 1, options: null, note: 'Note:- Unique ID. System will verify against database before proceeding.', is_custom: 0 },
+      { order_num: 2, key: 'name', label: '2) Name', placeholder: 'Enter prisoner full name', type: 'text', required: 1, options: null, note: 'Note:- Please enter prisoner full name.', is_custom: 0 },
+      { order_num: 3, key: 'case_type', label: '3) Case type / how you type of advocate to hire', placeholder: 'Select one or more case types', type: 'multi-select', required: 1, options: null, note: 'Note:- You can select multiple case types from the dropdown managed on the home page.', is_custom: 0 },
+      { order_num: 4, key: 'total_cases', label: '4) Total number of cases', placeholder: 'e.g. 1, 2, 3', type: 'number', required: 1, options: null, note: 'Note:- Input only Numbers', is_custom: 0 },
+      { order_num: 5, key: 'case_duration', label: '5) How long these cases are running', placeholder: 'e.g. 6 Months, 2 Years, 1 Year 4 Months', type: 'text', required: 1, options: null, note: 'Note:- Specify duration (months / years).', is_custom: 0 },
+      { order_num: 6, key: 'total_advocates_hired', label: '6) Total advocate hired till date', placeholder: 'e.g. 0, 1, 2', type: 'number', required: 1, options: null, note: 'Note:- Input only Numbers', is_custom: 0 },
+      { order_num: 7, key: 'times_in_jail', label: '7) How many time come to jail', placeholder: 'e.g. 1, 2, 3', type: 'number', required: 1, options: null, note: 'Note:- Input only Numbers', is_custom: 0 },
+      { order_num: 8, key: 'advocate_name_number', label: '8) Advocate name and number', placeholder: 'e.g. Adv. R.K. Gupta (+91 9876543210)', type: 'text', required: 0, options: null, note: 'Note:- Enter current or previous advocate name and phone number.', is_custom: 0 },
+      { order_num: 9, key: 'known_unknown_advocate', label: '9) Known / unknown Advocate', placeholder: 'Known or Unknown', type: 'yesno_or_choice', required: 0, options: JSON.stringify(['Known', 'Unknown', 'Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 10, key: 'high_court_advocate', label: '10) High court advocate', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 11, key: 'advocate_payment_advance', label: '11) Advocate payment advance', placeholder: "Type 'Yes' or 'No'", type: 'yesno_advance', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 12, key: 'first_advocate_by_io', label: '12) First Advocate hired by IO', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 13, key: 'know_case_process', label: '13) Do you know process, when case started, first and next step', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 14, key: 'lawyer_collects_details_evidence', label: '14) Does your lawyer ask, all details about your case, and collect evidence', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 15, key: 'know_fees_reasonable', label: '15) How do you know, lawyer jo fees le raha hai, vo sahi hai', placeholder: 'Yes or No / Details', type: 'yesno_text', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 16, key: 'complete_fees_total_initially', label: '16) Does it give, complete fees total, initially', placeholder: "Type 'Yes' or 'No'", type: 'yesno_advance', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No (If Yes, specify complete fees amount)', is_custom: 0 },
+      { order_num: 17, key: 'work_transparency_tracking', label: '17) Work transparency and tracking of lawyer work', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 18, key: 'know_legal_step_correct', label: '18) Kya apko pata hai, jo legal step lawyer process kar raha hai, vo sab sahi hai, kuch miss toh nahi kar raha', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 19, key: 'case_prolonged_expensive', label: '19) Because of some extra unwanted step, kya lawyer ki wajah se, case lamba chala aur expensive ho gaya', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 20, key: 'pairvi_knowledge_reason', label: '20) Parivi karwane ko knowledge hai ya nahi, aur kyun parivi karta hai', placeholder: 'Yes or No / Details', type: 'yesno_text', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 21, key: 'court_docs_fees_timing', label: '21) Court ke doc kyun nikalte hai, and uski fees pata hai, aur kya vo aapko time pe miljate hai', placeholder: 'Yes or No / Details', type: 'yesno_text', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 22, key: 'know_trustworthy_platform', label: '22) Do you know any platform, jo aapko pairvi karne wala de, and jo guarantee de ki, jo adv provide karega, jo trustworthy hoga', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls enter Only Yes or No', is_custom: 0 },
+      { order_num: 23, key: 'priority_money_vs_release', label: '23) Your priority, ki paise bachana hai ya jail se bahar jaldi jana hai', placeholder: 'Select priority', type: 'choice_text', required: 0, options: JSON.stringify(['Jail se bahar jaldi jana', 'Paise bachana']), note: 'Note:- Please select only one of the 2 options: Jail se bahar jaldi jana OR Paise bachana', is_custom: 0 },
+      { order_num: 24, key: 'prisoner_psychologic_survey', label: '24) Prisoner psychologic according Survey', placeholder: 'Select Yes or No, and add remarks (optional)...', type: 'psychologic_yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls select Yes or No (Remarks optional)', is_custom: 0 }
+    ];
+    const insertQ = db.prepare(`
+      INSERT INTO questions (order_num, key, label, placeholder, type, required, options, note, is_custom)
+      VALUES (@order_num, @key, @label, @placeholder, @type, @required, @options, @note, @is_custom)
+    `);
+    const insertManyQ = db.transaction((qs) => {
+      for (const q of qs) insertQ.run(q);
+    });
+    insertManyQ(defaultQuestions);
+    res.json({ success: true, message: 'Questions reset to default 24 successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`===============================================`);
-  console.log(`   SARVE PORTAL SERVER RUNNING ON PORT ${PORT} `);
-  console.log(`   Login: sarve / New@1020                      `);
+  console.log(`   SURVEY PORTAL SERVER RUNNING ON PORT ${PORT} `);
+  console.log(`   Login: meet / New@1020                      `);
   console.log(`===============================================`);
 });
