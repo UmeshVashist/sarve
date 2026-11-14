@@ -11,24 +11,33 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'prisoner'
+  // Remember current screen across page reloads (Stay on Prisoner Survey if reloaded!)
+  const [currentScreen, setCurrentScreen] = useState(() => {
+    return localStorage.getItem('sarve_current_screen') || 'dashboard';
+  });
   const [toastMessage, setToastMessage] = useState('');
+
+  const navigateTo = (screen) => {
+    setCurrentScreen(screen);
+    localStorage.setItem('sarve_current_screen', screen);
+  };
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     localStorage.setItem('sarve_user', JSON.stringify(userData));
-    setCurrentScreen('dashboard');
+    navigateTo('dashboard');
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('sarve_user');
+    localStorage.removeItem('sarve_current_screen');
     setCurrentScreen('dashboard');
   };
 
   const handleSelectDashboardOption = (optionId) => {
     if (optionId === 'prisoner') {
-      setCurrentScreen('prisoner');
+      navigateTo('prisoner');
     } else {
       const labels = {
         advocate: 'Advocate Sarve',
@@ -50,7 +59,7 @@ export default function App() {
       <Navbar
         user={user}
         onLogout={handleLogout}
-        onHomeClick={() => setCurrentScreen('dashboard')}
+        onHomeClick={() => navigateTo('dashboard')}
       />
 
       {/* Optional Toast Notification */}
@@ -82,7 +91,7 @@ export default function App() {
         )}
 
         {currentScreen === 'prisoner' && (
-          <PrisonerSurveyHome onBackToDashboard={() => setCurrentScreen('dashboard')} />
+          <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
         )}
       </main>
     </div>

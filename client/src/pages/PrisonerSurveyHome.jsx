@@ -159,11 +159,12 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
     downloadSurveyExcel(surveys, filename);
   };
 
-  // Quick stats calculations
-  const totalCount = surveys.length;
-  const highCourtCount = surveys.filter((s) => (s.high_court_advocate || '').toLowerCase() === 'yes').length;
-  const advancePaymentCount = surveys.filter((s) => (s.advocate_payment_advance || '').toLowerCase().startsWith('yes')).length;
-  const releasePriorityCount = surveys.filter((s) => (s.priority_money_vs_release || '').toLowerCase().includes('jail')).length;
+  // Quick stats calculations (Completely safe against null/undefined records)
+  const validSurveys = Array.isArray(surveys) ? surveys.filter((s) => s && typeof s === 'object') : [];
+  const totalCount = validSurveys.length;
+  const highCourtCount = validSurveys.filter((s) => (s?.high_court_advocate || '').toLowerCase() === 'yes').length;
+  const advancePaymentCount = validSurveys.filter((s) => (s?.advocate_payment_advance || '').toLowerCase().startsWith('yes')).length;
+  const releasePriorityCount = validSurveys.filter((s) => (s?.priority_money_vs_release || '').toLowerCase().includes('jail')).length;
 
   return (
     <div className="survey-page-container animate-fade-in">
@@ -340,18 +341,18 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
                   </td>
                 </tr>
               ) : (
-                surveys.map((survey, index) => {
-                  const caseTypeArr = survey.case_type ? survey.case_type.split(', ') : [];
-                  const advPaymentLower = (survey.advocate_payment_advance || '').toLowerCase();
-                  const highCourtLower = (survey.high_court_advocate || '').toLowerCase();
+                validSurveys.map((survey, index) => {
+                  const caseTypeArr = survey?.case_type ? survey.case_type.split(', ') : [];
+                  const advPaymentLower = (survey?.advocate_payment_advance || '').toLowerCase();
+                  const highCourtLower = (survey?.high_court_advocate || '').toLowerCase();
 
                   return (
-                    <tr key={survey.id}>
+                    <tr key={survey?.id || index}>
                       <td style={{ fontWeight: 600, color: '#64748B' }}>{index + 1}</td>
                       <td>
-                        <span className="badge-utct">{survey.utct_no}</span>
+                        <span className="badge-utct">{survey?.utct_no}</span>
                       </td>
-                      <td style={{ fontWeight: 700, color: '#0F172A' }}>{survey.name}</td>
+                      <td style={{ fontWeight: 700, color: '#0F172A' }}>{survey?.name}</td>
                       <td>
                         <div style={{ maxWidth: '280px', display: 'flex', flexWrap: 'wrap' }}>
                           {caseTypeArr.length > 0 ? (
@@ -441,7 +442,10 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         caseTypes={caseTypes}
         onCaseTypeAdded={fetchCaseTypes}
         onSurveySaved={(newSurvey) => {
-          setSurveys((prev) => [newSurvey, ...prev]);
+          if (newSurvey && typeof newSurvey === 'object') {
+            setSurveys((prev) => [newSurvey, ...(prev || []).filter(Boolean)]);
+          }
+          fetchSurveys();
         }}
       />
 

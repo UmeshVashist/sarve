@@ -148,8 +148,12 @@ export default {
           d.know_trustworthy_platform || '', d.priority_money_vs_release || '', d.prisoner_psychologic_survey || ''
         ).run();
 
+        const savedRecord = await env.DB.prepare(
+          'SELECT * FROM prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
+        ).bind(d.utct_no).first();
+
         return new Response(
-          JSON.stringify({ success: true, message: 'Saved successfully' }),
+          JSON.stringify({ success: true, message: 'Saved successfully', data: savedRecord || d }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -184,7 +188,8 @@ export default {
           id
         ).run();
 
-        return new Response(JSON.stringify({ success: true, message: 'Updated successfully' }), {
+        const updatedRecord = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(id).first();
+        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: updatedRecord || d }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

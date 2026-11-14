@@ -493,7 +493,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
       const data = await res.json();
 
       if (data.success) {
-        onSurveySaved(data.data);
+        onSurveySaved(data.data || payload);
         onClose();
       } else {
         setError(data.message || 'Failed to save survey. Check duplicate UT/CT no.');
