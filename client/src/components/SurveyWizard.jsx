@@ -654,16 +654,16 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 </div>
               )}
 
-              {/* High Speed Input & Direct "+ Add Case Type" button */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              {/* High Speed Input & Only "+" Icon Button */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
                   <input
                     ref={inputRef}
                     type="text"
                     className="wizard-input-box"
-                    style={{ paddingLeft: '40px', width: '100%' }}
-                    placeholder="Search or enter new case type..."
+                    style={{ paddingLeft: '40px', width: '100%', height: '48px', boxSizing: 'border-box' }}
+                    placeholder="Search case type (or type new name & click +)..."
                     value={caseTypeSearch}
                     onChange={(e) => {
                       setCaseTypeSearch(e.target.value);
@@ -676,23 +676,29 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 </div>
                 <button
                   type="button"
-                  className="btn-primary-coral"
                   style={{
-                    padding: '0 16px',
-                    display: 'inline-flex',
+                    width: '48px',
+                    height: '48px',
+                    minWidth: '48px',
+                    maxWidth: '48px',
+                    padding: 0,
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 600,
-                    fontSize: '13px',
+                    justifyContent: 'center',
+                    background: '#EE9576',
+                    color: '#FFFFFF',
+                    border: 'none',
                     borderRadius: '12px',
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(238, 149, 118, 0.35)',
+                    transition: 'all 0.2s ease',
+                    flexShrink: 0
                   }}
                   onClick={() => handleAddNewCaseType(caseTypeSearch)}
-                  title="Form band kare bina naya case type add aur select karein"
+                  title="Naya Case Type add aur select karein"
+                  aria-label="Add Case Type"
                 >
-                  <Plus size={16} />
-                  <span>+ Add Case Type</span>
+                  <Plus size={24} strokeWidth={2.6} />
                 </button>
               </div>
 
