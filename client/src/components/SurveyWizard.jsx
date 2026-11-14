@@ -124,12 +124,26 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
     }
   }, [currentStep, isQ24]);
 
-  // Focus input on step change
+  // Focus input automatically on wizard open and on every step change
   useEffect(() => {
-    if (!isReviewMode && inputRef.current) {
-      inputRef.current.focus();
+    if (isOpen && !isReviewMode) {
+      const focusTarget = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      };
+      // Immediate and staged timeouts to guarantee focus transfer in Portals
+      focusTarget();
+      const t1 = setTimeout(focusTarget, 30);
+      const t2 = setTimeout(focusTarget, 100);
+      const t3 = setTimeout(focusTarget, 250);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }
-  }, [currentStep, isReviewMode]);
+  }, [isOpen, currentStep, isReviewMode]);
 
   // Global Ctrl + Enter Shortcut listener
   useEffect(() => {
@@ -774,6 +788,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 className="wizard-input-box"
                 placeholder="Type 'Yes' or 'No'"
                 value={q11DisplayVal}
+                autoFocus
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val.toLowerCase().startsWith('no')) {
@@ -855,6 +870,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 className="wizard-input-box"
                 placeholder="Type 'Yes' or 'No'"
                 value={q16DisplayVal}
+                autoFocus
                 onChange={(e) => {
                   const val = e.target.value;
                   if (val.toLowerCase().startsWith('no')) {
@@ -991,6 +1007,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
               placeholder={currentQ.placeholder}
               value={currentVal}
               onChange={(e) => handleInputChange(e.target.value)}
+              autoFocus
             />
           ) : currentQ.type === 'yesno' ? (
             <div>
@@ -1001,6 +1018,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 placeholder="Type 'Yes' or 'No'"
                 value={currentVal}
                 onChange={(e) => handleInputChange(e.target.value)}
+                autoFocus
               />
               <div className="yes-no-options-grid">
                 <button
@@ -1030,6 +1048,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 placeholder={currentQ.placeholder}
                 value={currentVal}
                 onChange={(e) => handleInputChange(e.target.value)}
+                autoFocus
               />
               <div className="yes-no-options-grid">
                 {currentQ.options.map((opt) => (
@@ -1055,6 +1074,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], onCaseTy
                 value={currentVal}
                 onChange={(e) => handleInputChange(e.target.value)}
                 disabled={checkingUtct}
+                autoFocus
               />
               {checkingUtct && currentQ.isUniqueCheck && (
                 <div style={{
