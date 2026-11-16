@@ -206,8 +206,8 @@ export default function CourtTypesModal({
           </div>
         </div>
 
-        <div className="modal-footer" style={{ justifyContent: 'flex-end', paddingTop: '14px' }}>
-          <button type="button" className="btn-primary" onClick={onClose} style={{ padding: '8px 24px' }}>
+        <div className="modal-footer">
+          <button type="button" className="btn-modal-done" onClick={onClose}>
             Done
           </button>
         </div>

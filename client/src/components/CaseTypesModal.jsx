@@ -99,6 +99,12 @@ export default function CaseTypesModal({ isOpen, onClose, caseTypes, onAddCaseTy
             ))}
           </div>
         </div>
+
+        <div className="modal-footer">
+          <button type="button" className="btn-modal-done" onClick={onClose}>
+            Done
+          </button>
+        </div>
       </div>
     </div>,
     document.body

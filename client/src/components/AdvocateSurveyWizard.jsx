@@ -382,28 +382,32 @@ export default function AdvocateSurveyWizard({
   return createPortal(
     <div className="wizard-backdrop animate-fade-in" onClick={onClose}>
       <div className="wizard-card" onClick={(e) => e.stopPropagation()}>
-        {/* Progress Header */}
-        <div className="wizard-header">
-          <div className="wizard-badge" style={{ background: '#FFF7ED', color: '#EA580C' }}>
-            Question #{currentQ.order_num ?? currentStep + 1} ({currentStep + 1} of {totalQuestions})
+        {/* Top Info Bar */}
+        <div className="wizard-top-bar">
+          <div className="wizard-progress-info">
+            <span className="wizard-step-pill">
+              Question #{currentQ?.order_num ?? (currentStep + 1)} ({currentStep + 1} of {totalQuestions})
+            </span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B' }}>
+              {progressPercent}% Completed
+            </span>
           </div>
-          <div className="wizard-percent">{progressPercent}% Completed</div>
-          <button className="wizard-close-btn" onClick={onClose} title="Cancel">
+          <button className="wizard-close-btn" onClick={onClose} title="Close Questionnaire">
             <X size={20} />
           </button>
         </div>
 
         {/* Progress Bar */}
-        <div className="wizard-progress-bar-track">
+        <div className="wizard-progress-track">
           <div
-            className="wizard-progress-bar-fill"
-            style={{ width: `${progressPercent}%`, background: '#EA580C' }}
+            className="wizard-progress-fill"
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
 
         {/* Question Body */}
         <div className="wizard-body">
-          <h2 className="wizard-question-text">{getAdvocateQuestionLabel(currentQ, currentStep)}</h2>
+          <div className="wizard-question-label">{getAdvocateQuestionLabel(currentQ, currentStep)}</div>
 
           {currentQ.type === 'textarea' ? (
             <textarea
@@ -538,7 +542,6 @@ export default function AdvocateSurveyWizard({
           <button
             type="button"
             className="btn-wizard-next"
-            style={{ background: '#EA580C', borderColor: '#EA580C' }}
             onClick={handleNext}
             disabled={checkingReg}
           >
