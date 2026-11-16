@@ -65,8 +65,24 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
                   <div className="review-item-qnum">Question #{q.order_num ?? idx + 1}</div>
                   <div className="review-item-question">{getQuestionLabel(q, idx)}</div>
                   <div>
-                    {val !== undefined && val !== null && String(val).trim() !== '' ? (
-                      <span className="review-item-answer">{String(val)}</span>
+                    {q.key === 'advocate_name_number' && Array.isArray(survey.advocates_details) && survey.advocates_details.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                        {survey.advocates_details.map((adv, aIdx) => (
+                          <div key={aIdx} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>
+                              #{aIdx + 1} Advocate: {adv.name || 'N/A'}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', color: '#475569', fontSize: '12.5px' }}>
+                              <span>Fee: <strong>₹{adv.fee || 0}</strong></span>
+                              <span>Experience: <strong>{adv.experience || 'N/A'}</strong></span>
+                              <span>Known: <strong>{adv.known || 'N/A'}</strong></span>
+                              <span>Court: <strong>{adv.court_type || 'N/A'}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : val !== undefined && val !== null && String(val).trim() !== '' ? (
+                      <span className="review-item-answer" style={{ whiteSpace: 'pre-line' }}>{String(val)}</span>
                     ) : (
                       <span className="review-item-answer empty">Not specified</span>
                     )}

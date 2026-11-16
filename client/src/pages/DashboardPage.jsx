@@ -11,8 +11,8 @@ export default function DashboardPage({ onSelectOption }) {
     {
       id: 'advocate',
       title: 'Advocate Survey',
-      tag: 'Coming Soon',
-      isPrimary: false
+      tag: 'Active Module',
+      isPrimary: true
     },
     {
       id: 'citizen',

@@ -70,17 +70,87 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS court_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS advocate_surveys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      advocate_reg_no TEXT UNIQUE,
+      name TEXT NOT NULL,
+      contact_number TEXT,
+      office_address TEXT,
+      primary_court TEXT,
+      practice_experience_years INTEGER,
+      case_specialization TEXT,
+      regularly_handles_undertrial_cases TEXT,
+      provides_legal_aid_dlsa TEXT,
+      transparent_fee_structure TEXT,
+      average_case_duration TEXT,
+      parivi_assistance_knowledge TEXT,
+      remarks TEXT,
+      custom_answers TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS advocate_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_num INTEGER NOT NULL,
+      key TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      placeholder TEXT,
+      type TEXT DEFAULT 'text',
+      options TEXT,
+      required INTEGER DEFAULT 0,
+      note TEXT,
+      is_custom INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  // Ensure custom_answers column exists in prisoner_surveys if created prior
+  // Ensure custom_answers & advocates_details columns exist in prisoner_surveys
   try {
     const tableInfo = db.prepare("PRAGMA table_info(prisoner_surveys)").all();
     const hasCustomAnswers = tableInfo.some((col) => col.name === 'custom_answers');
     if (!hasCustomAnswers) {
       db.exec("ALTER TABLE prisoner_surveys ADD COLUMN custom_answers TEXT DEFAULT '{}'");
     }
+    const hasAdvocatesDetails = tableInfo.some((col) => col.name === 'advocates_details');
+    if (!hasAdvocatesDetails) {
+      db.exec("ALTER TABLE prisoner_surveys ADD COLUMN advocates_details TEXT DEFAULT '[]'");
+    }
   } catch (err) {
-    console.error('Migration notice for custom_answers column:', err.message);
+    console.error('Migration notice for prisoner_surveys columns:', err.message);
+  }
+
+  // Seed default court types if empty
+  try {
+    const courtCount = db.prepare('SELECT COUNT(*) as count FROM court_types').get().count;
+    if (courtCount === 0) {
+      const defaultCourts = [
+        'District Court',
+        'Sessions Court',
+        'High Court',
+        'Supreme Court',
+        'Magistrate Court (CMM / ACMM)',
+        'Special / NDPS Court',
+        'Family Court',
+        'Other'
+      ];
+      const insertCourt = db.prepare('INSERT OR IGNORE INTO court_types (name) VALUES (?)');
+      const insertManyCourts = db.transaction((types) => {
+        for (const t of types) insertCourt.run(t);
+      });
+      insertManyCourts(defaultCourts);
+      console.log('Seeded default court types successfully.');
+    }
+  } catch (err) {
+    console.error('Error seeding court types:', err.message);
   }
 
   // Seed default case types if empty
@@ -395,6 +465,38 @@ function initDB() {
   } else {
     // If questions exist, update Q24 label if it has "sarve"
     db.prepare("UPDATE questions SET label = '24) Prisoner psychologic according Survey' WHERE key = 'prisoner_psychologic_survey' AND label LIKE '%sarve%'").run();
+  }
+
+  // Seed default advocate questions if empty
+  try {
+    const advQCount = db.prepare('SELECT COUNT(*) as count FROM advocate_questions').get().count;
+    if (advQCount === 0) {
+      const defaultAdvQuestions = [
+        { order_num: 1, key: 'advocate_reg_no', label: '1) Bar Council / Enrollment No.', placeholder: 'e.g. D/1234/2015', type: 'text', required: 1, options: null, note: 'Note:- Unique advocate enrollment / bar registration number.', is_custom: 0 },
+        { order_num: 2, key: 'name', label: '2) Advocate Full Name', placeholder: 'e.g. Adv. Rajesh Sharma', type: 'text', required: 1, options: null, note: 'Note:- Enter full name of the advocate.', is_custom: 0 },
+        { order_num: 3, key: 'contact_number', label: '3) Contact / WhatsApp Number', placeholder: 'e.g. +91 9876543210', type: 'text', required: 1, options: null, note: 'Note:- 10-digit mobile number.', is_custom: 0 },
+        { order_num: 4, key: 'primary_court', label: '4) Primary Court of Practice', placeholder: 'Select primary court', type: 'choice_text', required: 1, options: JSON.stringify(['District Court', 'Sessions Court', 'High Court', 'Supreme Court', 'Magistrate Court (CMM / ACMM)', 'Special / NDPS Court', 'Other']), note: 'Note:- Main court where advocate practices regularly.', is_custom: 0 },
+        { order_num: 5, key: 'practice_experience_years', label: '5) Years of Legal Practice', placeholder: 'e.g. 5, 10, 15', type: 'number', required: 1, options: null, note: 'Note:- Input numeric years of experience.', is_custom: 0 },
+        { order_num: 6, key: 'case_specialization', label: '6) Legal Specialization', placeholder: 'Select legal specialization', type: 'multi-select', required: 1, options: JSON.stringify(['Criminal Defense', 'Bail Applications', 'NDPS Act (Narcotics)', 'POCSO & Women Safety', 'Cheating & Fraud (IPC 420)', 'Murder / Attempt (IPC 302/307)', 'Cyber Crime', 'Civil & Property', 'Constitutional / High Court Writs', 'Other']), note: 'Note:- Select one or more legal fields.', is_custom: 0 },
+        { order_num: 7, key: 'regularly_handles_undertrial_cases', label: '7) Regularly handles Jail / Undertrial Prisoner Cases?', placeholder: 'Yes or No', type: 'yesno', required: 1, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls select Yes or No.', is_custom: 0 },
+        { order_num: 8, key: 'provides_legal_aid_dlsa', label: '8) Empanelled with DLSA / Legal Aid?', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls select Yes or No.', is_custom: 0 },
+        { order_num: 9, key: 'transparent_fee_structure', label: '9) Provides transparent upfront fee agreement to clients?', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls select Yes or No.', is_custom: 0 },
+        { order_num: 10, key: 'average_case_duration', label: '10) Average duration to secure Bail / Trial relief', placeholder: 'e.g. 1 Month, 3 Months, 6 Months', type: 'text', required: 0, options: null, note: 'Note:- Approximate timeline.', is_custom: 0 },
+        { order_num: 11, key: 'parivi_assistance_knowledge', label: '11) Knowledge of Prison Parivi & Document tracking process?', placeholder: 'Yes or No', type: 'yesno', required: 0, options: JSON.stringify(['Yes', 'No']), note: 'Note:- Pls select Yes or No.', is_custom: 0 },
+        { order_num: 12, key: 'remarks', label: '12) Remarks / Suggestions for Jail Legal System', placeholder: 'Enter observations, suggestions, feedback...', type: 'textarea', required: 0, options: null, note: 'Note:- General observations.', is_custom: 0 }
+      ];
+      const insertAdvQ = db.prepare(`
+        INSERT INTO advocate_questions (order_num, key, label, placeholder, type, required, options, note, is_custom)
+        VALUES (@order_num, @key, @label, @placeholder, @type, @required, @options, @note, @is_custom)
+      `);
+      const insertManyAdvQ = db.transaction((qs) => {
+        for (const q of qs) insertAdvQ.run(q);
+      });
+      insertManyAdvQ(defaultAdvQuestions);
+      console.log('Seeded default advocate questions successfully.');
+    }
+  } catch (err) {
+    console.error('Error seeding advocate questions:', err.message);
   }
 }
 

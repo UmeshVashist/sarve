@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
+import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
 import Navbar from './components/Navbar';
 import './App.css';
 
@@ -50,13 +51,14 @@ export default function App() {
   const handleSelectDashboardOption = (optionId) => {
     if (optionId === 'prisoner') {
       navigateTo('prisoner');
+    } else if (optionId === 'advocate') {
+      navigateTo('advocate');
     } else {
       const labels = {
-        advocate: 'Advocate Survey',
         citizen: 'Citizen Survey',
         other: 'Other Survey'
       };
-      setToastMessage(`${labels[optionId] || optionId} portal module is currently in development and will be activated in the next phase! Please explore "Prisoner Survey".`);
+      setToastMessage(`${labels[optionId] || optionId} portal module is currently in development and will be activated in the next phase!`);
       setTimeout(() => setToastMessage(''), 5000);
     }
   };
@@ -104,6 +106,10 @@ export default function App() {
 
         {currentScreen === 'prisoner' && (
           <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+        )}
+
+        {currentScreen === 'advocate' && (
+          <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
         )}
       </main>
     </div>

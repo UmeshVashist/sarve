@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import SurveyWizard from '../components/SurveyWizard';
 import CaseTypesModal from '../components/CaseTypesModal';
+import CourtTypesModal from '../components/CourtTypesModal';
 import SurveyDetailModal from '../components/SurveyDetailModal';
 import EditSurveyModal from '../components/EditSurveyModal';
 import ManageQuestionsModal from '../components/ManageQuestionsModal';
@@ -45,6 +46,7 @@ export const DEFAULT_CASE_TYPES = [
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
+  const [courtTypes, setCourtTypes] = useState([]);
   const [questions, setQuestions] = useState(() => {
     try {
       const saved = localStorage.getItem('survey_questions_list');
@@ -73,16 +75,77 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   // Modals state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isCaseTypesOpen, setIsCaseTypesOpen] = useState(false);
+  const [isCourtTypesOpen, setIsCourtTypesOpen] = useState(false);
   const [isQuestionsOpen, setIsQuestionsOpen] = useState(false);
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
 
-  // Fetch surveys, case types, and questions on mount
+  // Fetch surveys, case types, court types, and questions on mount
   useEffect(() => {
     fetchSurveys();
     fetchCaseTypes();
+    fetchCourtTypes();
     fetchQuestions();
   }, []);
+
+  const fetchCourtTypes = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        setCourtTypes(data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch court types:', err);
+    }
+  };
+
+  const handleAddCourtType = async (typeName) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: typeName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchCourtTypes();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const handleEditCourtType = async (id, name) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchCourtTypes();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const handleDeleteCourtType = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete court type "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchCourtTypes();
+      }
+    } catch (err) {
+      alert('Failed to delete court type');
+    }
+  };
 
   const fetchQuestions = async () => {
     try {
@@ -325,6 +388,16 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
           </button>
 
           <button
+            className="btn-case-types"
+            style={{ background: '#FFF7ED', borderColor: '#FDBA74', color: '#EA580C' }}
+            onClick={() => setIsCourtTypesOpen(true)}
+            title="Manage court type options for Advocate Question 8"
+          >
+            <Scale size={17} />
+            <span>Manage Court Types ({courtTypes.length})</span>
+          </button>
+
+          <button
             className="btn-manage-questions"
             onClick={() => setIsQuestionsOpen(true)}
             title="Add, edit, delete, and set numbering for survey questions"
@@ -494,8 +567,12 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         caseTypes={caseTypes}
+        courtTypes={courtTypes}
         questions={questions}
         onCaseTypeAdded={fetchCaseTypes}
+        onCourtTypeAdded={handleAddCourtType}
+        onCourtTypeEdited={handleEditCourtType}
+        onCourtTypeDeleted={handleDeleteCourtType}
         onSurveySaved={(newSurvey) => {
           if (newSurvey && typeof newSurvey === 'object' && newSurvey.id) {
             setSurveys((prev) => [newSurvey, ...(prev || []).filter((s) => s && s.id !== newSurvey.id)]);
@@ -511,6 +588,16 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         caseTypes={caseTypes}
         onAddCaseType={handleAddCaseType}
         onDeleteCaseType={handleDeleteCaseType}
+      />
+
+      {/* Manage Court Types Modal */}
+      <CourtTypesModal
+        isOpen={isCourtTypesOpen}
+        onClose={() => setIsCourtTypesOpen(false)}
+        courtTypes={courtTypes}
+        onAddCourtType={handleAddCourtType}
+        onEditCourtType={handleEditCourtType}
+        onDeleteCourtType={handleDeleteCourtType}
       />
 
       {/* Manage Survey Questions Modal */}
@@ -536,6 +623,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
         onClose={() => setSelectedSurveyForEdit(null)}
         survey={selectedSurveyForEdit}
         caseTypes={caseTypes}
+        courtTypes={courtTypes}
         questions={questions}
         onSurveyUpdated={(updated) => {
           if (updated && updated.id) {

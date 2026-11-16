@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw, Trash2, Scale, UserPlus } from 'lucide-react';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
+import CourtTypesModal from './CourtTypesModal';
+
+const DEFAULT_FALLBACK_COURT_TYPES = [
+  { id: 1, name: 'District Court' },
+  { id: 2, name: 'Sessions Court' },
+  { id: 3, name: 'High Court' },
+  { id: 4, name: 'Supreme Court' },
+  { id: 5, name: 'Magistrate Court (CMM / ACMM)' },
+  { id: 6, name: 'Special / NDPS Court' },
+  { id: 7, name: 'Family Court' },
+  { id: 8, name: 'Other' }
+];
 
 const DEFAULT_FALLBACK_CASE_TYPES = [
   { id: 'fb-1', name: 'Murder (IPC 302)' },
@@ -19,7 +31,18 @@ const DEFAULT_FALLBACK_CASE_TYPES = [
   { id: 'fb-12', name: 'Other' }
 ];
 
-export default function SurveyWizard({ isOpen, onClose, caseTypes = [], questions = SURVEY_QUESTIONS, onCaseTypeAdded, onSurveySaved }) {
+export default function SurveyWizard({
+  isOpen,
+  onClose,
+  caseTypes = [],
+  courtTypes = [],
+  questions = SURVEY_QUESTIONS,
+  onCaseTypeAdded,
+  onCourtTypeAdded,
+  onCourtTypeEdited,
+  onCourtTypeDeleted,
+  onSurveySaved
+}) {
   const [currentStep, setCurrentStep] = useState(0); // 0 to N-1 for questions, N for Review Summary
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
@@ -29,6 +52,15 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
 
   // Dynamic Case Types state for Q3
   const [extraCaseTypes, setExtraCaseTypes] = useState([]);
+
+  // Question 8: Multi-Advocates Builder & Court Types
+  const [advocatesList, setAdvocatesList] = useState([
+    { name: '', fee: '', experience: 'Good', known: 'Known', court_type: 'District Court' }
+  ]);
+  const [localCourtTypes, setLocalCourtTypes] = useState(
+    Array.isArray(courtTypes) && courtTypes.length > 0 ? courtTypes : DEFAULT_FALLBACK_COURT_TYPES
+  );
+  const [isCourtTypesModalOpen, setIsCourtTypesModalOpen] = useState(false);
 
   // Question 11: Advance Payment Amount
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -73,11 +105,28 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
   const currentQ = activeQuestions[currentStep];
 
   const isQ3 = currentQ?.key === 'case_type';
+  const isQ8 = currentQ?.key === 'advocate_name_number';
   const isQ9 = currentQ?.key === 'known_unknown_advocate';
   const isQ11 = currentQ?.key === 'advocate_payment_advance';
   const isQ16 = currentQ?.key === 'complete_fees_total_initially';
   const isQ23 = currentQ?.key === 'priority_money_vs_release';
   const isQ24 = currentQ?.key === 'prisoner_psychologic_survey';
+
+  // Synchronize court types list
+  useEffect(() => {
+    if (Array.isArray(courtTypes) && courtTypes.length > 0) {
+      setLocalCourtTypes(courtTypes);
+    } else {
+      fetch(`${API_BASE_URL}/api/court-types`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+            setLocalCourtTypes(d.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [courtTypes, isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -91,8 +140,129 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       setShowCaseTypeDropdown(true);
       setQ24Choice('');
       setQ24Remarks('');
+      setAdvocatesList([
+        { name: '', fee: '', experience: 'Good', known: 'Known', court_type: localCourtTypes[0]?.name || 'District Court' }
+      ]);
     }
   }, [isOpen]);
+
+  // Synchronize Question 8 (Advocates list)
+  useEffect(() => {
+    if (isQ8) {
+      if (Array.isArray(formData.advocates_details) && formData.advocates_details.length > 0) {
+        setAdvocatesList(formData.advocates_details);
+      } else if (formData.advocate_name_number && typeof formData.advocate_name_number === 'string') {
+        setAdvocatesList([
+          { name: formData.advocate_name_number, fee: '', experience: 'Good', known: 'Known', court_type: localCourtTypes[0]?.name || 'District Court' }
+        ]);
+      }
+    }
+  }, [currentStep, isQ8]);
+
+  const handleAdvocateFieldChange = (index, field, value) => {
+    setError('');
+    const updated = [...advocatesList];
+    updated[index] = { ...updated[index], [field]: value };
+    setAdvocatesList(updated);
+
+    const summary = updated
+      .filter((a) => (a.name || '').trim())
+      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
+      .join('; ');
+
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: updated,
+      advocate_name_number: summary || updated[0]?.name || ''
+    }));
+  };
+
+  const handleAddAdvocateCard = () => {
+    setError('');
+    const defaultCourt = localCourtTypes[0]?.name || 'District Court';
+    const updated = [
+      ...advocatesList,
+      { name: '', fee: '', experience: 'Good', known: 'Known', court_type: defaultCourt }
+    ];
+    setAdvocatesList(updated);
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: updated
+    }));
+  };
+
+  const handleRemoveAdvocateCard = (index) => {
+    if (advocatesList.length <= 1) return;
+    setError('');
+    const updated = advocatesList.filter((_, i) => i !== index);
+    setAdvocatesList(updated);
+    const summary = updated
+      .filter((a) => (a.name || '').trim())
+      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
+      .join('; ');
+
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: updated,
+      advocate_name_number: summary || updated[0]?.name || ''
+    }));
+  };
+
+  const handleLocalAddCourtType = async (name) => {
+    if (onCourtTypeAdded) {
+      const res = await onCourtTypeAdded(name);
+      if (res && res.success) {
+        setLocalCourtTypes((prev) => [...prev, res.data || { id: Date.now(), name }]);
+        return res;
+      }
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLocalCourtTypes((prev) => [...prev, data.data || { id: Date.now(), name }]);
+      }
+      return data;
+    } catch (e) {
+      const fallbackObj = { id: Date.now(), name };
+      setLocalCourtTypes((prev) => [...prev, fallbackObj]);
+      return { success: true, data: fallbackObj };
+    }
+  };
+
+  const handleLocalEditCourtType = async (id, name) => {
+    if (onCourtTypeEdited) {
+      await onCourtTypeEdited(id, name);
+    } else {
+      try {
+        await fetch(`${API_BASE_URL}/api/court-types/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+      } catch (e) {}
+    }
+    setLocalCourtTypes((prev) =>
+      prev.map((c) => ((c.id === id || c.name === id) ? { ...c, name } : c))
+    );
+    return { success: true };
+  };
+
+  const handleLocalDeleteCourtType = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete court type "${name}"?`)) return;
+    if (onCourtTypeDeleted) {
+      await onCourtTypeDeleted(id, name);
+    } else {
+      try {
+        await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
+      } catch (e) {}
+    }
+    setLocalCourtTypes((prev) => prev.filter((c) => c.id !== id && c.name !== name));
+  };
 
   // Synchronize Question 11 (Advance Amount)
   useEffect(() => {
@@ -452,6 +622,20 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       }
     }
 
+    // Special handling for Question 8 (Multi-advocate details)
+    if (isQ8) {
+      const summary = advocatesList
+        .filter((a) => (a.name || '').trim())
+        .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
+        .join('; ');
+
+      setFormData((prev) => ({
+        ...prev,
+        advocates_details: advocatesList,
+        advocate_name_number: summary || advocatesList[0]?.name || ''
+      }));
+    }
+
     // Special validation for Question 11 (Advocate payment advance)
     if (isQ11) {
       const valStr = String(formData.advocate_payment_advance || currentVal || '').trim();
@@ -655,7 +839,7 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
       return;
     }
     // Only handle plain Enter for regular inputs (Ctrl+Enter is handled cleanly by window listener)
-    if (e.key === 'Enter' && !e.ctrlKey && currentQ?.type !== 'textarea' && !isQ3) {
+    if (e.key === 'Enter' && !e.ctrlKey && currentQ?.type !== 'textarea' && !isQ3 && !isQ8) {
       e.preventDefault();
       handleNext();
     }
@@ -755,7 +939,15 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
                     <div className="review-item-qnum">Question #{q.order_num ?? idx + 1}</div>
                     <div className="review-item-question">{getQuestionLabel(q, idx)}</div>
                     <div>
-                      {displayVal ? (
+                      {q.key === 'advocate_name_number' && Array.isArray(formData.advocates_details) && formData.advocates_details.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                          {formData.advocates_details.map((adv, aIdx) => (
+                            <div key={aIdx} style={{ background: '#F1F5F9', padding: '6px 10px', borderRadius: '8px', fontSize: '12.5px', color: '#1E293B', border: '1px solid #E2E8F0' }}>
+                              <strong>#{aIdx + 1} {adv.name || 'Advocate'}</strong> — Fee: ₹{adv.fee || 0} | Exp: {adv.experience} | Known: {adv.known} | Court: {adv.court_type}
+                            </div>
+                          ))}
+                        </div>
+                      ) : displayVal ? (
                         <span className="review-item-answer">{displayVal}</span>
                       ) : (
                         <span className="review-item-answer empty">Not specified</span>
@@ -980,6 +1172,241 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
                   )}
                 </div>
               )}
+            </div>
+          ) : isQ8 ? (
+            /* QUESTION 8: ADVOCATE DETAILS BUILDER (MULTI-ADVOCATE AS PER IMAGE 2) */
+            <div className="advocates-builder-container">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                  Advocate Records: <strong>{advocatesList.length} Added</strong>
+                </span>
+                <button
+                  type="button"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    background: '#F8FAFC',
+                    color: '#EA580C',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => setIsCourtTypesModalOpen(true)}
+                  title="Manage court type options"
+                >
+                  <Scale size={14} />
+                  <span>Manage Court Types</span>
+                </button>
+              </div>
+
+              {advocatesList.map((adv, aIdx) => (
+                <div
+                  key={aIdx}
+                  style={{
+                    background: '#F8FAFC',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '14px',
+                    padding: '16px 18px',
+                    marginBottom: '16px',
+                    position: 'relative',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        style={{
+                          background: '#EE9576',
+                          color: '#fff',
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: 800
+                        }}
+                      >
+                        {aIdx + 1}
+                      </span>
+                      <strong style={{ fontSize: '14px', color: '#1E293B' }}>
+                        Advocate #{aIdx + 1}
+                      </strong>
+                    </div>
+
+                    {advocatesList.length > 1 && (
+                      <button
+                        type="button"
+                        style={{
+                          background: '#FEE2E2',
+                          color: '#DC2626',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '6px 10px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        onClick={() => handleRemoveAdvocateCard(aIdx)}
+                        title="Remove this advocate"
+                      >
+                        <Trash2 size={14} />
+                        <span>Remove</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 5 Input Boxes / Columns per Image 2 */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* 1. Advocate Name */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
+                        Advocate Name:
+                      </label>
+                      <input
+                        type="text"
+                        className="wizard-input-box"
+                        style={{ height: '42px', fontSize: '13.5px', padding: '8px 12px' }}
+                        placeholder="e.g. Adv. R.K. Gupta (+91 9876543210)"
+                        value={adv.name || ''}
+                        onChange={(e) => handleAdvocateFieldChange(aIdx, 'name', e.target.value)}
+                        autoFocus={aIdx === 0}
+                      />
+                    </div>
+
+                    {/* 2. Fee */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
+                        Fee (₹):
+                      </label>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <span style={{ position: 'absolute', left: '10px', fontWeight: 700, color: '#64748B' }}>₹</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          className="wizard-input-box"
+                          style={{ height: '42px', fontSize: '13.5px', paddingLeft: '26px' }}
+                          placeholder="e.g. 50000"
+                          value={adv.fee || ''}
+                          onChange={(e) => {
+                            const clean = e.target.value.replace(/[^0-9]/g, '');
+                            handleAdvocateFieldChange(aIdx, 'fee', clean);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3. Good / Bad */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
+                        Good / Bad:
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          className={`btn-pill-choice ${adv.experience === 'Good' ? 'selected' : ''}`}
+                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleAdvocateFieldChange(aIdx, 'experience', 'Good')}
+                        >
+                          Good
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-pill-choice ${adv.experience === 'Bad' ? 'selected' : ''}`}
+                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleAdvocateFieldChange(aIdx, 'experience', 'Bad')}
+                        >
+                          Bad
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 4. Known Yes/No */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
+                        Known Yes / No:
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          className={`btn-pill-choice ${adv.known === 'Known' || adv.known === 'Yes' ? 'selected' : ''}`}
+                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleAdvocateFieldChange(aIdx, 'known', 'Known')}
+                        >
+                          Known
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn-pill-choice ${adv.known === 'Unknown' || adv.known === 'No' ? 'selected' : ''}`}
+                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          onClick={() => handleAdvocateFieldChange(aIdx, 'known', 'Unknown')}
+                        >
+                          Unknown
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 5. Court Type Dropdown (Single Select) */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
+                        Court Type (Single Select):
+                      </label>
+                      <select
+                        className="wizard-input-box"
+                        value={adv.court_type || (localCourtTypes[0]?.name || 'District Court')}
+                        onChange={(e) => handleAdvocateFieldChange(aIdx, 'court_type', e.target.value)}
+                        style={{ height: '42px', fontSize: '13px', cursor: 'pointer', padding: '6px 10px', background: '#FFFFFF' }}
+                      >
+                        {localCourtTypes.map((c) => (
+                          <option key={c.id || c.name} value={c.name}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* + Add Another Advocate Button */}
+              <button
+                type="button"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '12px',
+                  background: '#FFF7ED',
+                  border: '2px dashed #FDBA74',
+                  borderRadius: '12px',
+                  color: '#EA580C',
+                  fontSize: '13.5px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  marginTop: '6px'
+                }}
+                onClick={handleAddAdvocateCard}
+              >
+                <Plus size={18} strokeWidth={2.6} />
+                <span>+ Add Another Advocate</span>
+              </button>
             </div>
           ) : isQ11 ? (
             /* QUESTION 11: ADVOCATE PAYMENT ADVANCE (YES -> AMOUNT, NO -> NEXT) */
@@ -1448,6 +1875,15 @@ export default function SurveyWizard({ isOpen, onClose, caseTypes = [], question
           </button>
         </div>
       </div>
+
+      <CourtTypesModal
+        isOpen={isCourtTypesModalOpen}
+        onClose={() => setIsCourtTypesModalOpen(false)}
+        courtTypes={localCourtTypes}
+        onAddCourtType={handleLocalAddCourtType}
+        onEditCourtType={handleLocalEditCourtType}
+        onDeleteCourtType={handleLocalDeleteCourtType}
+      />
     </div>,
     document.body
   );

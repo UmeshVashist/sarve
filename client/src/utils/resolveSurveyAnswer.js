@@ -13,6 +13,25 @@ import { STANDARD_KEYS } from '../data/questions';
 export function resolveAnswerForRecord(r, q, allQuestions = []) {
   if (!r || !q) return '';
 
+  // Special multi-advocate formatted resolution for Question 8
+  if (q.key === 'advocate_name_number' && r.advocates_details) {
+    let list = [];
+    try {
+      list = typeof r.advocates_details === 'string' ? JSON.parse(r.advocates_details) : r.advocates_details;
+    } catch (e) {}
+    if (Array.isArray(list) && list.length > 0) {
+      return list.map((a, i) => {
+        const parts = [];
+        if (a.name) parts.push(`Name: ${a.name}`);
+        if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+        if (a.experience) parts.push(`Exp: ${a.experience}`);
+        if (a.known) parts.push(`Known: ${a.known}`);
+        if (a.court_type) parts.push(`Court: ${a.court_type}`);
+        return `[${i + 1}] ${parts.join(' | ')}`;
+      }).join(' ; \n');
+    }
+  }
+
   // 1. Check direct key on record r
   if (r[q.key] !== undefined && r[q.key] !== null && String(r[q.key]).trim() !== '') {
     const val = r[q.key];

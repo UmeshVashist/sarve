@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, AlertCircle, Tag, Check } from 'lucide-react';
+import { X, Save, AlertCircle, Tag, Check, Plus, Trash2, Scale } from 'lucide-react';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 
-export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
+export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], courtTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [localCourtTypes, setLocalCourtTypes] = useState(courtTypes);
+
+  useEffect(() => {
+    if (Array.isArray(courtTypes) && courtTypes.length > 0) {
+      setLocalCourtTypes(courtTypes);
+    } else {
+      fetch(`${API_BASE_URL}/api/court-types`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && Array.isArray(d.data) && d.data.length > 0) {
+            setLocalCourtTypes(d.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [courtTypes, isOpen]);
 
   const activeQuestions = useMemo(() => {
     let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
@@ -71,6 +87,22 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
       });
 
       merged.case_type = survey.case_type ? (Array.isArray(survey.case_type) ? survey.case_type : survey.case_type.split(', ').filter(Boolean)) : [];
+
+      let advocatesDetails = [];
+      if (survey.advocates_details) {
+        try {
+          advocatesDetails = typeof survey.advocates_details === 'string' ? JSON.parse(survey.advocates_details) : survey.advocates_details;
+        } catch (e) {}
+      }
+      if (!Array.isArray(advocatesDetails) || advocatesDetails.length === 0) {
+        if (survey.advocate_name_number) {
+          advocatesDetails = [{ name: survey.advocate_name_number, fee: '', experience: 'Good', known: 'Known', court_type: 'District Court' }];
+        } else {
+          advocatesDetails = [{ name: '', fee: '', experience: 'Good', known: 'Known', court_type: 'District Court' }];
+        }
+      }
+      merged.advocates_details = advocatesDetails;
+
       setFormData(merged);
       setError('');
     }
@@ -80,6 +112,48 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
 
   const handleChange = (key, val) => {
     setFormData((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleAdvocateEdit = (index, field, value) => {
+    const list = Array.isArray(formData.advocates_details) ? [...formData.advocates_details] : [];
+    if (!list[index]) list[index] = { name: '', fee: '', experience: 'Good', known: 'Known', court_type: 'District Court' };
+    list[index] = { ...list[index], [field]: value };
+    const summary = list
+      .filter((a) => (a.name || '').trim())
+      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
+      .join('; ');
+
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: list,
+      advocate_name_number: summary || list[0]?.name || ''
+    }));
+  };
+
+  const handleAddAdvocateToEdit = () => {
+    const list = Array.isArray(formData.advocates_details) ? [...formData.advocates_details] : [];
+    const defaultCourt = localCourtTypes[0]?.name || 'District Court';
+    list.push({ name: '', fee: '', experience: 'Good', known: 'Known', court_type: defaultCourt });
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: list
+    }));
+  };
+
+  const handleRemoveAdvocateFromEdit = (index) => {
+    const list = Array.isArray(formData.advocates_details) ? [...formData.advocates_details] : [];
+    if (list.length <= 1) return;
+    const updated = list.filter((_, i) => i !== index);
+    const summary = updated
+      .filter((a) => (a.name || '').trim())
+      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
+      .join('; ');
+
+    setFormData((prev) => ({
+      ...prev,
+      advocates_details: updated,
+      advocate_name_number: summary || updated[0]?.name || ''
+    }));
   };
 
   const handleCaseTypeToggle = (name) => {
@@ -201,6 +275,121 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                           );
                         })}
                       </div>
+                    </div>
+                  ) : q.key === 'advocate_name_number' ? (
+                    <div>
+                      {(formData.advocates_details || []).map((adv, aIdx) => (
+                        <div
+                          key={aIdx}
+                          style={{
+                            background: '#FFFFFF',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '10px',
+                            padding: '12px 14px',
+                            marginBottom: '10px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <strong style={{ fontSize: '13px', color: '#1E293B' }}>Advocate #{aIdx + 1}</strong>
+                            {(formData.advocates_details || []).length > 1 && (
+                              <button
+                                type="button"
+                                style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11.5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                onClick={() => handleRemoveAdvocateFromEdit(aIdx)}
+                              >
+                                <Trash2 size={13} />
+                                <span>Remove</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                            <div>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Name & Number:</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{ padding: '6px 10px', fontSize: '12.5px' }}
+                                value={adv.name || ''}
+                                onChange={(e) => handleAdvocateEdit(aIdx, 'name', e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Fee (₹):</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{ padding: '6px 10px', fontSize: '12.5px' }}
+                                value={adv.fee || ''}
+                                onChange={(e) => handleAdvocateEdit(aIdx, 'fee', e.target.value.replace(/[^0-9]/g, ''))}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Good / Bad:</label>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  className={`btn-pill-choice ${adv.experience === 'Good' ? 'selected' : ''}`}
+                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
+                                  onClick={() => handleAdvocateEdit(aIdx, 'experience', 'Good')}
+                                >
+                                  Good
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`btn-pill-choice ${adv.experience === 'Bad' ? 'selected' : ''}`}
+                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
+                                  onClick={() => handleAdvocateEdit(aIdx, 'experience', 'Bad')}
+                                >
+                                  Bad
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Known Yes / No:</label>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  className={`btn-pill-choice ${adv.known === 'Known' || adv.known === 'Yes' ? 'selected' : ''}`}
+                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
+                                  onClick={() => handleAdvocateEdit(aIdx, 'known', 'Known')}
+                                >
+                                  Known
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`btn-pill-choice ${adv.known === 'Unknown' || adv.known === 'No' ? 'selected' : ''}`}
+                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
+                                  onClick={() => handleAdvocateEdit(aIdx, 'known', 'Unknown')}
+                                >
+                                  Unknown
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Court Type:</label>
+                              <select
+                                className="form-control"
+                                style={{ padding: '6px 8px', fontSize: '12px' }}
+                                value={adv.court_type || (localCourtTypes[0]?.name || 'District Court')}
+                                onChange={(e) => handleAdvocateEdit(aIdx, 'court_type', e.target.value)}
+                              >
+                                {localCourtTypes.map((c) => (
+                                  <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%', padding: '8px', background: '#FFF7ED', border: '1.5px dashed #FDBA74', borderRadius: '8px', color: '#EA580C', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+                        onClick={handleAddAdvocateToEdit}
+                      >
+                        <Plus size={15} />
+                        <span>+ Add Another Advocate</span>
+                      </button>
                     </div>
                   ) : (q.key === 'advocate_payment_advance' || q.key === 'complete_fees_total_initially') ? (
                     <div>
