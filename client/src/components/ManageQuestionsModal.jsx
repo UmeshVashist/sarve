@@ -150,6 +150,7 @@ export default function ManageQuestionsModal({
         body: JSON.stringify({
           items: reordered.map((item) => ({
             id: item.id,
+            key: item.key,
             order_num: item.order_num,
             label: item.label
           }))
@@ -189,6 +190,7 @@ export default function ManageQuestionsModal({
         body: JSON.stringify({
           items: reordered.map((item) => ({
             id: item.id,
+            key: item.key,
             order_num: item.order_num,
             label: item.label
           }))
@@ -277,6 +279,7 @@ export default function ManageQuestionsModal({
           body: JSON.stringify({
             items: reordered.map((item) => ({
               id: item.id,
+              key: item.key,
               order_num: item.order_num,
               label: item.label
             }))
@@ -347,6 +350,7 @@ export default function ManageQuestionsModal({
             body: JSON.stringify({
               items: finalized.map((item) => ({
                 id: item.id,
+                key: item.key,
                 order_num: item.order_num,
                 label: item.label
               }))

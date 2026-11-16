@@ -1,6 +1,7 @@
 -- ==============================================================================
--- DATABASE SCHEMA FOR SURVEY PORTAL (Cloudflare D1 Compatible)
--- Execute using: npx wrangler d1 execute <DATABASE_NAME> --file=./schema.sql
+-- COMPLETE DATABASE SCHEMA FOR SURVEY PORTAL (Cloudflare D1 & SQLite Compatible)
+-- Execute in Cloudflare D1 Console or using:
+-- npx wrangler d1 execute sarve_d1_database --file=./cloudflare/schema.sql
 -- ==============================================================================
 
 -- 1. USERS TABLE
@@ -40,7 +41,25 @@ INSERT OR IGNORE INTO case_types (name) VALUES
   ('Other');
 
 
--- 3. QUESTIONS MANAGEMENT TABLE
+-- 3. COURT TYPES TABLE (For Advocate Court Type Selection)
+CREATE TABLE IF NOT EXISTS court_types (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed Default Court Types
+INSERT OR IGNORE INTO court_types (name) VALUES 
+  ('District Court'),
+  ('Sessions Court'),
+  ('High Court'),
+  ('Supreme Court'),
+  ('Special / NDPS Court'),
+  ('Magistrate Court (CMM / ACMM)'),
+  ('Other');
+
+
+-- 4. PRISONER SURVEY QUESTIONS TABLE
 CREATE TABLE IF NOT EXISTS questions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_num INTEGER NOT NULL,
@@ -56,7 +75,7 @@ CREATE TABLE IF NOT EXISTS questions (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed Default 24 Survey Questions
+-- Seed Default 24 Prisoner Survey Questions
 INSERT OR IGNORE INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom) VALUES
   (1, 'utct_no', '1) UT/CT No.', 'e.g. UT/2026/104 or CT/2026/89', 'text', NULL, 1, 'Note:- Unique ID. System will verify against database before proceeding.', 0),
   (2, 'name', '2) Name', 'Enter prisoner full name', 'text', NULL, 1, 'Note:- Please enter prisoner full name.', 0),
@@ -84,7 +103,7 @@ INSERT OR IGNORE INTO questions (order_num, key, label, placeholder, type, optio
   (24, 'prisoner_psychologic_survey', '24) Prisoner psychologic according Survey', 'Select Yes or No, and add remarks (optional)...', 'psychologic_yesno', '["Yes","No"]', 0, 'Note:- Pls select Yes or No (Remarks optional)', 0);
 
 
--- 4. PRISONER SURVEYS TABLE
+-- 5. PRISONER SURVEYS TABLE
 CREATE TABLE IF NOT EXISTS prisoner_surveys (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   utct_no TEXT UNIQUE NOT NULL,
@@ -111,6 +130,61 @@ CREATE TABLE IF NOT EXISTS prisoner_surveys (
   know_trustworthy_platform TEXT,
   priority_money_vs_release TEXT,
   prisoner_psychologic_survey TEXT,
+  advocates_details TEXT DEFAULT '[]',
+  custom_answers TEXT DEFAULT '{}',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- 6. ADVOCATE QUESTIONS TABLE
+CREATE TABLE IF NOT EXISTS advocate_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_num INTEGER NOT NULL,
+  key TEXT UNIQUE NOT NULL,
+  label TEXT NOT NULL,
+  placeholder TEXT,
+  type TEXT DEFAULT 'text',
+  options TEXT,
+  required INTEGER DEFAULT 0,
+  note TEXT,
+  is_custom INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed Default 12 Advocate Questions
+INSERT OR IGNORE INTO advocate_questions (order_num, key, label, placeholder, type, options, required, note, is_custom) VALUES
+  (1, 'advocate_reg_no', '1) Bar Council / Enrollment No.', 'e.g. D/1234/2015', 'text', NULL, 1, 'Note:- Unique advocate enrollment / bar registration number.', 0),
+  (2, 'name', '2) Advocate Full Name', 'e.g. Adv. Rajesh Sharma', 'text', NULL, 1, 'Note:- Enter full name of the advocate.', 0),
+  (3, 'contact_number', '3) Contact / WhatsApp Number', 'e.g. +91 9876543210', 'text', NULL, 1, 'Note:- 10-digit mobile number.', 0),
+  (4, 'primary_court', '4) Primary Court of Practice', 'Select primary court', 'choice_text', '["District Court","Sessions Court","High Court","Supreme Court","Magistrate Court (CMM / ACMM)","Special / NDPS Court","Other"]', 1, 'Note:- Main court where advocate practices regularly.', 0),
+  (5, 'practice_experience_years', '5) Years of Legal Practice', 'e.g. 5, 10, 15', 'number', NULL, 1, 'Note:- Input numeric years of experience.', 0),
+  (6, 'case_specialization', '6) Legal Specialization', 'Select legal specialization', 'multi-select', '["Criminal Defense","Bail Applications","NDPS Act (Narcotics)","POCSO & Women Safety","Cheating & Fraud (IPC 420)","Murder / Attempt (IPC 302/307)","Cyber Crime","Civil & Property","Constitutional / High Court Writs","Other"]', 1, 'Note:- Select one or more legal fields.', 0),
+  (7, 'regularly_handles_undertrial_cases', '7) Regularly handles Jail / Undertrial Prisoner Cases?', 'Yes or No', 'yesno', '["Yes","No"]', 1, 'Note:- Pls select Yes or No.', 0),
+  (8, 'provides_legal_aid_dlsa', '8) Empanelled with DLSA / Legal Aid?', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls select Yes or No.', 0),
+  (9, 'transparent_fee_structure', '9) Provides transparent upfront fee agreement to clients?', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls select Yes or No.', 0),
+  (10, 'average_case_duration', '10) Average duration to secure Bail / Trial relief', 'e.g. 1 Month, 3 Months, 6 Months', 'text', NULL, 0, 'Note:- Approximate timeline.', 0),
+  (11, 'parivi_assistance_knowledge', '11) Knowledge of Prison Parivi & Document tracking process?', 'Yes or No', 'yesno', '["Yes","No"]', 0, 'Note:- Pls select Yes or No.', 0),
+  (12, 'remarks', '12) Remarks / Suggestions for Jail Legal System', 'Enter observations, suggestions, feedback...', 'textarea', NULL, 0, 'Note:- General observations.', 0);
+
+
+-- 7. ADVOCATE SURVEYS TABLE
+CREATE TABLE IF NOT EXISTS advocate_surveys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  advocate_reg_no TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  contact_number TEXT,
+  office_address TEXT,
+  primary_court TEXT,
+  practice_experience_years INTEGER DEFAULT 0,
+  case_specialization TEXT,
+  regularly_handles_undertrial_cases TEXT,
+  provides_legal_aid_dlsa TEXT,
+  transparent_fee_structure TEXT,
+  average_case_duration TEXT,
+  parivi_assistance_knowledge TEXT,
+  remarks TEXT,
   custom_answers TEXT DEFAULT '{}',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

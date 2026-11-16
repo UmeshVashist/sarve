@@ -43,10 +43,20 @@ export const DEFAULT_CASE_TYPES = [
   { id: 12, name: 'Other' }
 ];
 
+export const DEFAULT_COURT_TYPES = [
+  { id: 1, name: 'District Court' },
+  { id: 2, name: 'Sessions Court' },
+  { id: 3, name: 'High Court' },
+  { id: 4, name: 'Supreme Court' },
+  { id: 5, name: 'Special / NDPS Court' },
+  { id: 6, name: 'Magistrate Court (CMM / ACMM)' },
+  { id: 7, name: 'Other' }
+];
+
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
-  const [courtTypes, setCourtTypes] = useState([]);
+  const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [questions, setQuestions] = useState(() => {
     try {
       const saved = localStorage.getItem('survey_questions_list');

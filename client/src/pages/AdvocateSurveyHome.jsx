@@ -25,9 +25,11 @@ import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel } from '../data/adv
 import { API_BASE_URL } from '../config';
 import { downloadAdvocateExcel, resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
 
+import { DEFAULT_COURT_TYPES } from './PrisonerSurveyHome';
+
 export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
-  const [courtTypes, setCourtTypes] = useState([]);
+  const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [questions, setQuestions] = useState(() => {
     try {
       const saved = localStorage.getItem('advocate_questions_list');
