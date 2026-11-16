@@ -13,17 +13,38 @@ export default function DownloadFormatModal({ isOpen, onClose, onConfirmDownload
   };
 
   return createPortal(
-    <div className="modal-overlay" style={{ zIndex: 1100 }}>
+    <div
+      className="wizard-backdrop animate-fade-in"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px'
+      }}
+    >
       <div
-        className="modal-container"
+        className="modal-card animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '560px',
-          width: '94%',
+          width: '100%',
           borderRadius: '16px',
           padding: '0',
           overflow: 'hidden',
-          boxShadow: '0 20px 45px rgba(15, 23, 42, 0.25)',
-          background: '#ffffff'
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
+          background: '#ffffff',
+          margin: 'auto'
         }}
       >
         {/* Header */}
