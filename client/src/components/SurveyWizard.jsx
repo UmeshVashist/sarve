@@ -66,9 +66,11 @@ export default function SurveyWizard({
   const [advanceAmount, setAdvanceAmount] = useState('');
   const amountInputRef = useRef(null);
 
-  // Question 16: Complete Fees Amount
+  // Question 16: Complete Fees Amount & Remark
   const [feesAmount, setFeesAmount] = useState('');
   const feesAmountInputRef = useRef(null);
+  const [feesRemark, setFeesRemark] = useState('');
+  const feesRemarkInputRef = useRef(null);
 
   // Question 3: Case Type High-speed entry
   const [caseTypeSearch, setCaseTypeSearch] = useState('');
@@ -136,12 +138,13 @@ export default function SurveyWizard({
       setJumpBackToReview(false);
       setAdvanceAmount('');
       setFeesAmount('');
+      setFeesRemark('');
       setCaseTypeSearch('');
       setShowCaseTypeDropdown(true);
       setQ24Choice('');
       setQ24Remarks('');
       setAdvocatesList([
-        { name: '', fee: '', experience: 'Good', known: 'Known', court_type: localCourtTypes[0]?.name || 'District Court' }
+        { name: '', fee: '', experience: '', known: '', court_type: localCourtTypes[0]?.name || 'District Court' }
       ]);
     }
   }, [isOpen]);
@@ -153,7 +156,7 @@ export default function SurveyWizard({
         setAdvocatesList(formData.advocates_details);
       } else if (formData.advocate_name_number && typeof formData.advocate_name_number === 'string') {
         setAdvocatesList([
-          { name: formData.advocate_name_number, fee: '', experience: 'Good', known: 'Known', court_type: localCourtTypes[0]?.name || 'District Court' }
+          { name: formData.advocate_name_number, fee: '', experience: '', known: '', court_type: localCourtTypes[0]?.name || 'District Court' }
         ]);
       }
     }
@@ -167,8 +170,16 @@ export default function SurveyWizard({
 
     const summary = updated
       .filter((a) => (a.name || '').trim())
-      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
-      .join('; ');
+      .map((a, i) => {
+        const parts = [];
+        if (a.name) parts.push(`Name: ${a.name.trim()}`);
+        if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+        if (a.experience) parts.push(`Exp: ${a.experience}`);
+        if (a.known) parts.push(`Known: ${a.known}`);
+        if (a.court_type) parts.push(`Court: ${a.court_type}`);
+        return `[${i + 1}] ${parts.join(' | ')}`;
+      })
+      .join(' ; \n');
 
     setFormData((prev) => ({
       ...prev,
@@ -182,7 +193,7 @@ export default function SurveyWizard({
     const defaultCourt = localCourtTypes[0]?.name || 'District Court';
     const updated = [
       ...advocatesList,
-      { name: '', fee: '', experience: 'Good', known: 'Known', court_type: defaultCourt }
+      { name: '', fee: '', experience: '', known: '', court_type: defaultCourt }
     ];
     setAdvocatesList(updated);
     setFormData((prev) => ({
@@ -198,8 +209,16 @@ export default function SurveyWizard({
     setAdvocatesList(updated);
     const summary = updated
       .filter((a) => (a.name || '').trim())
-      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
-      .join('; ');
+      .map((a, i) => {
+        const parts = [];
+        if (a.name) parts.push(`Name: ${a.name.trim()}`);
+        if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+        if (a.experience) parts.push(`Exp: ${a.experience}`);
+        if (a.known) parts.push(`Known: ${a.known}`);
+        if (a.court_type) parts.push(`Court: ${a.court_type}`);
+        return `[${i + 1}] ${parts.join(' | ')}`;
+      })
+      .join(' ; \n');
 
     setFormData((prev) => ({
       ...prev,
@@ -281,20 +300,38 @@ export default function SurveyWizard({
     }
   }, [currentStep, isQ11]);
 
-  // Synchronize Question 16 (Complete Fees Total)
+  // Synchronize Question 16 (Complete Fees Total + Remark)
   useEffect(() => {
     if (isQ16) {
       const raw = String(formData.complete_fees_total_initially || '').trim();
+      let amt = '';
+      let rem = '';
       if (raw.toLowerCase().startsWith('yes')) {
-        const parts = raw.split('/');
-        if (parts.length > 1) {
-          setFeesAmount(parts.slice(1).join('/').trim());
+        if (raw.includes('Remark:')) {
+          const rParts = raw.split(/Remark:\s*/i);
+          rem = rParts[1]?.trim() || '';
+          const mainPart = rParts[0].replace(/\|\s*$/, '').trim();
+          const slashParts = mainPart.split('/');
+          if (slashParts.length > 1) {
+            amt = slashParts.slice(1).join('/').trim();
+          }
         } else {
-          setFeesAmount('');
+          const parts = raw.split('/');
+          if (parts.length > 1) {
+            amt = parts.slice(1).join('/').trim();
+          }
+        }
+      } else if (raw.toLowerCase().startsWith('no')) {
+        if (raw.includes('Remark:')) {
+          rem = raw.split(/Remark:\s*/i)[1]?.trim() || '';
+        } else if (raw.includes('-')) {
+          rem = raw.split(/-+/)[1]?.trim() || '';
         }
       } else {
-        setFeesAmount('');
+        rem = raw;
       }
+      setFeesAmount(amt);
+      setFeesRemark(rem);
     }
   }, [currentStep, isQ16]);
 
@@ -433,9 +470,24 @@ export default function SurveyWizard({
     String(currentVal).toLowerCase().startsWith('yes')
   );
 
+  const buildQ16Value = (choice, amt, rem) => {
+    const cleanAmt = amt ? String(amt).trim() : '';
+    const cleanRem = rem ? String(rem).trim() : '';
+    let res = choice;
+    if (choice === 'Yes') {
+      if (cleanAmt) res += ` / ${cleanAmt}`;
+      if (cleanRem) res += ` | Remark: ${cleanRem}`;
+    } else if (choice === 'No') {
+      if (cleanRem) res += ` | Remark: ${cleanRem}`;
+    } else if (cleanRem) {
+      res = cleanRem;
+    }
+    return res;
+  };
+
   const handleSelectQ16Yes = () => {
     setError('');
-    const formatted = feesAmount.trim() ? `Yes / ${feesAmount.trim()}` : 'Yes';
+    const formatted = buildQ16Value('Yes', feesAmount, feesRemark);
     setFormData((prev) => ({ ...prev, complete_fees_total_initially: formatted }));
     setTimeout(() => {
       feesAmountInputRef.current?.focus();
@@ -445,16 +497,29 @@ export default function SurveyWizard({
   const handleSelectQ16No = () => {
     setError('');
     setFeesAmount('');
-    setFormData((prev) => ({ ...prev, complete_fees_total_initially: 'No' }));
+    const formatted = buildQ16Value('No', '', feesRemark);
+    setFormData((prev) => ({ ...prev, complete_fees_total_initially: formatted }));
   };
 
   const handleFeesAmountChange = (val) => {
     setError('');
     const clean = val.replace(/[^0-9]/g, '');
     setFeesAmount(clean);
+    const formatted = buildQ16Value('Yes', clean, feesRemark);
     setFormData((prev) => ({
       ...prev,
-      complete_fees_total_initially: clean ? `Yes / ${clean}` : 'Yes'
+      complete_fees_total_initially: formatted
+    }));
+  };
+
+  const handleFeesRemarkChange = (val) => {
+    setError('');
+    setFeesRemark(val);
+    const activeChoice = isQ16Yes ? 'Yes' : (q16DisplayVal.toLowerCase() === 'no' ? 'No' : (val.trim() ? 'Yes' : ''));
+    const formatted = buildQ16Value(activeChoice || 'Yes', feesAmount, val);
+    setFormData((prev) => ({
+      ...prev,
+      complete_fees_total_initially: formatted
     }));
   };
 
@@ -626,8 +691,16 @@ export default function SurveyWizard({
     if (isQ8) {
       const summary = advocatesList
         .filter((a) => (a.name || '').trim())
-        .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
-        .join('; ');
+        .map((a, i) => {
+          const parts = [];
+          if (a.name) parts.push(`Name: ${a.name.trim()}`);
+          if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+          if (a.experience) parts.push(`Exp: ${a.experience}`);
+          if (a.known) parts.push(`Known: ${a.known}`);
+          if (a.court_type) parts.push(`Court: ${a.court_type}`);
+          return `[${i + 1}] ${parts.join(' | ')}`;
+        })
+        .join(' ; \n');
 
       setFormData((prev) => ({
         ...prev,
@@ -685,12 +758,12 @@ export default function SurveyWizard({
         }
         setFormData((prev) => ({
           ...prev,
-          complete_fees_total_initially: `Yes / ${feesAmount.trim()}`
+          complete_fees_total_initially: buildQ16Value('Yes', feesAmount, feesRemark)
         }));
       } else if (lower === 'n' || lower.startsWith('no')) {
         setFormData((prev) => ({
           ...prev,
-          complete_fees_total_initially: 'No'
+          complete_fees_total_initially: buildQ16Value('No', '', feesRemark)
         }));
       } else {
         setError("Please enter or select complete 'Yes' or 'No' only.");
@@ -1310,54 +1383,96 @@ export default function SurveyWizard({
                       </div>
                     </div>
 
-                    {/* 3. Good / Bad */}
+                    {/* 3. Good / Bad (Auto-fill on 'G' or 'B' only) */}
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
                         Good / Bad:
                       </label>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          className={`btn-pill-choice ${adv.experience === 'Good' ? 'selected' : ''}`}
-                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleAdvocateFieldChange(aIdx, 'experience', 'Good')}
-                        >
-                          Good
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn-pill-choice ${adv.experience === 'Bad' ? 'selected' : ''}`}
-                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleAdvocateFieldChange(aIdx, 'experience', 'Bad')}
-                        >
-                          Bad
-                        </button>
-                      </div>
+                      <input
+                        type="text"
+                        className="wizard-input-box"
+                        style={{
+                          height: '42px',
+                          fontSize: '13.5px',
+                          padding: '8px 12px',
+                          fontWeight: adv.experience ? 700 : 400,
+                          color: adv.experience === 'Good' ? '#16A34A' : adv.experience === 'Bad' ? '#DC2626' : '#1E293B',
+                          background: adv.experience === 'Good' ? '#F0FDF4' : adv.experience === 'Bad' ? '#FEF2F2' : '#FFFFFF',
+                          borderColor: adv.experience === 'Good' ? '#86EFAC' : adv.experience === 'Bad' ? '#FECACA' : '#CBD5E1'
+                        }}
+                        placeholder="Type 'G' or 'B'"
+                        value={adv.experience || ''}
+                        onKeyDown={(e) => {
+                          if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+                          if (e.key === 'Backspace' || e.key === 'Delete') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'experience', '');
+                            return;
+                          }
+                          const key = e.key.toLowerCase();
+                          if (key === 'g') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'experience', 'Good');
+                          } else if (key === 'b') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'experience', 'Bad');
+                          } else {
+                            e.preventDefault();
+                          }
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value.toLowerCase();
+                          if (val.includes('g')) handleAdvocateFieldChange(aIdx, 'experience', 'Good');
+                          else if (val.includes('b')) handleAdvocateFieldChange(aIdx, 'experience', 'Bad');
+                          else if (val === '') handleAdvocateFieldChange(aIdx, 'experience', '');
+                        }}
+                      />
                     </div>
 
-                    {/* 4. Known Yes/No */}
+                    {/* 4. Known Yes/No (Auto-fill on 'K' or 'U' only) */}
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '5px' }}>
                         Known Yes / No:
                       </label>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          className={`btn-pill-choice ${adv.known === 'Known' || adv.known === 'Yes' ? 'selected' : ''}`}
-                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleAdvocateFieldChange(aIdx, 'known', 'Known')}
-                        >
-                          Known
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn-pill-choice ${adv.known === 'Unknown' || adv.known === 'No' ? 'selected' : ''}`}
-                          style={{ flex: 1, height: '42px', padding: '0 4px', fontSize: '12.5px', fontWeight: 700, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleAdvocateFieldChange(aIdx, 'known', 'Unknown')}
-                        >
-                          Unknown
-                        </button>
-                      </div>
+                      <input
+                        type="text"
+                        className="wizard-input-box"
+                        style={{
+                          height: '42px',
+                          fontSize: '13.5px',
+                          padding: '8px 12px',
+                          fontWeight: adv.known ? 700 : 400,
+                          color: (adv.known === 'Known' || adv.known === 'Yes') ? '#2563EB' : (adv.known === 'Unknown' || adv.known === 'No') ? '#D97706' : '#1E293B',
+                          background: (adv.known === 'Known' || adv.known === 'Yes') ? '#EFF6FF' : (adv.known === 'Unknown' || adv.known === 'No') ? '#FFFBEB' : '#FFFFFF',
+                          borderColor: (adv.known === 'Known' || adv.known === 'Yes') ? '#BFDBFE' : (adv.known === 'Unknown' || adv.known === 'No') ? '#FDE68A' : '#CBD5E1'
+                        }}
+                        placeholder="Type 'K' or 'U'"
+                        value={adv.known || ''}
+                        onKeyDown={(e) => {
+                          if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+                          if (e.key === 'Backspace' || e.key === 'Delete') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'known', '');
+                            return;
+                          }
+                          const key = e.key.toLowerCase();
+                          if (key === 'k') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'known', 'Known');
+                          } else if (key === 'u') {
+                            e.preventDefault();
+                            handleAdvocateFieldChange(aIdx, 'known', 'Unknown');
+                          } else {
+                            e.preventDefault();
+                          }
+                        }}
+                        onChange={(e) => {
+                          const val = e.target.value.toLowerCase();
+                          if (val.includes('k')) handleAdvocateFieldChange(aIdx, 'known', 'Known');
+                          else if (val.includes('u')) handleAdvocateFieldChange(aIdx, 'known', 'Unknown');
+                          else if (val === '') handleAdvocateFieldChange(aIdx, 'known', '');
+                        }}
+                      />
                     </div>
 
                     {/* 5. Court Type Dropdown (Single Select) */}
@@ -1382,30 +1497,28 @@ export default function SurveyWizard({
                 </div>
               ))}
 
-              {/* + Add Another Advocate Button */}
+              {/* + Only Icon Button to Add Another Advocate */}
               <button
                 type="button"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
                   width: '100%',
-                  padding: '12px',
+                  height: '46px',
                   background: '#FFF7ED',
                   border: '2px dashed #FDBA74',
                   borderRadius: '12px',
                   color: '#EA580C',
-                  fontSize: '13.5px',
-                  fontWeight: 800,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  marginTop: '6px'
+                  marginTop: '8px'
                 }}
                 onClick={handleAddAdvocateCard}
+                title="Add Another Advocate"
+                aria-label="Add Another Advocate"
               >
-                <Plus size={18} strokeWidth={2.6} />
-                <span>+ Add Another Advocate</span>
+                <Plus size={26} strokeWidth={3} />
               </button>
             </div>
           ) : isQ11 ? (
@@ -1530,7 +1643,7 @@ export default function SurveyWizard({
                 </button>
               </div>
 
-              {/* Amount input for Q16 */}
+              {/* Amount input for Q16 (when Yes) */}
               {isQ16Yes && (
                 <div
                   className="animate-fade-in"
@@ -1560,14 +1673,47 @@ export default function SurveyWizard({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          handleNext();
+                          feesRemarkInputRef.current?.focus();
                         }
                       }}
                       autoFocus
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Remark input for Q16 (Optional) */}
+              {(isQ16Yes || q16DisplayVal.toLowerCase() === 'no') && (
+                <div
+                  className="animate-fade-in"
+                  style={{
+                    marginTop: '12px',
+                    background: '#F8FAFC',
+                    padding: '14px 18px',
+                    borderRadius: '14px',
+                    border: '1.5px solid #CBD5E1',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                    Fees Remarks (Optional):
+                  </label>
+                  <input
+                    ref={feesRemarkInputRef}
+                    type="text"
+                    className="wizard-input-box"
+                    placeholder="Enter fee remark / notes (optional)..."
+                    value={feesRemark}
+                    onChange={(e) => handleFeesRemarkChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleNext();
+                      }
+                    }}
+                  />
                   <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px' }}>
-                    Excel report me ye ek hi column me <strong>Yes / {feesAmount || '[amount]'}</strong> show hoga.
+                    Excel report me: <strong>{buildQ16Value(isQ16Yes ? 'Yes' : 'No', feesAmount, feesRemark)}</strong> show hoga.
                   </div>
                 </div>
               )}

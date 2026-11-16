@@ -415,9 +415,35 @@ app.get('/api/survey/export/excel', (req, res) => {
     const records = db.prepare(query).all(...params).map(formatSurvey);
     const questions = db.prepare('SELECT * FROM questions ORDER BY order_num ASC, id ASC').all();
 
-    // Map records to rows dynamically based on questions configured
-    const excelRows = records.map((r, index) => {
-      const row = { 'S.No': index + 1 };
+    // Helper to format a single advocate card into readable string
+    const formatAdv = (a, aIdx) => {
+      if (!a) return '';
+      const parts = [];
+      if (a.name) parts.push(`Name: ${String(a.name).trim()}`);
+      if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+      if (a.experience) parts.push(`Exp: ${a.experience}`);
+      if (a.known) parts.push(`Known: ${a.known}`);
+      if (a.court_type) parts.push(`Court: ${a.court_type}`);
+      return `[${aIdx + 1}] ${parts.join(' | ')}`;
+    };
+
+    // Map records to rows dynamically based on questions configured (Multi-advocate row expansion)
+    const excelRows = [];
+
+    records.forEach((r, recordIndex) => {
+      let advocateList = [];
+      if (r.advocates_details) {
+        try {
+          advocateList = typeof r.advocates_details === 'string' ? JSON.parse(r.advocates_details) : r.advocates_details;
+        } catch (e) {}
+      }
+      if (!Array.isArray(advocateList)) advocateList = [];
+      advocateList = advocateList.filter((a) => a && (a.name || a.fee || a.experience || a.known || a.court_type));
+
+      let utctVal = r.utct_no || '';
+      let nameVal = r.name || '';
+
+      const firstRow = { 'S.No': recordIndex + 1 };
       questions.forEach((q, idx) => {
         const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
         const header = `${q.order_num ?? idx + 1}) ${cleanLabel}`;
@@ -425,17 +451,54 @@ app.get('/api/survey/export/excel', (req, res) => {
         if (val === undefined || val === null || val === '') {
           if (r.custom_answers) {
             try {
-              const ca = JSON.parse(r.custom_answers);
+              const ca = typeof r.custom_answers === 'string' ? JSON.parse(r.custom_answers) : r.custom_answers;
               if (ca[q.key] !== undefined && ca[q.key] !== null) val = ca[q.key];
             } catch (e) {}
           }
         }
         if (val === undefined || val === null) val = '';
         if (Array.isArray(val)) val = val.join(', ');
-        row[header] = val;
+
+        if (q.key === 'utct_no') {
+          utctVal = val || utctVal;
+          firstRow[header] = utctVal;
+        } else if (q.key === 'name') {
+          nameVal = val || nameVal;
+          firstRow[header] = nameVal;
+        } else if (q.key === 'advocate_name_number') {
+          if (advocateList.length > 0) {
+            firstRow[header] = formatAdv(advocateList[0], 0);
+          } else {
+            firstRow[header] = val;
+          }
+        } else {
+          firstRow[header] = val;
+        }
       });
-      row['Survey Date & Time'] = r.created_at || '';
-      return row;
+
+      firstRow['Survey Date & Time'] = r.created_at || '';
+      excelRows.push(firstRow);
+
+      if (advocateList.length > 1) {
+        for (let k = 1; k < advocateList.length; k++) {
+          const subRow = { 'S.No': '' };
+          questions.forEach((q, idx) => {
+            const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+            const header = `${q.order_num ?? idx + 1}) ${cleanLabel}`;
+            if (q.key === 'utct_no') {
+              subRow[header] = utctVal;
+            } else if (q.key === 'name') {
+              subRow[header] = nameVal;
+            } else if (q.key === 'advocate_name_number') {
+              subRow[header] = formatAdv(advocateList[k], k);
+            } else {
+              subRow[header] = '';
+            }
+          });
+          subRow['Survey Date & Time'] = '';
+          excelRows.push(subRow);
+        }
+      }
     });
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);

@@ -116,12 +116,20 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
 
   const handleAdvocateEdit = (index, field, value) => {
     const list = Array.isArray(formData.advocates_details) ? [...formData.advocates_details] : [];
-    if (!list[index]) list[index] = { name: '', fee: '', experience: 'Good', known: 'Known', court_type: 'District Court' };
+    if (!list[index]) list[index] = { name: '', fee: '', experience: '', known: '', court_type: 'District Court' };
     list[index] = { ...list[index], [field]: value };
     const summary = list
       .filter((a) => (a.name || '').trim())
-      .map((a) => `${a.name.trim()} (Fee: ₹${a.fee || 0}, ${a.court_type || 'Court'})`)
-      .join('; ');
+      .map((a, i) => {
+        const parts = [];
+        if (a.name) parts.push(`Name: ${a.name.trim()}`);
+        if (a.fee) parts.push(`Fee: ₹${a.fee}`);
+        if (a.experience) parts.push(`Exp: ${a.experience}`);
+        if (a.known) parts.push(`Known: ${a.known}`);
+        if (a.court_type) parts.push(`Court: ${a.court_type}`);
+        return `[${i + 1}] ${parts.join(' | ')}`;
+      })
+      .join(' ; \n');
 
     setFormData((prev) => ({
       ...prev,
@@ -133,7 +141,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
   const handleAddAdvocateToEdit = () => {
     const list = Array.isArray(formData.advocates_details) ? [...formData.advocates_details] : [];
     const defaultCourt = localCourtTypes[0]?.name || 'District Court';
-    list.push({ name: '', fee: '', experience: 'Good', known: 'Known', court_type: defaultCourt });
+    list.push({ name: '', fee: '', experience: '', known: '', court_type: defaultCourt });
     setFormData((prev) => ({
       ...prev,
       advocates_details: list
@@ -326,45 +334,85 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                             </div>
                             <div>
                               <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Good / Bad:</label>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button
-                                  type="button"
-                                  className={`btn-pill-choice ${adv.experience === 'Good' ? 'selected' : ''}`}
-                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
-                                  onClick={() => handleAdvocateEdit(aIdx, 'experience', 'Good')}
-                                >
-                                  Good
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`btn-pill-choice ${adv.experience === 'Bad' ? 'selected' : ''}`}
-                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
-                                  onClick={() => handleAdvocateEdit(aIdx, 'experience', 'Bad')}
-                                >
-                                  Bad
-                                </button>
-                              </div>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{
+                                  padding: '6px 10px',
+                                  fontSize: '12.5px',
+                                  fontWeight: adv.experience ? 700 : 400,
+                                  color: adv.experience === 'Good' ? '#16A34A' : adv.experience === 'Bad' ? '#DC2626' : '#1E293B',
+                                  background: adv.experience === 'Good' ? '#F0FDF4' : adv.experience === 'Bad' ? '#FEF2F2' : '#FFFFFF',
+                                  borderColor: adv.experience === 'Good' ? '#86EFAC' : adv.experience === 'Bad' ? '#FECACA' : '#CBD5E1'
+                                }}
+                                placeholder="Type 'G' or 'B'"
+                                value={adv.experience || ''}
+                                onKeyDown={(e) => {
+                                  if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+                                  if (e.key === 'Backspace' || e.key === 'Delete') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'experience', '');
+                                    return;
+                                  }
+                                  const key = e.key.toLowerCase();
+                                  if (key === 'g') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'experience', 'Good');
+                                  } else if (key === 'b') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'experience', 'Bad');
+                                  } else {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value.toLowerCase();
+                                  if (val.includes('g')) handleAdvocateEdit(aIdx, 'experience', 'Good');
+                                  else if (val.includes('b')) handleAdvocateEdit(aIdx, 'experience', 'Bad');
+                                  else if (val === '') handleAdvocateEdit(aIdx, 'experience', '');
+                                }}
+                              />
                             </div>
                             <div>
                               <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Known Yes / No:</label>
-                              <div style={{ display: 'flex', gap: '4px' }}>
-                                <button
-                                  type="button"
-                                  className={`btn-pill-choice ${adv.known === 'Known' || adv.known === 'Yes' ? 'selected' : ''}`}
-                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
-                                  onClick={() => handleAdvocateEdit(aIdx, 'known', 'Known')}
-                                >
-                                  Known
-                                </button>
-                                <button
-                                  type="button"
-                                  className={`btn-pill-choice ${adv.known === 'Unknown' || adv.known === 'No' ? 'selected' : ''}`}
-                                  style={{ flex: 1, padding: '6px 0', fontSize: '11.5px', borderRadius: '6px' }}
-                                  onClick={() => handleAdvocateEdit(aIdx, 'known', 'Unknown')}
-                                >
-                                  Unknown
-                                </button>
-                              </div>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{
+                                  padding: '6px 10px',
+                                  fontSize: '12.5px',
+                                  fontWeight: adv.known ? 700 : 400,
+                                  color: (adv.known === 'Known' || adv.known === 'Yes') ? '#2563EB' : (adv.known === 'Unknown' || adv.known === 'No') ? '#D97706' : '#1E293B',
+                                  background: (adv.known === 'Known' || adv.known === 'Yes') ? '#EFF6FF' : (adv.known === 'Unknown' || adv.known === 'No') ? '#FFFBEB' : '#FFFFFF',
+                                  borderColor: (adv.known === 'Known' || adv.known === 'Yes') ? '#BFDBFE' : (adv.known === 'Unknown' || adv.known === 'No') ? '#FDE68A' : '#CBD5E1'
+                                }}
+                                placeholder="Type 'K' or 'U'"
+                                value={adv.known || ''}
+                                onKeyDown={(e) => {
+                                  if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+                                  if (e.key === 'Backspace' || e.key === 'Delete') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'known', '');
+                                    return;
+                                  }
+                                  const key = e.key.toLowerCase();
+                                  if (key === 'k') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'known', 'Known');
+                                  } else if (key === 'u') {
+                                    e.preventDefault();
+                                    handleAdvocateEdit(aIdx, 'known', 'Unknown');
+                                  } else {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value.toLowerCase();
+                                  if (val.includes('k')) handleAdvocateEdit(aIdx, 'known', 'Known');
+                                  else if (val.includes('u')) handleAdvocateEdit(aIdx, 'known', 'Unknown');
+                                  else if (val === '') handleAdvocateEdit(aIdx, 'known', '');
+                                }}
+                              />
                             </div>
                             <div>
                               <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Court Type:</label>
@@ -384,14 +432,120 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                       ))}
                       <button
                         type="button"
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', width: '100%', padding: '8px', background: '#FFF7ED', border: '1.5px dashed #FDBA74', borderRadius: '8px', color: '#EA580C', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '42px', background: '#FFF7ED', border: '1.5px dashed #FDBA74', borderRadius: '8px', color: '#EA580C', cursor: 'pointer', transition: 'all 0.2s ease' }}
                         onClick={handleAddAdvocateToEdit}
+                        title="Add Another Advocate"
+                        aria-label="Add Another Advocate"
                       >
-                        <Plus size={15} />
-                        <span>+ Add Another Advocate</span>
+                        <Plus size={22} strokeWidth={2.8} />
                       </button>
                     </div>
-                  ) : (q.key === 'advocate_payment_advance' || q.key === 'complete_fees_total_initially') ? (
+                  ) : q.key === 'complete_fees_total_initially' ? (
+                    <div>
+                      {(() => {
+                        const strVal = String(val || '').trim();
+                        const isYes = strVal.toLowerCase().startsWith('yes');
+                        const isNo = strVal.toLowerCase() === 'no';
+                        let currentAmount = '';
+                        let currentRemark = '';
+                        if (strVal.includes('Remark:')) {
+                          const rParts = strVal.split(/Remark:\s*/i);
+                          currentRemark = rParts[1]?.trim() || '';
+                          const mainPart = rParts[0].replace(/\|\s*$/, '').trim();
+                          const slashParts = mainPart.split('/');
+                          if (slashParts.length > 1) {
+                            currentAmount = slashParts.slice(1).join('/').trim();
+                          }
+                        } else {
+                          const slashParts = strVal.split('/');
+                          if (slashParts.length > 1) {
+                            currentAmount = slashParts.slice(1).join('/').trim();
+                          }
+                        }
+
+                        const updateQ16 = (choice, amt, rem) => {
+                          let res = choice;
+                          const cleanAmt = amt ? String(amt).trim() : '';
+                          const cleanRem = rem ? String(rem).trim() : '';
+                          if (choice === 'Yes') {
+                            if (cleanAmt) res += ` / ${cleanAmt}`;
+                            if (cleanRem) res += ` | Remark: ${cleanRem}`;
+                          } else if (choice === 'No') {
+                            if (cleanRem) res += ` | Remark: ${cleanRem}`;
+                          } else if (cleanRem) {
+                            res = cleanRem;
+                          }
+                          handleChange(q.key, res);
+                        };
+
+                        return (
+                          <div>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                              <button
+                                type="button"
+                                className={`btn-action-icon ${isYes ? 'view' : ''}`}
+                                style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
+                                onClick={() => updateQ16('Yes', currentAmount, currentRemark)}
+                              >
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                className={`btn-action-icon ${isNo ? 'delete' : ''}`}
+                                style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
+                                onClick={() => updateQ16('No', '', currentRemark)}
+                              >
+                                No
+                              </button>
+                            </div>
+
+                            {isYes && (
+                              <div style={{ background: '#FFFFFF', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #CBD5E1', marginTop: '8px' }}>
+                                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                                  Complete Total Fees Amount (₹):
+                                </label>
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                  <span style={{ position: 'absolute', left: '10px', fontWeight: 700, color: '#64748B' }}>₹</span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="form-control"
+                                    style={{ paddingLeft: '26px' }}
+                                    placeholder="Enter amount (e.g. 50000 or 100000)"
+                                    value={currentAmount}
+                                    onChange={(e) => {
+                                      const clean = e.target.value.replace(/[^0-9]/g, '');
+                                      updateQ16('Yes', clean, currentRemark);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {(isYes || isNo) && (
+                              <div style={{ background: '#FFFFFF', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #CBD5E1', marginTop: '8px' }}>
+                                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                                  Fees Remark (Optional):
+                                </label>
+                                <input
+                                  type="text"
+                                  className="form-control"
+                                  placeholder="Enter any fee remark or note (optional)..."
+                                  value={currentRemark}
+                                  onChange={(e) => {
+                                    updateQ16(isYes ? 'Yes' : 'No', currentAmount, e.target.value);
+                                  }}
+                                />
+                                <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
+                                  Saved in Excel as: <strong>{val || 'Not specified'}</strong>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : q.key === 'advocate_payment_advance' ? (
                     <div>
                       {(() => {
                         const strVal = String(val || '').trim();
