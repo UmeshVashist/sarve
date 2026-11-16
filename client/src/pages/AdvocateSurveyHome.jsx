@@ -249,49 +249,45 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         </div>
       </div>
 
-      {/* Stat Cards Banner */}
-      <div className="stats-grid">
+      {/* Quick Stats Banner */}
+      <div className="stats-banner">
         <div className="stat-card">
-          <div className="stat-icon-wrapper" style={{ background: '#FFF7ED', color: '#EA580C' }}>
-            <Users size={24} />
+          <div className="stat-icon orange">
+            <Users size={22} />
           </div>
-          <div className="stat-details">
-            <span className="stat-label">Total Advocates</span>
-            <span className="stat-value">{totalCount}</span>
-            <span className="stat-sub">Registered surveys</span>
+          <div>
+            <div className="stat-value">{totalCount}</div>
+            <div className="stat-label">Total Advocates</div>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon-wrapper" style={{ background: '#EFF6FF', color: '#2563EB' }}>
-            <Briefcase size={24} />
+          <div className="stat-icon blue">
+            <Briefcase size={22} />
           </div>
-          <div className="stat-details">
-            <span className="stat-label">Criminal Defense</span>
-            <span className="stat-value">{criminalSpecialistsCount}</span>
-            <span className="stat-sub">Specialized lawyers</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon-wrapper" style={{ background: '#F0FDF4', color: '#16A34A' }}>
-            <Scale size={24} />
-          </div>
-          <div className="stat-details">
-            <span className="stat-label">Legal Aid / DLSA</span>
-            <span className="stat-value">{legalAidCount}</span>
-            <span className="stat-sub">Empanelled advocates</span>
+          <div>
+            <div className="stat-value">{criminalSpecialistsCount}</div>
+            <div className="stat-label">Criminal Defense</div>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon-wrapper" style={{ background: '#FAF5FF', color: '#9333EA' }}>
-            <Award size={24} />
+          <div className="stat-icon green">
+            <Scale size={22} />
           </div>
-          <div className="stat-details">
-            <span className="stat-label">10+ Yrs Practice</span>
-            <span className="stat-value">{highExpCount}</span>
-            <span className="stat-sub">Senior practitioners</span>
+          <div>
+            <div className="stat-value">{legalAidCount}</div>
+            <div className="stat-label">Legal Aid / DLSA</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon purple">
+            <Award size={22} />
+          </div>
+          <div>
+            <div className="stat-value">{highExpCount}</div>
+            <div className="stat-label">10+ Yrs Practice</div>
           </div>
         </div>
       </div>
@@ -301,7 +297,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         <div className="action-buttons-group">
           <button
             className="btn-add-data"
-            style={{ background: '#EA580C', borderColor: '#EA580C' }}
             onClick={() => setIsWizardOpen(true)}
           >
             <Plus size={18} />
@@ -371,45 +366,51 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           )}
         </div>
 
-        <div className="table-responsive" style={{ maxHeight: '520px', overflowY: 'auto' }}>
-          <table className="data-table">
+        <div className="table-responsive">
+          <table className="survey-table sarve-table">
             <thead>
               <tr>
-                <th style={{ width: '45px' }}>#</th>
-                <th>BAR / REG NO.</th>
-                <th>ADVOCATE NAME</th>
-                <th>CONTACT NO.</th>
-                <th>PRIMARY COURT</th>
-                <th>EXPERIENCE</th>
-                <th>SPECIALIZATION</th>
-                <th>SURVEY DATE</th>
-                <th style={{ textAlign: 'center', width: '120px' }}>ACTIONS</th>
+                <th style={{ width: '55px', textAlign: 'center' }}>#</th>
+                <th style={{ minWidth: '150px' }}>Bar / Reg No.</th>
+                <th style={{ minWidth: '170px' }}>Advocate Name</th>
+                <th style={{ minWidth: '130px' }}>Contact No.</th>
+                <th style={{ minWidth: '150px' }}>Primary Court</th>
+                <th style={{ minWidth: '110px' }}>Experience</th>
+                <th style={{ minWidth: '190px' }}>Specialization</th>
+                <th style={{ minWidth: '120px' }}>Survey Date</th>
+                <th style={{ width: '120px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}>
-                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: '#EA580C' }} />
-                    <div style={{ color: '#64748B', fontSize: '14px' }}>Loading advocate survey records...</div>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '36px' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#64748B' }}>
+                      <RefreshCw size={18} className="animate-spin" style={{ color: '#EA580C' }} />
+                      <span>Loading advocate survey records...</span>
+                    </div>
                   </td>
                 </tr>
               ) : surveys.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '50px 20px' }}>
-                    <Scale size={42} style={{ color: '#CBD5E1', margin: '0 auto 12px' }} />
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>
-                      {searchQuery ? `No advocate records match "${searchQuery}"` : 'No Advocate Survey Records Found'}
-                    </div>
-                    <div style={{ fontSize: '13.5px', color: '#64748B', marginTop: '6px' }}>
-                      Click <strong>"+ Add Data"</strong> button to conduct your first advocate questionnaire.
+                  <td colSpan={9}>
+                    <div className="empty-state-box">
+                      <div className="empty-icon" style={{ background: '#FFF7ED', color: '#EA580C' }}>
+                        <Scale size={32} />
+                      </div>
+                      <h3 style={{ fontSize: '17px', fontWeight: 700, color: '#1E293B', marginBottom: '6px' }}>
+                        {searchQuery ? `No advocate records match "${searchQuery}"` : 'No Advocate Survey Records Found'}
+                      </h3>
+                      <p style={{ fontSize: '13.5px', color: '#64748B', margin: 0 }}>
+                        Click <strong>"+ Add Data"</strong> button to conduct your first advocate questionnaire.
+                      </p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 surveys.map((survey, index) => (
                   <tr key={survey.id || index}>
-                    <td style={{ fontWeight: 600, color: '#64748B' }}>{index + 1}</td>
+                    <td style={{ fontWeight: 600, color: '#64748B', textAlign: 'center' }}>{index + 1}</td>
                     <td>
                       <span className="badge-utct" style={{ background: '#1E293B' }}>
                         {survey.advocate_reg_no || 'N/A'}
@@ -431,8 +432,8 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
                     <td style={{ color: '#64748B', fontSize: '12.5px' }}>
                       {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '—'}
                     </td>
-                    <td>
-                      <div className="table-actions">
+                    <td style={{ textAlign: 'center' }}>
+                      <div className="table-actions" style={{ justifyContent: 'center' }}>
                         <button
                           type="button"
                           className="btn-action-icon view"

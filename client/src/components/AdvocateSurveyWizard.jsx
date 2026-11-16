@@ -56,6 +56,14 @@ export default function AdvocateSurveyWizard({
   const isReviewMode = currentStep === totalQuestions;
   const currentQ = activeQuestions[currentStep];
 
+  const choiceOptions = useMemo(() => {
+    if (currentQ?.key === 'primary_court' && Array.isArray(courtTypes) && courtTypes.length > 0) {
+      const dynamicNames = courtTypes.map((c) => (typeof c === 'string' ? c : c?.name)).filter(Boolean);
+      return Array.from(new Set([...dynamicNames, ...(currentQ.options || [])]));
+    }
+    return currentQ?.options || [];
+  }, [currentQ, courtTypes]);
+
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(0);
@@ -121,6 +129,17 @@ export default function AdvocateSurveyWizard({
 
   const handleInputChange = (val) => {
     setError('');
+    if (currentQ?.type === 'yesno') {
+      const lower = String(val).trim().toLowerCase();
+      if (lower === 'y' || lower === 'ye' || lower === 'yes') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'Yes' }));
+        return;
+      }
+      if (lower === 'n' || lower === 'no') {
+        setFormData((prev) => ({ ...prev, [currentQ.key]: 'No' }));
+        return;
+      }
+    }
     setFormData((prev) => ({ ...prev, [currentQ.key]: val }));
   };
 
@@ -462,7 +481,7 @@ export default function AdvocateSurveyWizard({
                 autoFocus
               />
               <div className="multi-select-container" style={{ marginTop: '12px' }}>
-                {(currentQ.options || []).map((opt) => (
+                {choiceOptions.map((opt) => (
                   <button
                     key={opt}
                     type="button"

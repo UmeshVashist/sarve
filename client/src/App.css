@@ -450,6 +450,11 @@
   color: #16A34A;
 }
 
+.stat-icon.purple {
+  background: #FAF5FF;
+  color: #9333EA;
+}
+
 .stat-value {
   font-size: 22px;
   font-weight: 800;

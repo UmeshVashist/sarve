@@ -215,6 +215,34 @@ export default function EditAdvocateSurveyModal({
                         No
                       </button>
                     </div>
+                  ) : q.type === 'choice_text' ? (
+                    <div>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={val}
+                        onChange={(e) => handleChange(q.key, e.target.value)}
+                        placeholder={q.placeholder || 'Select or enter choice...'}
+                        style={{ marginBottom: '8px' }}
+                      />
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {(q.key === 'primary_court' && Array.isArray(courtTypes) && courtTypes.length > 0
+                          ? Array.from(new Set([...courtTypes.map((c) => (typeof c === 'string' ? c : c?.name)).filter(Boolean), ...(q.options || [])]))
+                          : (q.options || [])
+                        ).map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            className={`selectable-tag ${val === opt ? 'selected' : ''}`}
+                            style={{ fontSize: '12px', padding: '4px 10px' }}
+                            onClick={() => handleChange(q.key, opt)}
+                          >
+                            {val === opt && <Check size={12} />}
+                            <span>{opt}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ) : (
                     <input
                       type={q.type === 'number' ? 'number' : 'text'}
