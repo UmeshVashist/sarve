@@ -2,8 +2,12 @@ import * as XLSX from 'xlsx';
 import { getQuestionLabel, SURVEY_QUESTIONS } from '../data/questions';
 import { resolveAnswerForRecord } from './resolveSurveyAnswer';
 
-function formatSingleAdvocate(a, index) {
+export function formatSingleAdvocate(a, index) {
   if (!a) return '';
+  if (a.raw) {
+    if (/^\[\d+\]/.test(a.raw)) return a.raw;
+    return `[${index + 1}] ${a.raw}`;
+  }
   const parts = [];
   if (a.name) parts.push(`Name: ${String(a.name).trim()}`);
   if (a.fee) parts.push(`Fee: ₹${a.fee}`);
@@ -13,13 +17,71 @@ function formatSingleAdvocate(a, index) {
   return `[${index + 1}] ${parts.join(' | ')}`;
 }
 
-export function downloadSurveyExcel(records, filename = 'Prisoner_Survey_Report.xlsx', customQuestions = null) {
+export function extractAdvocateList(r) {
+  let list = [];
+
+  // 1. Direct advocates_details array or JSON string
+  if (r.advocates_details) {
+    try {
+      list = typeof r.advocates_details === 'string' ? JSON.parse(r.advocates_details) : r.advocates_details;
+    } catch (e) {}
+  }
+
+  // 2. Fallback to custom_answers.advocates_details
+  if ((!Array.isArray(list) || list.length === 0) && r.custom_answers) {
+    try {
+      const ca = typeof r.custom_answers === 'string' ? JSON.parse(r.custom_answers) : r.custom_answers;
+      if (ca?.advocates_details) {
+        list = typeof ca.advocates_details === 'string' ? JSON.parse(ca.advocates_details) : ca.advocates_details;
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback: Check if advocate_name_number itself is a JSON array string
+  if ((!Array.isArray(list) || list.length === 0) && typeof r.advocate_name_number === 'string') {
+    const trimmed = r.advocate_name_number.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+          list = parsed;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 4. Fallback: Parse formatted multi-advocate text: e.g. "[1] Name: ... | Fee: ... ; [2] Name: ... | Fee: ..."
+  if ((!Array.isArray(list) || list.length === 0) && typeof r.advocate_name_number === 'string') {
+    const text = r.advocate_name_number;
+    if (text.includes('[1]') && text.includes('[2]')) {
+      const chunks = text
+        .split(/(?=\[\d+\])/g)
+        .map((s) => s.trim().replace(/^;\s*/, ''))
+        .filter(Boolean);
+      if (chunks.length > 1) {
+        list = chunks.map((c) => ({ raw: c }));
+      }
+    }
+  }
+
+  if (!Array.isArray(list)) list = [];
+  return list.filter((a) => a && (a.raw || a.name || a.fee || a.experience || a.known || a.court_type));
+}
+
+export function downloadSurveyExcel(
+  records,
+  filename = 'Prisoner_Survey_Report.xlsx',
+  customQuestions = null,
+  options = { mode: 'multi-row' }
+) {
   if (!records || records.length === 0) {
     alert('No survey records to export!');
     return;
   }
 
-  // 1. Resolve questions list: priority passed prop -> localStorage -> default SURVEY_QUESTIONS
+  const exportMode = (typeof options === 'string' ? options : options?.mode) || 'multi-row';
+
+  // 1. Resolve questions list
   let qList = Array.isArray(customQuestions) && customQuestions.length > 0 ? customQuestions : null;
   if (!qList) {
     try {
@@ -41,26 +103,46 @@ export function downloadSurveyExcel(records, filename = 'Prisoner_Survey_Report.
     (a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0)
   );
 
-  // 2. Format records into Excel rows
-  // If a record has multiple advocates, expand across multiple rows per Image 3:
-  // - Row 1 has S.No, UT/CT No, Name, Advocate 1 details in Column D, all other question answers filled, and Date & Time.
-  // - Subsequent rows (Advocate 2, 3...) have BLANK S.No, REPEATED UT/CT No, REPEATED Name, Advocate k details, and BLANK for all other questions.
   const excelRows = [];
 
   records.forEach((r, recordIndex) => {
-    // Parse advocates details
-    let advocateList = [];
-    if (r.advocates_details) {
-      try {
-        advocateList = typeof r.advocates_details === 'string' ? JSON.parse(r.advocates_details) : r.advocates_details;
-      } catch (e) {}
-    }
-    if (!Array.isArray(advocateList)) advocateList = [];
-    advocateList = advocateList.filter((a) => a && (a.name || a.fee || a.experience || a.known || a.court_type));
+    const advocateList = extractAdvocateList(r);
 
     let utctVal = r.utct_no || '';
     let nameVal = r.name || '';
 
+    // ==========================================
+    // MODE A: SINGLE LINE (1 Row per Prisoner)
+    // ==========================================
+    if (exportMode === 'single-line') {
+      const singleRow = { 'S.No': recordIndex + 1 };
+      sortedQuestions.forEach((q, idx) => {
+        const header = getQuestionLabel(q, idx);
+        if (q.key === 'utct_no') {
+          const val = resolveAnswerForRecord(r, q, sortedQuestions);
+          singleRow[header] = val || utctVal;
+        } else if (q.key === 'name') {
+          const val = resolveAnswerForRecord(r, q, sortedQuestions);
+          singleRow[header] = val || nameVal;
+        } else if (q.key === 'advocate_name_number') {
+          if (advocateList.length > 0) {
+            singleRow[header] = advocateList.map((a, i) => formatSingleAdvocate(a, i)).join(' ; \n');
+          } else {
+            singleRow[header] = resolveAnswerForRecord(r, q, sortedQuestions) || '';
+          }
+        } else {
+          const val = resolveAnswerForRecord(r, q, sortedQuestions);
+          singleRow[header] = val || '';
+        }
+      });
+      singleRow['Survey Date & Time'] = r.created_at || '';
+      excelRows.push(singleRow);
+      return; // done for this record
+    }
+
+    // ==========================================
+    // MODE B: MULTI-ROW (Repeat UT/CT No & Name)
+    // ==========================================
     // First row
     const firstRow = { 'S.No': recordIndex + 1 };
 
@@ -92,7 +174,7 @@ export function downloadSurveyExcel(records, filename = 'Prisoner_Survey_Report.
     // Multi-advocate expansion: Rows 2..N for this prisoner
     if (advocateList.length > 1) {
       for (let k = 1; k < advocateList.length; k++) {
-        const subRow = { 'S.No': '' }; // Blank S.No as in Image 3
+        const subRow = { 'S.No': '' }; // Blank S.No
         sortedQuestions.forEach((q, idx) => {
           const header = getQuestionLabel(q, idx);
           if (q.key === 'utct_no') {
@@ -102,7 +184,7 @@ export function downloadSurveyExcel(records, filename = 'Prisoner_Survey_Report.
           } else if (q.key === 'advocate_name_number') {
             subRow[header] = formatSingleAdvocate(advocateList[k], k); // [2] Name: ...
           } else {
-            subRow[header] = ''; // Blank for all other questions as in Image 3
+            subRow[header] = ''; // Blank for all other questions
           }
         });
         subRow['Survey Date & Time'] = '';

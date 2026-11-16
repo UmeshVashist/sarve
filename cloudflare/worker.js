@@ -402,7 +402,13 @@ export default {
               advocates_details = [];
             }
           }
-          return { ...r, advocates_details, ...custom };
+          if ((!Array.isArray(advocates_details) || advocates_details.length === 0) && custom.advocates_details) {
+            try {
+              advocates_details = typeof custom.advocates_details === 'string' ? JSON.parse(custom.advocates_details) : custom.advocates_details;
+            } catch (e) {}
+          }
+          delete custom.advocates_details;
+          return { ...r, ...custom, advocates_details: Array.isArray(advocates_details) ? advocates_details : [] };
         });
 
         return new Response(
@@ -433,7 +439,13 @@ export default {
             advocates_details = [];
           }
         }
-        return new Response(JSON.stringify({ success: true, data: { ...survey, advocates_details, ...custom } }), {
+        if ((!Array.isArray(advocates_details) || advocates_details.length === 0) && custom.advocates_details) {
+          try {
+            advocates_details = typeof custom.advocates_details === 'string' ? JSON.parse(custom.advocates_details) : custom.advocates_details;
+          } catch (e) {}
+        }
+        delete custom.advocates_details;
+        return new Response(JSON.stringify({ success: true, data: { ...survey, ...custom, advocates_details: Array.isArray(advocates_details) ? advocates_details : [] } }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

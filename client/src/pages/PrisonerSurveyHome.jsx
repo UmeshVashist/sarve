@@ -23,6 +23,7 @@ import CourtTypesModal from '../components/CourtTypesModal';
 import SurveyDetailModal from '../components/SurveyDetailModal';
 import EditSurveyModal from '../components/EditSurveyModal';
 import ManageQuestionsModal from '../components/ManageQuestionsModal';
+import DownloadFormatModal from '../components/DownloadFormatModal';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 import { downloadSurveyExcel } from '../utils/exportExcel';
@@ -87,6 +88,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [isCaseTypesOpen, setIsCaseTypesOpen] = useState(false);
   const [isCourtTypesOpen, setIsCourtTypesOpen] = useState(false);
   const [isQuestionsOpen, setIsQuestionsOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
 
@@ -285,10 +287,14 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       alert('Abhi database me koi survey record nahi hai! Add Data button se survey add kare.');
       return;
     }
+    setIsDownloadModalOpen(true);
+  };
+
+  const handleConfirmDownload = (format) => {
     const filename = searchQuery
       ? `Prisoner_Survey_Filtered_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`
       : 'Prisoner_Survey_Report.xlsx';
-    downloadSurveyExcel(surveys, filename, questions);
+    downloadSurveyExcel(surveys, filename, questions, { mode: format });
   };
 
   // Quick stats calculations (Completely safe against null/undefined records)
@@ -644,6 +650,14 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
           }
           fetchSurveys();
         }}
+      />
+
+      {/* Download Excel Format Selection Modal */}
+      <DownloadFormatModal
+        isOpen={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        onConfirmDownload={handleConfirmDownload}
+        totalRecords={surveys.length}
       />
     </div>
   );
