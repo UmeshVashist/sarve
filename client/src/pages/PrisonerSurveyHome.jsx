@@ -100,6 +100,13 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
     fetchQuestions();
   }, []);
 
+  // Ensure latest questions are loaded whenever user opens "+ Add Data" or "Manage Questions"
+  useEffect(() => {
+    if (isWizardOpen || isQuestionsOpen) {
+      fetchQuestions();
+    }
+  }, [isWizardOpen, isQuestionsOpen]);
+
   const fetchCourtTypes = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/court-types`);
@@ -161,7 +168,9 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/questions`);
+      const res = await fetch(`${API_BASE_URL}/api/questions?_t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         handleQuestionsChange(data.data);

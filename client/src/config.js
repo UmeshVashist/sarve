@@ -1,6 +1,4 @@
-// Central API configuration for Local Node.js server or Cloudflare Workers
+// Central API configuration for Survey Portal (Cloudflare Workers & D1 Database)
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://sarve-portal-api.umeshvashist9.workers.dev'
-    : 'http://localhost:5000');
+  'https://sarve-portal-api.umeshvashist9.workers.dev';

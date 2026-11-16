@@ -413,7 +413,7 @@ export default {
 
         return new Response(
           JSON.stringify({ success: true, count: data.length, data }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' } }
         );
       }
 
@@ -630,7 +630,7 @@ export default {
             return { ...q, required: Boolean(q.required), is_custom: Boolean(q.is_custom), options };
           });
           return new Response(JSON.stringify({ success: true, data }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
           });
         } catch (e) {
           return new Response(JSON.stringify({ success: false, message: e.message }), {
@@ -839,7 +839,7 @@ export default {
           list = await env.DB.prepare('SELECT * FROM court_types ORDER BY id ASC').all();
         }
         return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });
       }
 
@@ -1046,7 +1046,7 @@ export default {
 
         return new Response(
           JSON.stringify({ success: true, count: data.length, data }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' } }
         );
       }
 

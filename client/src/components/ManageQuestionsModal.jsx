@@ -46,6 +46,13 @@ export default function ManageQuestionsModal({
     return [...questions].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
   }, [questions]);
 
+  // Ensure latest server questions are fetched whenever modal opens
+  useEffect(() => {
+    if (isOpen && onQuestionsUpdated) {
+      onQuestionsUpdated();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const showSuccess = (msg) => {
@@ -288,19 +295,36 @@ export default function ManageQuestionsModal({
       } else {
         const targetOrder = Number(formData.order_num) || (sortedQuestions.length + 1);
         const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length));
-        const tempId = 'custom_' + Date.now();
         const customKey = `custom_${Date.now()}`;
 
-        const newQ = {
-          id: tempId,
+        serverPayload = {
           key: customKey,
+          order_num: targetIndex + 1,
+          label: `${targetIndex + 1}) ${cleanLabel}`,
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
           note: formData.note ? formData.note.trim() : '',
-          required: formData.required ? 1 : 0,
-          label: cleanLabel,
-          is_custom: true
+          required: formData.required ? 1 : 0
+        };
+
+        const res = await fetch(`${API_BASE_URL}/api/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(serverPayload)
+        });
+        const resData = await res.json();
+        if (!res.ok || !resData.success || !resData.data) {
+          throw new Error(resData.message || 'Failed to save question to server database');
+        }
+
+        const createdQ = resData.data;
+        const newQ = {
+          ...createdQ,
+          required: Boolean(createdQ.required),
+          is_custom: true,
+          options: options && options.length > 0 ? options : null,
+          label: `${targetIndex + 1}) ${cleanLabel}`
         };
 
         const copy = [...sortedQuestions];
@@ -320,48 +344,24 @@ export default function ManageQuestionsModal({
         setActiveTab('list');
         setEditingQuestion(null);
 
-        serverPayload = {
-          key: customKey,
-          order_num: targetIndex + 1,
-          label: `${targetIndex + 1}) ${cleanLabel}`,
-          placeholder: formData.placeholder ? formData.placeholder.trim() : '',
-          type: formData.type || 'text',
-          options: options && options.length > 0 ? options : null,
-          note: formData.note ? formData.note.trim() : '',
-          required: formData.required ? 1 : 0
-        };
-
-        const res = await fetch(`${API_BASE_URL}/api/questions`, {
+        await fetch(`${API_BASE_URL}/api/questions/reorder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(serverPayload)
+          body: JSON.stringify({
+            items: reordered.map((item) => ({
+              id: item.id,
+              key: item.key,
+              order_num: item.order_num,
+              label: item.label
+            }))
+          })
         });
-        const resData = await res.json();
-        if (resData.success && resData.data) {
-          const finalized = reordered.map((item) =>
-            item.id === tempId
-              ? { ...item, id: resData.data.id, key: resData.data.key || customKey }
-              : item
-          );
-          applyQuestionsUpdate(finalized);
-          await fetch(`${API_BASE_URL}/api/questions/reorder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              items: finalized.map((item) => ({
-                id: item.id,
-                key: item.key,
-                order_num: item.order_num,
-                label: item.label
-              }))
-            })
-          });
-        }
       }
 
       if (onQuestionsUpdated) onQuestionsUpdated();
     } catch (err) {
-      console.warn('API sync warning:', err);
+      console.error('API sync error:', err);
+      setError(err.message || 'Failed to sync with server');
     } finally {
       setSaving(false);
     }
