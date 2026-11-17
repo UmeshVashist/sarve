@@ -222,6 +222,19 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     }
   };
 
+  const handleDeleteCourtType = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete court type "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchCourtTypes();
+      }
+    } catch (err) {
+      alert('Failed to delete court type');
+    }
+  };
+
   const fetchAdvocateTypes = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/advocate-types`);
