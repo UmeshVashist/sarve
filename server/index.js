@@ -631,6 +631,69 @@ app.delete('/api/court-types/:id', (req, res) => {
   }
 });
 
+// 9b. Advocate Types CRUD (Dropdown Options)
+app.get('/api/advocate-types', (req, res) => {
+  try {
+    const list = db.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
+    res.json({ success: true, data: list });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/advocate-types', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Advocate type name is required' });
+    }
+    const cleanName = name.trim();
+    const existing = db.prepare('SELECT id FROM advocate_types WHERE LOWER(name) = LOWER(?)').get(cleanName);
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'Advocate type already exists!' });
+    }
+    const result = db.prepare('INSERT INTO advocate_types (name) VALUES (?)').run(cleanName);
+    const created = db.prepare('SELECT * FROM advocate_types WHERE id = ?').get(result.lastInsertRowid);
+    res.json({ success: true, message: 'Advocate type added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/advocate-types/:id', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Advocate type name is required' });
+    }
+    const cleanName = name.trim();
+    const id = req.params.id;
+    const existing = db.prepare('SELECT id FROM advocate_types WHERE LOWER(name) = LOWER(?) AND id != ?').get(cleanName, id);
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'Advocate type already exists with this name!' });
+    }
+    const result = db.prepare('UPDATE advocate_types SET name = ? WHERE id = ?').run(cleanName, id);
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'Advocate type not found' });
+    }
+    res.json({ success: true, message: 'Advocate type updated successfully', data: { id: Number(id), name: cleanName } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/advocate-types/:id', (req, res) => {
+  try {
+    const result = db.prepare('DELETE FROM advocate_types WHERE id = ?').run(req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'Advocate type not found' });
+    }
+    res.json({ success: true, message: 'Advocate type removed successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // 10. Questions CRUD & Numbering Management
 app.get('/api/questions', (req, res) => {
   try {
@@ -648,6 +711,7 @@ app.get('/api/questions', (req, res) => {
         ...q,
         required: Boolean(q.required),
         is_custom: Boolean(q.is_custom),
+        has_remark: Boolean(q.has_remark),
         options
       };
     });
@@ -659,7 +723,7 @@ app.get('/api/questions', (req, res) => {
 
 app.post('/api/questions', (req, res) => {
   try {
-    let { order_num, label, placeholder, type, options, required, note, key } = req.body;
+    let { order_num, label, placeholder, type, options, required, note, key, has_remark } = req.body;
     if (!label || !label.trim()) {
       return res.status(400).json({ success: false, message: 'Question label / text is required' });
     }
@@ -693,8 +757,8 @@ app.post('/api/questions', (req, res) => {
     }
 
     const insert = db.prepare(`
-      INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     `);
 
     const result = insert.run(
@@ -705,7 +769,8 @@ app.post('/api/questions', (req, res) => {
       type || 'text',
       optionsStr,
       required ? 1 : 0,
-      note ? note.trim() : ''
+      note ? note.trim() : '',
+      has_remark ? 1 : 0
     );
 
     const created = db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid);
@@ -715,6 +780,7 @@ app.post('/api/questions', (req, res) => {
       data: {
         ...created,
         required: Boolean(created.required),
+        has_remark: Boolean(created.has_remark),
         options: optionsStr ? JSON.parse(optionsStr) : null
       }
     });
@@ -732,7 +798,7 @@ app.put('/api/questions/:id', (req, res) => {
       return res.status(404).json({ success: false, message: 'Question not found' });
     }
 
-    let { order_num, label, placeholder, type, options, required, note } = req.body;
+    let { order_num, label, placeholder, type, options, required, note, has_remark } = req.body;
 
     const newOrderNum = (order_num !== undefined && !isNaN(order_num)) ? Number(order_num) : existing.order_num;
     const newLabel = label !== undefined ? label.trim() : existing.label;
@@ -740,6 +806,7 @@ app.put('/api/questions/:id', (req, res) => {
     const newType = type || existing.type;
     const newRequired = required !== undefined ? (required ? 1 : 0) : existing.required;
     const newNote = note !== undefined ? note.trim() : existing.note;
+    const newHasRemark = has_remark !== undefined ? (has_remark ? 1 : 0) : (existing.has_remark ? 1 : 0);
 
     let optionsStr = existing.options;
     if (options !== undefined) {
@@ -761,9 +828,10 @@ app.put('/api/questions/:id', (req, res) => {
         options = ?,
         required = ?,
         note = ?,
+        has_remark = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, id);
+    `).run(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, newHasRemark, id);
 
     const updated = db.prepare('SELECT * FROM questions WHERE id = ?').get(id);
     res.json({
@@ -772,6 +840,7 @@ app.put('/api/questions/:id', (req, res) => {
       data: {
         ...updated,
         required: Boolean(updated.required),
+        has_remark: Boolean(updated.has_remark),
         options: optionsStr ? JSON.parse(optionsStr) : null
       }
     });
@@ -883,6 +952,7 @@ app.get('/api/advocate-questions', (req, res) => {
         ...q,
         required: Boolean(q.required),
         is_custom: Boolean(q.is_custom),
+        has_remark: Boolean(q.has_remark),
         options
       };
     });
@@ -894,7 +964,7 @@ app.get('/api/advocate-questions', (req, res) => {
 
 app.post('/api/advocate-questions', (req, res) => {
   try {
-    let { order_num, label, placeholder, type, options, required, note, key } = req.body;
+    let { order_num, label, placeholder, type, options, required, note, key, has_remark } = req.body;
     if (!label || !label.trim()) {
       return res.status(400).json({ success: false, message: 'Question label / text is required' });
     }
@@ -933,8 +1003,8 @@ app.post('/api/advocate-questions', (req, res) => {
     const numberedLabel = `${order_num}) ${cleanLabel}`;
 
     const insert = db.prepare(`
-      INSERT INTO advocate_questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO advocate_questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     `);
 
     const result = insert.run(
@@ -945,7 +1015,8 @@ app.post('/api/advocate-questions', (req, res) => {
       type || 'text',
       optionsStr,
       required ? 1 : 0,
-      note ? note.trim() : ''
+      note ? note.trim() : '',
+      has_remark ? 1 : 0
     );
 
     const created = db.prepare('SELECT * FROM advocate_questions WHERE id = ?').get(result.lastInsertRowid);
@@ -956,6 +1027,7 @@ app.post('/api/advocate-questions', (req, res) => {
         ...created,
         required: Boolean(created.required),
         is_custom: Boolean(created.is_custom),
+        has_remark: Boolean(created.has_remark),
         options: optionsStr ? JSON.parse(optionsStr) : null
       }
     });
@@ -973,7 +1045,7 @@ app.put('/api/advocate-questions/:id', (req, res) => {
       return res.status(404).json({ success: false, message: 'Question not found' });
     }
 
-    let { order_num, label, placeholder, type, options, required, note } = req.body;
+    let { order_num, label, placeholder, type, options, required, note, has_remark } = req.body;
     order_num = order_num !== undefined && !isNaN(order_num) ? Number(order_num) : existing.order_num;
     let finalLabel = label ? label.trim() : existing.label;
     if (label) {
@@ -996,6 +1068,8 @@ app.put('/api/advocate-questions/:id', (req, res) => {
       }
     }
 
+    const newHasRemark = has_remark !== undefined ? (has_remark ? 1 : 0) : (existing.has_remark ? 1 : 0);
+
     const update = db.prepare(`
       UPDATE advocate_questions SET
         order_num = ?,
@@ -1005,6 +1079,7 @@ app.put('/api/advocate-questions/:id', (req, res) => {
         options = ?,
         required = ?,
         note = ?,
+        has_remark = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
@@ -1017,6 +1092,7 @@ app.put('/api/advocate-questions/:id', (req, res) => {
       optionsStr,
       required !== undefined ? (required ? 1 : 0) : existing.required,
       note !== undefined ? note : existing.note,
+      newHasRemark,
       id
     );
 
@@ -1028,6 +1104,7 @@ app.put('/api/advocate-questions/:id', (req, res) => {
         ...updated,
         required: Boolean(updated.required),
         is_custom: Boolean(updated.is_custom),
+        has_remark: Boolean(updated.has_remark),
         options: optionsStr ? JSON.parse(optionsStr) : null
       }
     });

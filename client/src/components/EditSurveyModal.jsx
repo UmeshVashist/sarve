@@ -732,6 +732,22 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                     </div>
                   )}
 
+                  {Boolean(q.has_remark) && (
+                    <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
+                        Remark (Optional):
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Enter remark..."
+                        value={formData[`${q.key}_remark`] || ''}
+                        onChange={(e) => handleChange(`${q.key}_remark`, e.target.value)}
+                        style={{ fontSize: '12.5px', padding: '5px 10px', background: '#FFFFFF' }}
+                      />
+                    </div>
+                  )}
+
                   {q.note && (
                     <div style={{ fontSize: '11.5px', color: '#B45309', marginTop: '4px', fontWeight: 600 }}>
                       {q.note}

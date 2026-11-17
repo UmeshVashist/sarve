@@ -118,6 +118,32 @@ async function ensureD1Database(db) {
       }
     }
 
+    // 3b. Advocate types table
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS advocate_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+    const advTypeCount = (await db.prepare('SELECT COUNT(*) as c FROM advocate_types').first())?.c || 0;
+    if (advTypeCount === 0) {
+      const defaultAdvTypes = [
+        'Private Advocate',
+        'DLSA / Legal Aid Advocate',
+        'High Court Legal Services Committee (HCLSC) Advocate',
+        'Remand Advocate',
+        'Amicus Curiae',
+        'Senior Advocate',
+        'Government Pleader / Public Prosecutor',
+        'Panel Advocate',
+        'Other'
+      ];
+      for (const t of defaultAdvTypes) {
+        await db.prepare('INSERT OR IGNORE INTO advocate_types (name) VALUES (?)').bind(t).run();
+      }
+    }
+
     // 4. Questions table (Prisoner Survey Questions)
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS questions (
@@ -279,6 +305,12 @@ async function ensureD1Database(db) {
     } catch (e) {}
     try {
       await db.prepare("ALTER TABLE advocate_surveys ADD COLUMN custom_answers TEXT DEFAULT '{}'").run();
+    } catch (e) {}
+    try {
+      await db.prepare("ALTER TABLE questions ADD COLUMN has_remark INTEGER DEFAULT 0").run();
+    } catch (e) {}
+    try {
+      await db.prepare("ALTER TABLE advocate_questions ADD COLUMN has_remark INTEGER DEFAULT 0").run();
     } catch (e) {}
 
     isD1Initialized = true;
@@ -627,7 +659,13 @@ export default {
             if (q.options) {
               try { options = JSON.parse(q.options); } catch (e) { options = q.options.split(','); }
             }
-            return { ...q, required: Boolean(q.required), is_custom: Boolean(q.is_custom), options };
+            return {
+              ...q,
+              required: Boolean(q.required),
+              is_custom: Boolean(q.is_custom),
+              has_remark: Boolean(q.has_remark),
+              options
+            };
           });
           return new Response(JSON.stringify({ success: true, data }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
@@ -656,10 +694,11 @@ export default {
           optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : JSON.stringify(String(body.options).split(',').map((s) => s.trim()).filter(Boolean));
         }
 
+        const hasRemark = body.has_remark ? 1 : 0;
         await env.DB.prepare(`
-          INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-        `).bind(orderNum, key, body.label.trim(), body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '').run();
+          INSERT INTO questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).bind(orderNum, key, body.label.trim(), body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '', hasRemark).run();
 
         const created = await env.DB.prepare('SELECT * FROM questions WHERE key = ?').bind(key).first();
         let options = null;
@@ -673,6 +712,7 @@ export default {
             ...created,
             required: Boolean(created?.required),
             is_custom: true,
+            has_remark: Boolean(created?.has_remark),
             options
           }
         }), {
@@ -698,6 +738,7 @@ export default {
         const newType = body.type || existing.type;
         const newRequired = body.required !== undefined ? (body.required ? 1 : 0) : existing.required;
         const newNote = body.note !== undefined ? body.note.trim() : existing.note;
+        const newHasRemark = body.has_remark !== undefined ? (body.has_remark ? 1 : 0) : (existing.has_remark ? 1 : 0);
         let optionsStr = existing.options;
         if (body.options !== undefined) {
           optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : (typeof body.options === 'string' ? JSON.stringify(body.options.split(',').map((s) => s.trim()).filter(Boolean)) : null);
@@ -705,12 +746,16 @@ export default {
 
         await env.DB.prepare(`
           UPDATE questions SET
-            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?, required = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?, required = ?, note = ?, has_remark = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, id).run();
+        `).bind(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, newHasRemark, id).run();
 
         const updated = await env.DB.prepare('SELECT * FROM questions WHERE id = ?').bind(id).first();
-        return new Response(JSON.stringify({ success: true, message: 'Question updated successfully', data: updated }), {
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Question updated successfully',
+          data: { ...updated, has_remark: Boolean(updated?.has_remark), required: Boolean(updated?.required) }
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
@@ -878,6 +923,67 @@ export default {
       }
 
       // ==========================================
+      // 13b. Advocate Types CRUD (Dropdown Options)
+      // ==========================================
+      if (path === '/api/advocate-types' && method === 'GET') {
+        let list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
+        if (!list.results || list.results.length === 0) {
+          const defaultAdvTypes = [
+            'Private Advocate',
+            'DLSA / Legal Aid Advocate',
+            'High Court Legal Services Committee (HCLSC) Advocate',
+            'Remand Advocate',
+            'Amicus Curiae',
+            'Senior Advocate',
+            'Government Pleader / Public Prosecutor',
+            'Panel Advocate',
+            'Other'
+          ];
+          for (const t of defaultAdvTypes) {
+            await env.DB.prepare('INSERT OR IGNORE INTO advocate_types (name) VALUES (?)').bind(t).run();
+          }
+          list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
+        }
+        return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/advocate-types' && method === 'POST') {
+        const { name } = await request.json();
+        const cleanName = (name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Advocate type name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        await env.DB.prepare('INSERT OR IGNORE INTO advocate_types (name) VALUES (?)').bind(cleanName).run();
+        const created = await env.DB.prepare('SELECT * FROM advocate_types WHERE name = ?').bind(cleanName).first();
+        return new Response(JSON.stringify({ success: true, message: 'Advocate type added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/advocate-types/') && method === 'PUT') {
+        const id = path.split('/')[3];
+        const { name } = await request.json();
+        const cleanName = (name || '').trim();
+        await env.DB.prepare('UPDATE advocate_types SET name = ? WHERE id = ?').bind(cleanName, id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Advocate type updated successfully', data: { id: Number(id), name: cleanName } }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/advocate-types/') && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM advocate_types WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Advocate type removed successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================
       // 14. Advocate Questions CRUD & Management
       // ==========================================
       if (path === '/api/advocate-questions' && method === 'GET') {
@@ -887,10 +993,16 @@ export default {
           if (q.options) {
             try { options = JSON.parse(q.options); } catch (e) { options = q.options.split(','); }
           }
-          return { ...q, required: Boolean(q.required), is_custom: Boolean(q.is_custom), options };
+          return {
+            ...q,
+            required: Boolean(q.required),
+            is_custom: Boolean(q.is_custom),
+            has_remark: Boolean(q.has_remark),
+            options
+          };
         });
         return new Response(JSON.stringify({ success: true, data }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });
       }
 
@@ -899,17 +1011,26 @@ export default {
         const maxOrder = (await env.DB.prepare('SELECT MAX(order_num) as m FROM advocate_questions').first())?.m || 0;
         const orderNum = body.order_num ? Number(body.order_num) : (maxOrder + 1);
         const key = body.key || `adv_custom_${Date.now()}`;
-        const optionsStr = body.options ? JSON.stringify(body.options) : null;
+        const optionsStr = body.options ? (typeof body.options === 'string' ? body.options : JSON.stringify(body.options)) : null;
         const cleanLabel = (body.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
         const numberedLabel = `${orderNum}) ${cleanLabel}`;
+        const hasRemark = body.has_remark ? 1 : 0;
 
         await env.DB.prepare(`
-          INSERT INTO advocate_questions (order_num, key, label, placeholder, type, options, required, note, is_custom)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-        `).bind(orderNum, key, numberedLabel, body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '').run();
+          INSERT INTO advocate_questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).bind(orderNum, key, numberedLabel, body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '', hasRemark).run();
 
         const created = await env.DB.prepare('SELECT * FROM advocate_questions WHERE key = ?').bind(key).first();
-        return new Response(JSON.stringify({ success: true, data: created }), {
+        return new Response(JSON.stringify({
+          success: true,
+          data: {
+            ...created,
+            required: Boolean(created?.required),
+            is_custom: true,
+            has_remark: Boolean(created?.has_remark)
+          }
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
@@ -935,6 +1056,7 @@ export default {
         const newType = body.type || existing.type;
         const newRequired = body.required !== undefined ? (body.required ? 1 : 0) : existing.required;
         const newNote = body.note !== undefined ? body.note.trim() : existing.note;
+        const newHasRemark = body.has_remark !== undefined ? (body.has_remark ? 1 : 0) : (existing.has_remark ? 1 : 0);
         let optionsStr = existing.options;
         if (body.options !== undefined) {
           optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : (typeof body.options === 'string' ? JSON.stringify(body.options.split(',').map((s) => s.trim()).filter(Boolean)) : null);
@@ -942,12 +1064,16 @@ export default {
 
         await env.DB.prepare(`
           UPDATE advocate_questions SET
-            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?, required = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?, required = ?, note = ?, has_remark = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, id).run();
+        `).bind(newOrderNum, newLabel, newPlaceholder, newType, optionsStr, newRequired, newNote, newHasRemark, id).run();
 
         const updated = await env.DB.prepare('SELECT * FROM advocate_questions WHERE id = ?').bind(id).first();
-        return new Response(JSON.stringify({ success: true, message: 'Advocate question updated successfully', data: updated }), {
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Advocate question updated successfully',
+          data: { ...updated, has_remark: Boolean(updated?.has_remark), required: Boolean(updated?.required) }
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

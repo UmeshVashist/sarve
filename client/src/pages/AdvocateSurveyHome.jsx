@@ -18,10 +18,11 @@ import {
 } from 'lucide-react';
 import AdvocateSurveyWizard from '../components/AdvocateSurveyWizard';
 import CourtTypesModal from '../components/CourtTypesModal';
+import AdvocateTypesModal from '../components/AdvocateTypesModal';
 import AdvocateSurveyDetailModal from '../components/AdvocateSurveyDetailModal';
 import EditAdvocateSurveyModal from '../components/EditAdvocateSurveyModal';
 import ManageAdvocateQuestionsModal from '../components/ManageAdvocateQuestionsModal';
-import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel } from '../data/advocateQuestions';
+import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, DEFAULT_ADVOCATE_TYPES } from '../data/advocateQuestions';
 import { API_BASE_URL } from '../config';
 import { downloadAdvocateExcel, resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
 
@@ -30,6 +31,16 @@ import { DEFAULT_COURT_TYPES } from './PrisonerSurveyHome';
 export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
+  const [advocateTypes, setAdvocateTypes] = useState(() => {
+    try {
+      const saved = localStorage.getItem('advocate_types_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_ADVOCATE_TYPES;
+  });
   const [questions, setQuestions] = useState(() => {
     try {
       const saved = localStorage.getItem('advocate_questions_list');
@@ -50,6 +61,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   // Modals state
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isCourtTypesOpen, setIsCourtTypesOpen] = useState(false);
+  const [isAdvocateTypesOpen, setIsAdvocateTypesOpen] = useState(false);
   const [isQuestionsOpen, setIsQuestionsOpen] = useState(false);
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
@@ -66,6 +78,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   useEffect(() => {
     fetchSurveys();
     fetchCourtTypes();
+    fetchAdvocateTypes();
     fetchQuestions();
   }, []);
 
@@ -166,16 +179,65 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     }
   };
 
-  const handleDeleteCourtType = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete court type "${name}"?`)) return;
+  const fetchAdvocateTypes = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/advocate-types`);
       const data = await res.json();
-      if (data.success) {
-        fetchCourtTypes();
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        setAdvocateTypes(data.data);
+        try {
+          localStorage.setItem('advocate_types_list', JSON.stringify(data.data));
+        } catch (e) {}
       }
     } catch (err) {
-      alert('Failed to delete court type');
+      console.warn('Failed to fetch advocate types:', err);
+    }
+  };
+
+  const handleAddAdvocateType = async (typeName) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/advocate-types`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: typeName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchAdvocateTypes();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const handleEditAdvocateType = async (id, name) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/advocate-types/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchAdvocateTypes();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const handleDeleteAdvocateType = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete advocate type "${name}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/advocate-types/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchAdvocateTypes();
+      }
+    } catch (err) {
+      alert('Failed to delete advocate type');
     }
   };
 
@@ -239,6 +301,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
               setRefreshing(true);
               fetchSurveys(searchQuery);
               fetchCourtTypes();
+              fetchAdvocateTypes();
               fetchQuestions();
             }}
             title="Refresh Data"
@@ -320,6 +383,16 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           >
             <Scale size={17} />
             <span>Manage Court Types ({courtTypes.length})</span>
+          </button>
+
+          <button
+            className="btn-case-types"
+            style={{ background: '#F0FDF4', borderColor: '#86EFAC', color: '#16A34A' }}
+            onClick={() => setIsAdvocateTypesOpen(true)}
+            title="Manage dynamic advocate types"
+          >
+            <Briefcase size={17} />
+            <span>Manage Advocate Types ({advocateTypes.length})</span>
           </button>
 
           <button
@@ -473,6 +546,8 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         courtTypes={courtTypes}
+        advocateTypes={advocateTypes}
+        onAddAdvocateType={handleAddAdvocateType}
         questions={questions}
         onSurveySaved={(newSurvey) => {
           if (newSurvey && typeof newSurvey === 'object' && newSurvey.id) {
@@ -492,11 +567,22 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         onDeleteCourtType={handleDeleteCourtType}
       />
 
+      {/* Advocate Types Modal */}
+      <AdvocateTypesModal
+        isOpen={isAdvocateTypesOpen}
+        onClose={() => setIsAdvocateTypesOpen(false)}
+        advocateTypes={advocateTypes}
+        onAddAdvocateType={handleAddAdvocateType}
+        onEditAdvocateType={handleEditAdvocateType}
+        onDeleteAdvocateType={handleDeleteAdvocateType}
+      />
+
       {/* Manage Advocate Questions Modal */}
       <ManageAdvocateQuestionsModal
         isOpen={isQuestionsOpen}
         onClose={() => setIsQuestionsOpen(false)}
         questions={questions}
+        advocateTypes={advocateTypes}
         onUpdateQuestions={handleQuestionsChange}
         onQuestionsUpdated={fetchQuestions}
       />
@@ -515,6 +601,8 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         onClose={() => setSelectedSurveyForEdit(null)}
         survey={selectedSurveyForEdit}
         courtTypes={courtTypes}
+        advocateTypes={advocateTypes}
+        onAddAdvocateType={handleAddAdvocateType}
         questions={questions}
         onSurveyUpdated={(updated) => {
           if (updated && updated.id) {

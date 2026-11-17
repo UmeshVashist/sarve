@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import { getQuestionLabel, SURVEY_QUESTIONS } from '../data/questions';
-import { resolveAnswerForRecord } from './resolveSurveyAnswer';
+import { resolveAnswerForRecord, resolveQuestionRemark, formatAnswerWithRemark } from './resolveSurveyAnswer';
 
 export function formatSingleAdvocate(a, index) {
   if (!a) return '';
@@ -131,7 +131,9 @@ export function downloadSurveyExcel(
             singleRow[header] = resolveAnswerForRecord(r, q, sortedQuestions) || '';
           }
         } else {
-          const val = resolveAnswerForRecord(r, q, sortedQuestions);
+          const rawVal = resolveAnswerForRecord(r, q, sortedQuestions);
+          const remark = resolveQuestionRemark(r, q);
+          const val = formatAnswerWithRemark(rawVal, remark);
           singleRow[header] = val || '';
         }
       });
@@ -160,10 +162,14 @@ export function downloadSurveyExcel(
         if (advocateList.length > 0) {
           firstRow[header] = formatSingleAdvocate(advocateList[0], 0);
         } else {
-          firstRow[header] = resolveAnswerForRecord(r, q, sortedQuestions) || '';
+          const rawVal = resolveAnswerForRecord(r, q, sortedQuestions) || '';
+          const remark = resolveQuestionRemark(r, q);
+          firstRow[header] = formatAnswerWithRemark(rawVal, remark);
         }
       } else {
-        const val = resolveAnswerForRecord(r, q, sortedQuestions);
+        const rawVal = resolveAnswerForRecord(r, q, sortedQuestions);
+        const remark = resolveQuestionRemark(r, q);
+        const val = formatAnswerWithRemark(rawVal, remark);
         firstRow[header] = val || '';
       }
     });

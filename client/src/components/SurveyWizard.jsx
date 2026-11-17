@@ -1021,9 +1021,23 @@ export default function SurveyWizard({
                           ))}
                         </div>
                       ) : displayVal ? (
-                        <span className="review-item-answer">{displayVal}</span>
+                        <div>
+                          <span className="review-item-answer">{displayVal}</span>
+                          {formData[`${q.key}_remark`] && (
+                            <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                              Remark: {formData[`${q.key}_remark`]}
+                            </div>
+                          )}
+                        </div>
                       ) : (
-                        <span className="review-item-answer empty">Not specified</span>
+                        <div>
+                          <span className="review-item-answer empty">Not specified</span>
+                          {formData[`${q.key}_remark`] && (
+                            <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                              Remark: {formData[`${q.key}_remark`]}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1961,6 +1975,23 @@ export default function SurveyWizard({
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Question Remark input if has_remark is active */}
+          {Boolean(currentQ.has_remark) && (
+            <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
+                Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:
+              </label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter remark or comments for this question..."
+                value={formData[`${currentQ.key}_remark`] || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, [`${currentQ.key}_remark`]: e.target.value }))}
+                style={{ background: '#FFFFFF', borderColor: '#86EFAC' }}
+              />
             </div>
           )}
 

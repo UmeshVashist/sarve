@@ -77,6 +77,12 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS advocate_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS advocate_surveys (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       advocate_reg_no TEXT UNIQUE,
@@ -151,6 +157,46 @@ function initDB() {
     }
   } catch (err) {
     console.error('Error seeding court types:', err.message);
+  }
+
+  // Seed default advocate types if empty
+  try {
+    const advTypeCount = db.prepare('SELECT COUNT(*) as count FROM advocate_types').get().count;
+    if (advTypeCount === 0) {
+      const defaultAdvTypes = [
+        'Private Advocate',
+        'DLSA / Legal Aid Advocate',
+        'High Court Legal Services Committee (HCLSC) Advocate',
+        'Remand Advocate',
+        'Amicus Curiae',
+        'Senior Advocate',
+        'Government Pleader / Public Prosecutor',
+        'Panel Advocate',
+        'Other'
+      ];
+      const insertAdvType = db.prepare('INSERT OR IGNORE INTO advocate_types (name) VALUES (?)');
+      const insertManyAdvTypes = db.transaction((types) => {
+        for (const t of types) insertAdvType.run(t);
+      });
+      insertManyAdvTypes(defaultAdvTypes);
+      console.log('Seeded default advocate types successfully.');
+    }
+  } catch (err) {
+    console.error('Error seeding advocate types:', err.message);
+  }
+
+  // Ensure has_remark column in questions & advocate_questions
+  try {
+    const qInfo = db.prepare("PRAGMA table_info(questions)").all();
+    if (!qInfo.some((c) => c.name === 'has_remark')) {
+      db.exec("ALTER TABLE questions ADD COLUMN has_remark INTEGER DEFAULT 0");
+    }
+    const advQInfo = db.prepare("PRAGMA table_info(advocate_questions)").all();
+    if (!advQInfo.some((c) => c.name === 'has_remark')) {
+      db.exec("ALTER TABLE advocate_questions ADD COLUMN has_remark INTEGER DEFAULT 0");
+    }
+  } catch (err) {
+    console.error('Error checking has_remark columns:', err.message);
   }
 
   // Seed default case types if empty

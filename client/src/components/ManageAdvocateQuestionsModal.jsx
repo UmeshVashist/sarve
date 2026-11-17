@@ -33,7 +33,8 @@ export default function ManageAdvocateQuestionsModal({
     type: 'text',
     optionsText: '',
     note: '',
-    required: false
+    required: false,
+    has_remark: false
   });
 
   const [saving, setSaving] = useState(false);
@@ -78,7 +79,8 @@ export default function ManageAdvocateQuestionsModal({
       type: 'text',
       optionsText: '',
       note: '',
-      required: false
+      required: false,
+      has_remark: false
     });
     setError('');
     setActiveTab('add');
@@ -95,7 +97,8 @@ export default function ManageAdvocateQuestionsModal({
       type: q.type || 'text',
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
       note: q.note || '',
-      required: Boolean(q.required)
+      required: Boolean(q.required),
+      has_remark: Boolean(q.has_remark)
     });
     setError('');
     setActiveTab('edit');
@@ -122,7 +125,8 @@ export default function ManageAdvocateQuestionsModal({
       type: formData.type || 'text',
       options: parsedOptions,
       note: formData.note.trim(),
-      required: Boolean(formData.required)
+      required: Boolean(formData.required),
+      has_remark: formData.has_remark ? 1 : 0
     };
 
     setSaving(true);
@@ -364,10 +368,16 @@ export default function ManageAdvocateQuestionsModal({
                 }}
               >
                 <div style={{ flex: 1, paddingRight: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 800, color: '#EA580C', fontSize: '13px' }}>#{q.order_num ?? idx + 1}</span>
                     <strong style={{ fontSize: '13.5px', color: '#1E293B' }}>{getAdvocateQuestionLabel(q, idx)}</strong>
                     {q.required && <span style={{ color: '#DC2626', fontSize: '11px', fontWeight: 700 }}>*Required</span>}
+                    {Boolean(q.has_remark) && (
+                      <span style={{ background: '#EDE9FE', color: '#7C3AED', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>+ Remark</span>
+                    )}
+                    {q.type === 'advocate_type' && (
+                      <span style={{ background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Advocate Types</span>
+                    )}
                     {q.is_custom ? (
                       <span style={{ background: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Custom</span>
                     ) : null}
@@ -467,6 +477,7 @@ export default function ManageAdvocateQuestionsModal({
                   <option value="yesno">Yes / No</option>
                   <option value="choice_text">Single Select Choice</option>
                   <option value="multi-select">Multi-Select Choices</option>
+                  <option value="advocate_type">Advocate Types (Dynamic Multi-Select)</option>
                 </select>
               </div>
 
@@ -512,17 +523,32 @@ export default function ManageAdvocateQuestionsModal({
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-              <input
-                type="checkbox"
-                id="adv-req-check"
-                checked={formData.required}
-                onChange={(e) => setFormData({ ...formData, required: e.target.checked })}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <label htmlFor="adv-req-check" style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B', cursor: 'pointer' }}>
-                Required Field (User must fill before proceeding)
-              </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="adv-req-check"
+                  checked={formData.required}
+                  onChange={(e) => setFormData({ ...formData, required: e.target.checked })}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <label htmlFor="adv-req-check" style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B', cursor: 'pointer' }}>
+                  Required Field (User must fill before proceeding)
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  id="adv-remark-check"
+                  checked={formData.has_remark}
+                  onChange={(e) => setFormData({ ...formData, has_remark: e.target.checked })}
+                  style={{ width: '16px', height: '16px', accentColor: '#10B981', cursor: 'pointer' }}
+                />
+                <label htmlFor="adv-remark-check" style={{ fontSize: '13px', fontWeight: 700, color: '#047857', cursor: 'pointer' }}>
+                  Include Remark (Optional Remark Input in Survey)
+                </label>
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

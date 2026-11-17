@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, User, Scale, Calendar, Printer, FileText } from 'lucide-react';
 import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel } from '../data/advocateQuestions';
 import { resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
+import { resolveQuestionRemark } from '../utils/resolveSurveyAnswer';
 
 export default function AdvocateSurveyDetailModal({ isOpen, onClose, survey, questions = ADVOCATE_SURVEY_QUESTIONS }) {
   if (!isOpen || !survey) return null;
@@ -66,9 +67,35 @@ export default function AdvocateSurveyDetailModal({ isOpen, onClose, survey, que
                   <div className="review-item-question">{getAdvocateQuestionLabel(q, idx)}</div>
                   <div>
                     {val !== undefined && val !== null && String(val).trim() !== '' ? (
-                      <span className="review-item-answer">{String(val)}</span>
+                      <div>
+                        <span className="review-item-answer">{String(val)}</span>
+                        {(() => {
+                          const remark = resolveQuestionRemark(survey, q);
+                          if (remark) {
+                            return (
+                              <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                                Remark: {remark}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     ) : (
-                      <span className="review-item-answer empty">Not specified</span>
+                      <div>
+                        <span className="review-item-answer empty">Not specified</span>
+                        {(() => {
+                          const remark = resolveQuestionRemark(survey, q);
+                          if (remark) {
+                            return (
+                              <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                                Remark: {remark}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     )}
                   </div>
                 </div>

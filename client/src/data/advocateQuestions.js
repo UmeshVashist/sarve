@@ -8,6 +8,18 @@ export function getAdvocateQuestionLabel(q, idx) {
   return num !== '' ? `${num}) ${cleanLabel}` : cleanLabel;
 }
 
+export const DEFAULT_ADVOCATE_TYPES = [
+  { id: 1, name: 'Private Advocate' },
+  { id: 2, name: 'DLSA / Legal Aid Advocate' },
+  { id: 3, name: 'High Court Legal Services Committee (HCLSC) Advocate' },
+  { id: 4, name: 'Remand Advocate' },
+  { id: 5, name: 'Amicus Curiae' },
+  { id: 6, name: 'Senior Advocate' },
+  { id: 7, name: 'Government Pleader / Public Prosecutor' },
+  { id: 8, name: 'Panel Advocate' },
+  { id: 9, name: 'Other' }
+];
+
 export const ADVOCATE_SURVEY_QUESTIONS = [
   {
     id: 1,

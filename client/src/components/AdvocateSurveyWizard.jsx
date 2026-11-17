@@ -9,15 +9,18 @@ import {
   Edit3,
   Send,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Plus
 } from 'lucide-react';
-import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, ADVOCATE_STANDARD_KEYS } from '../data/advocateQuestions';
+import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, ADVOCATE_STANDARD_KEYS, DEFAULT_ADVOCATE_TYPES } from '../data/advocateQuestions';
 import { API_BASE_URL } from '../config';
 
 export default function AdvocateSurveyWizard({
   isOpen,
   onClose,
   courtTypes = [],
+  advocateTypes = [],
+  onAddAdvocateType,
   questions = ADVOCATE_SURVEY_QUESTIONS,
   onSurveySaved
 }) {
@@ -27,6 +30,11 @@ export default function AdvocateSurveyWizard({
   const [checkingReg, setCheckingReg] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jumpBackToReview, setJumpBackToReview] = useState(false);
+
+  // Inline Quick Add for Advocate Types
+  const [newTypeName, setNewTypeName] = useState('');
+  const [showAddTypeInline, setShowAddTypeInline] = useState(false);
+  const [isAddingType, setIsAddingType] = useState(false);
 
   const inputRef = useRef(null);
   const reviewEnteredTimeRef = useRef(0);
@@ -156,6 +164,23 @@ export default function AdvocateSurveyWizard({
       updated = [...list, option];
     }
     setFormData((prev) => ({ ...prev, [currentQ.key]: updated }));
+  };
+
+  const handleInlineAddAdvocateType = async (e) => {
+    if (e) e.preventDefault();
+    if (!newTypeName.trim() || !onAddAdvocateType) return;
+    setIsAddingType(true);
+    try {
+      const res = await onAddAdvocateType(newTypeName.trim());
+      const addedName = (res && res.data && res.data.name) ? res.data.name : newTypeName.trim();
+      handleMultiSelectToggle(addedName);
+      setNewTypeName('');
+      setShowAddTypeInline(false);
+    } catch (err) {
+      console.error('Error adding advocate type inline:', err);
+    } finally {
+      setIsAddingType(false);
+    }
   };
 
   const handleNext = async () => {
@@ -326,9 +351,23 @@ export default function AdvocateSurveyWizard({
                     <div className="review-item-question">{getAdvocateQuestionLabel(q, idx)}</div>
                     <div>
                       {displayVal ? (
-                        <span className="review-item-answer">{displayVal}</span>
+                        <div>
+                          <span className="review-item-answer">{displayVal}</span>
+                          {formData[`${q.key}_remark`] && (
+                            <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                              Remark: {formData[`${q.key}_remark`]}
+                            </div>
+                          )}
+                        </div>
                       ) : (
-                        <span className="review-item-answer empty">Not specified</span>
+                        <div>
+                          <span className="review-item-answer empty">Not specified</span>
+                          {formData[`${q.key}_remark`] && (
+                            <div style={{ marginTop: '4px', fontSize: '12px', color: '#047857', fontWeight: 600 }}>
+                              Remark: {formData[`${q.key}_remark`]}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -472,6 +511,93 @@ export default function AdvocateSurveyWizard({
                 })}
               </div>
             </div>
+          ) : currentQ.type === 'advocate_type' ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ fontSize: '12.5px', color: '#64748B' }}>
+                  Selected: <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
+                </div>
+                {!showAddTypeInline && onAddAdvocateType && (
+                  <button
+                    type="button"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: '#F0FDF4',
+                      color: '#16A34A',
+                      border: '1px dashed #86EFAC',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setShowAddTypeInline(true)}
+                  >
+                    <Plus size={13} />
+                    <span>+ Add Type</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Inline quick add input */}
+              {showAddTypeInline && (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', background: '#F8FAFC', padding: '8px 10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Enter new advocate type..."
+                    value={newTypeName}
+                    onChange={(e) => setNewTypeName(e.target.value)}
+                    style={{ padding: '6px 10px', fontSize: '13px' }}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleInlineAddAdvocateType();
+                      } else if (e.key === 'Escape') {
+                        setShowAddTypeInline(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ padding: '6px 12px', fontSize: '12px', background: '#16A34A', whiteSpace: 'nowrap' }}
+                    onClick={handleInlineAddAdvocateType}
+                    disabled={isAddingType || !newTypeName.trim()}
+                  >
+                    {isAddingType ? 'Adding...' : 'Add'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-wizard-prev"
+                    style={{ padding: '6px 10px', fontSize: '12px' }}
+                    onClick={() => setShowAddTypeInline(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              <div className="multi-select-container" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {(advocateTypes && advocateTypes.length > 0 ? advocateTypes.map(t => typeof t === 'string' ? t : t.name) : DEFAULT_ADVOCATE_TYPES.map(t => typeof t === 'string' ? t : t.name)).map((opt) => {
+                  const isSel = Array.isArray(currentVal) ? currentVal.includes(opt) : false;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleMultiSelectToggle(opt)}
+                    >
+                      {isSel && <Check size={14} />}
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ) : currentQ.type === 'choice_text' ? (
             <div>
               <input
@@ -509,6 +635,23 @@ export default function AdvocateSurveyWizard({
               onKeyDown={handleKeyDown}
               autoFocus
             />
+          )}
+
+          {/* Question Remark input if has_remark is active */}
+          {Boolean(currentQ.has_remark) && (
+            <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
+                Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:
+              </label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Enter remark or comments for this question..."
+                value={formData[`${currentQ.key}_remark`] || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, [`${currentQ.key}_remark`]: e.target.value }))}
+                style={{ background: '#FFFFFF', borderColor: '#86EFAC' }}
+              />
+            </div>
           )}
 
           {/* Note */}

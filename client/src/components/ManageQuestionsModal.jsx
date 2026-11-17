@@ -34,7 +34,8 @@ export default function ManageQuestionsModal({
     type: 'text',
     optionsText: '',
     note: '',
-    required: false
+    required: false,
+    has_remark: false
   });
 
   const [saving, setSaving] = useState(false);
@@ -88,7 +89,8 @@ export default function ManageQuestionsModal({
       type: 'text',
       optionsText: '',
       note: '',
-      required: false
+      required: false,
+      has_remark: false
     });
     setError('');
     setActiveTab('add');
@@ -106,7 +108,8 @@ export default function ManageQuestionsModal({
       type: q.type || 'text',
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
       note: q.note || '',
-      required: Boolean(q.required)
+      required: Boolean(q.required),
+      has_remark: Boolean(q.has_remark)
     });
     setError('');
     setActiveTab('edit');
@@ -241,6 +244,7 @@ export default function ManageQuestionsModal({
           options: options && options.length > 0 ? options : null,
           note: formData.note ? formData.note.trim() : '',
           required: formData.required ? 1 : 0,
+          has_remark: formData.has_remark ? 1 : 0,
           label: cleanLabel
         };
 
@@ -271,7 +275,8 @@ export default function ManageQuestionsModal({
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
           note: formData.note ? formData.note.trim() : '',
-          required: formData.required ? 1 : 0
+          required: formData.required ? 1 : 0,
+          has_remark: formData.has_remark ? 1 : 0
         };
 
         await fetch(`${API_BASE_URL}/api/questions/${editingQuestion.id}`, {
@@ -305,7 +310,8 @@ export default function ManageQuestionsModal({
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
           note: formData.note ? formData.note.trim() : '',
-          required: formData.required ? 1 : 0
+          required: formData.required ? 1 : 0,
+          has_remark: formData.has_remark ? 1 : 0
         };
 
         const res = await fetch(`${API_BASE_URL}/api/questions`, {
@@ -322,6 +328,7 @@ export default function ManageQuestionsModal({
         const newQ = {
           ...createdQ,
           required: Boolean(createdQ.required),
+          has_remark: Boolean(createdQ.has_remark ?? formData.has_remark),
           is_custom: true,
           options: options && options.length > 0 ? options : null,
           label: `${targetIndex + 1}) ${cleanLabel}`
@@ -568,6 +575,11 @@ export default function ManageQuestionsModal({
                         <div className="question-meta-row">
                           <span className="badge-qtype">{q.type || 'text'}</span>
                           {q.required ? <span className="badge-required">Required</span> : null}
+                          {Boolean(q.has_remark) ? (
+                            <span className="badge-qtype" style={{ background: '#EDE9FE', color: '#7C3AED', borderColor: '#DDD6FE', fontWeight: 700 }}>
+                              + Remark
+                            </span>
+                          ) : null}
                           {q.is_custom ? <span className="badge-custom">Custom</span> : null}
                           {q.note && (
                             <span style={{ fontSize: '11.5px', color: '#64748B', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -730,16 +742,27 @@ export default function ManageQuestionsModal({
 
                   {/* Required Checkbox */}
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <label className="form-label" style={{ marginBottom: '8px' }}>Validation</label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', fontWeight: 600 }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.required}
-                        onChange={(e) => setFormData({ ...formData, required: e.target.checked })}
-                        style={{ width: '16px', height: '16px', accentColor: '#8B5CF6' }}
-                      />
-                      <span>Mark question as Required (Mandatory)</span>
-                    </label>
+                    <label className="form-label" style={{ marginBottom: '8px' }}>Validation & Extra</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.required}
+                          onChange={(e) => setFormData({ ...formData, required: e.target.checked })}
+                          style={{ width: '16px', height: '16px', accentColor: '#8B5CF6' }}
+                        />
+                        <span>Mark question as Required</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: '#047857' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.has_remark}
+                          onChange={(e) => setFormData({ ...formData, has_remark: e.target.checked })}
+                          style={{ width: '16px', height: '16px', accentColor: '#10B981' }}
+                        />
+                        <span>Include Remark (Optional Remark Input in Survey)</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 

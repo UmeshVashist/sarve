@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { getAdvocateQuestionLabel, ADVOCATE_SURVEY_QUESTIONS, ADVOCATE_STANDARD_KEYS } from '../data/advocateQuestions';
+import { resolveQuestionRemark, formatAnswerWithRemark } from './resolveSurveyAnswer';
 
 export function resolveAdvocateAnswer(r, q, allQuestions = []) {
   if (!r || !q) return '';
@@ -91,7 +92,9 @@ export function downloadAdvocateExcel(records, filename = 'Advocate_Survey_Repor
 
     sortedQuestions.forEach((q, idx) => {
       const header = getAdvocateQuestionLabel(q, idx);
-      const val = resolveAdvocateAnswer(r, q, sortedQuestions);
+      const rawVal = resolveAdvocateAnswer(r, q, sortedQuestions);
+      const remark = resolveQuestionRemark(r, q);
+      const val = formatAnswerWithRemark(rawVal, remark);
       row[header] = val || '';
     });
 

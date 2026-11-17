@@ -126,3 +126,70 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
   return '';
 }
 
+/**
+ * Resolves remark entered for any question q on record r
+ */
+export function resolveQuestionRemark(r, q) {
+  if (!r || !q) return '';
+  const remarkKey = `${q.key}_remark`;
+  const idRemarkKey = q.id ? `${q.id}_remark` : null;
+
+  // 1. Direct key
+  if (r[remarkKey] !== undefined && r[remarkKey] !== null && String(r[remarkKey]).trim() !== '') {
+    return String(r[remarkKey]).trim();
+  }
+  if (idRemarkKey && r[idRemarkKey] !== undefined && r[idRemarkKey] !== null && String(r[idRemarkKey]).trim() !== '') {
+    return String(r[idRemarkKey]).trim();
+  }
+
+  // 2. Custom answers
+  let customAnswers = {};
+  if (r.custom_answers) {
+    if (typeof r.custom_answers === 'string') {
+      try { customAnswers = JSON.parse(r.custom_answers); } catch (e) {}
+    } else if (typeof r.custom_answers === 'object') {
+      customAnswers = r.custom_answers;
+    }
+  }
+  if (customAnswers[remarkKey] !== undefined && customAnswers[remarkKey] !== null && String(customAnswers[remarkKey]).trim() !== '') {
+    return String(customAnswers[remarkKey]).trim();
+  }
+  if (idRemarkKey && customAnswers[idRemarkKey] !== undefined && customAnswers[idRemarkKey] !== null && String(customAnswers[idRemarkKey]).trim() !== '') {
+    return String(customAnswers[idRemarkKey]).trim();
+  }
+
+  // 3. LocalStorage
+  try {
+    const utctKey = String(r.utct_no || r.advocate_reg_no || r.id || '').trim().toLowerCase();
+    if (utctKey) {
+      const pMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
+      const aMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
+      const cached = pMap[utctKey] || aMap[utctKey];
+      if (cached) {
+        if (cached[remarkKey]) return String(cached[remarkKey]).trim();
+        if (idRemarkKey && cached[idRemarkKey]) return String(cached[idRemarkKey]).trim();
+      }
+    }
+  } catch (e) {}
+
+  return '';
+}
+
+/**
+ * Formats main answer and remark together in the required format:
+ * "<Answer> | Remark: <Remark>" (or "Remark: <Remark>" if no main answer)
+ */
+export function formatAnswerWithRemark(mainAnswer, remark) {
+  const cleanAns = String(mainAnswer || '').trim();
+  const cleanRemark = String(remark || '').trim();
+
+  if (!cleanRemark) return cleanAns;
+  // If the answer already contains this remark or already formatted with "Remark:"
+  if (cleanAns.toLowerCase().includes('remark:')) return cleanAns;
+
+  if (cleanAns) {
+    return `${cleanAns} | Remark: ${cleanRemark}`;
+  }
+  return `Remark: ${cleanRemark}`;
+}
+

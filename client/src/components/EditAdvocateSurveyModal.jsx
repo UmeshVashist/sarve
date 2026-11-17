@@ -10,6 +10,8 @@ export default function EditAdvocateSurveyModal({
   onClose,
   survey,
   courtTypes = [],
+  advocateTypes = [],
+  onAddAdvocateType,
   questions = ADVOCATE_SURVEY_QUESTIONS,
   onSurveyUpdated
 }) {
@@ -243,6 +245,27 @@ export default function EditAdvocateSurveyModal({
                         ))}
                       </div>
                     </div>
+                  ) : q.type === 'advocate_type' ? (
+                    <div className="multi-select-container">
+                      {(advocateTypes && advocateTypes.length > 0 ? advocateTypes.map(t => typeof t === 'string' ? t : t.name) : ['Private Advocate', 'DLSA / Legal Aid Advocate', 'Panel Advocate']).map((opt) => {
+                        const curList = Array.isArray(val) ? val : (typeof val === 'string' && val.trim() ? val.split(', ').filter(Boolean) : []);
+                        const isSel = curList.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                            onClick={() => {
+                              const updated = isSel ? curList.filter(i => i !== opt) : [...curList, opt];
+                              handleChange(q.key, updated);
+                            }}
+                          >
+                            {isSel && <Check size={14} />}
+                            <span>{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <input
                       type={q.type === 'number' ? 'number' : 'text'}
@@ -250,6 +273,22 @@ export default function EditAdvocateSurveyModal({
                       value={val}
                       onChange={(e) => handleChange(q.key, e.target.value)}
                     />
+                  )}
+
+                  {Boolean(q.has_remark) && (
+                    <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
+                      <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
+                        Remark (Optional):
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Enter remark..."
+                        value={formData[`${q.key}_remark`] || ''}
+                        onChange={(e) => handleChange(`${q.key}_remark`, e.target.value)}
+                        style={{ fontSize: '12.5px', padding: '5px 10px', background: '#FFFFFF' }}
+                      />
+                    </div>
                   )}
                 </div>
               );
