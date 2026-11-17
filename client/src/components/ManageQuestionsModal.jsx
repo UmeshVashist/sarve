@@ -101,6 +101,15 @@ export default function ManageQuestionsModal({
     // Strip leading number prefix so user can edit cleanly
     const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
 
+    let remarkMap = {};
+    try {
+      remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+    } catch (e) {}
+
+    const hasRemarkVal = (q.has_remark !== undefined && q.has_remark !== null)
+      ? Boolean(q.has_remark)
+      : Boolean(remarkMap[q.key] ?? remarkMap[q.id]);
+
     setFormData({
       order_num: q.order_num ?? '',
       label: cleanLabel,
@@ -109,7 +118,7 @@ export default function ManageQuestionsModal({
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
       note: q.note || '',
       required: Boolean(q.required),
-      has_remark: Boolean(q.has_remark)
+      has_remark: hasRemarkVal
     });
     setError('');
     setActiveTab('edit');
@@ -264,6 +273,14 @@ export default function ManageQuestionsModal({
           };
         });
 
+        // Persist has_remark in local remarks map
+        try {
+          const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+          remarkMap[editingQuestion.key] = Boolean(formData.has_remark);
+          if (editingQuestion.id) remarkMap[editingQuestion.id] = Boolean(formData.has_remark);
+          localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
+        } catch (e) {}
+
         applyQuestionsUpdate(reordered, `Question #${targetIndex + 1} updated successfully!`);
         setActiveTab('list');
         setEditingQuestion(null);
@@ -346,6 +363,14 @@ export default function ManageQuestionsModal({
             label: `${newNum}) ${cLabel}`
           };
         });
+
+        // Persist has_remark in local remarks map
+        try {
+          const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+          remarkMap[customKey] = Boolean(formData.has_remark);
+          if (createdQ?.id) remarkMap[createdQ.id] = Boolean(formData.has_remark);
+          localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
+        } catch (e) {}
 
         applyQuestionsUpdate(reordered, `New Question added at #${targetIndex + 1}!`);
         setActiveTab('list');
@@ -575,7 +600,12 @@ export default function ManageQuestionsModal({
                         <div className="question-meta-row">
                           <span className="badge-qtype">{q.type || 'text'}</span>
                           {q.required ? <span className="badge-required">Required</span> : null}
-                          {Boolean(q.has_remark) ? (
+                          {(Boolean(q.has_remark) || (() => {
+                            try {
+                              const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+                              return Boolean(m[q.key] ?? m[q.id]);
+                            } catch (e) { return false; }
+                          })()) ? (
                             <span className="badge-qtype" style={{ background: '#EDE9FE', color: '#7C3AED', borderColor: '#DDD6FE', fontWeight: 700 }}>
                               + Remark
                             </span>

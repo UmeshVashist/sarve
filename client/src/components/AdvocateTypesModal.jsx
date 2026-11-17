@@ -39,8 +39,10 @@ export default function AdvocateTypesModal({
   };
 
   const startEdit = (t) => {
-    setEditingId(t.id || t.name);
-    setEditingName(t.name);
+    const typeName = typeof t === 'string' ? t : (t?.name || '');
+    const typeId = typeof t === 'string' ? t : (t?.id || t?.name);
+    setEditingId(typeId);
+    setEditingName(typeName);
     setError('');
   };
 
@@ -51,11 +53,12 @@ export default function AdvocateTypesModal({
 
   const saveEdit = async (t) => {
     if (!editingName.trim()) return;
+    const typeId = typeof t === 'string' ? t : (t?.id || t?.name);
     setError('');
     setSubmitting(true);
     try {
       if (onEditAdvocateType) {
-        const res = await onEditAdvocateType(t.id || t.name, editingName.trim());
+        const res = await onEditAdvocateType(typeId, editingName.trim());
         if (res && !res.success && res.message) {
           setError(res.message);
           return;
@@ -131,7 +134,9 @@ export default function AdvocateTypesModal({
               </div>
             ) : (
               advocateTypes.map((t) => {
-                const itemKey = t.id || t.name;
+                const typeName = typeof t === 'string' ? t : (t?.name || '');
+                const typeId = typeof t === 'string' ? t : (t?.id || t?.name);
+                const itemKey = typeId || typeName;
                 const isEditing = editingId === itemKey;
 
                 return (
@@ -176,7 +181,7 @@ export default function AdvocateTypesModal({
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Check size={15} color="#16A34A" />
-                          <span className="case-type-name" style={{ fontWeight: 600 }}>{t.name}</span>
+                          <span className="case-type-name" style={{ fontWeight: 600 }}>{typeName}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <button
@@ -191,7 +196,7 @@ export default function AdvocateTypesModal({
                           <button
                             type="button"
                             className="btn-delete-case-type"
-                            onClick={() => onDeleteAdvocateType(t.id, t.name)}
+                            onClick={() => onDeleteAdvocateType(typeId, typeName)}
                             title="Remove advocate type"
                           >
                             <Trash2 size={15} />

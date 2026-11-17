@@ -26,7 +26,7 @@ import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, DEFAULT_ADVOCATE_T
 import { API_BASE_URL } from '../config';
 import { downloadAdvocateExcel, resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
 
-import { DEFAULT_COURT_TYPES } from './PrisonerSurveyHome';
+import { DEFAULT_COURT_TYPES } from '../data/courtTypes';
 
 export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
@@ -42,16 +42,30 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     return DEFAULT_ADVOCATE_TYPES;
   });
   const [questions, setQuestions] = useState(() => {
+    let remarkMap = {};
+    try {
+      remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+    } catch (e) {}
+
+    let initial = ADVOCATE_SURVEY_QUESTIONS;
     try {
       const saved = localStorage.getItem('advocate_questions_list');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return [...parsed].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+          initial = parsed;
         }
       }
     } catch (e) {}
-    return ADVOCATE_SURVEY_QUESTIONS;
+
+    return [...initial]
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => ({
+        ...q,
+        has_remark: remarkMap[q.key] !== undefined
+          ? Boolean(remarkMap[q.key])
+          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
+      }));
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,7 +82,20 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
 
   const handleQuestionsChange = (newQuestionsList) => {
     if (!Array.isArray(newQuestionsList)) return;
-    const sorted = [...newQuestionsList].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    let remarkMap = {};
+    try {
+      remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+    } catch (e) {}
+
+    const sorted = [...newQuestionsList]
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => ({
+        ...q,
+        has_remark: remarkMap[q.key] !== undefined
+          ? Boolean(remarkMap[q.key])
+          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
+      }));
+
     setQuestions(sorted);
     try {
       localStorage.setItem('advocate_questions_list', JSON.stringify(sorted));
@@ -281,8 +308,18 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   // Quick stats
   const validSurveys = Array.isArray(surveys) ? surveys.filter((s) => s && typeof s === 'object') : [];
   const totalCount = validSurveys.length;
-  const criminalSpecialistsCount = validSurveys.filter((s) => (s?.case_specialization || '').toLowerCase().includes('criminal')).length;
-  const legalAidCount = validSurveys.filter((s) => (s?.provides_legal_aid_dlsa || '').toLowerCase() === 'yes').length;
+  const criminalSpecialistsCount = validSurveys.filter((s) => {
+    const spec = Array.isArray(s?.case_specialization)
+      ? s.case_specialization.join(', ')
+      : String(s?.case_specialization || '');
+    return spec.toLowerCase().includes('criminal');
+  }).length;
+
+  const legalAidCount = validSurveys.filter((s) => {
+    const aid = String(s?.provides_legal_aid_dlsa || '').toLowerCase();
+    return aid === 'yes';
+  }).length;
+
   const highExpCount = validSurveys.filter((s) => Number(s?.practice_experience_years || 0) >= 10).length;
 
   return (
@@ -500,7 +537,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
                       {survey.practice_experience_years ? `${survey.practice_experience_years} Years` : '—'}
                     </td>
                     <td style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {survey.case_specialization || '—'}
+                      {Array.isArray(survey.case_specialization) ? survey.case_specialization.join(', ') : (survey.case_specialization || '—')}
                     </td>
                     <td style={{ color: '#64748B', fontSize: '12.5px' }}>
                       {survey.created_at ? new Date(survey.created_at).toLocaleDateString() : '—'}

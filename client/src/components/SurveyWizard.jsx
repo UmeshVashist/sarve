@@ -1979,7 +1979,12 @@ export default function SurveyWizard({
           )}
 
           {/* Question Remark input if has_remark is active */}
-          {Boolean(currentQ.has_remark) && (
+          {(Boolean(currentQ?.has_remark) || (() => {
+            try {
+              const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+              return Boolean(m[currentQ?.key] ?? m[currentQ?.id]);
+            } catch (e) { return false; }
+          })()) && (
             <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
                 Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:
@@ -1988,8 +1993,8 @@ export default function SurveyWizard({
                 type="text"
                 className="form-control"
                 placeholder="Enter remark or comments for this question..."
-                value={formData[`${currentQ.key}_remark`] || ''}
-                onChange={(e) => setFormData((prev) => ({ ...prev, [`${currentQ.key}_remark`]: e.target.value }))}
+                value={formData[`${currentQ?.key}_remark`] || ''}
+                onChange={(e) => setFormData((prev) => ({ ...prev, [`${currentQ?.key}_remark`]: e.target.value }))}
                 style={{ background: '#FFFFFF', borderColor: '#86EFAC' }}
               />
             </div>

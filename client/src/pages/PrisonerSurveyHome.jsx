@@ -44,31 +44,38 @@ export const DEFAULT_CASE_TYPES = [
   { id: 12, name: 'Other' }
 ];
 
-export const DEFAULT_COURT_TYPES = [
-  { id: 1, name: 'District Court' },
-  { id: 2, name: 'Sessions Court' },
-  { id: 3, name: 'High Court' },
-  { id: 4, name: 'Supreme Court' },
-  { id: 5, name: 'Special / NDPS Court' },
-  { id: 6, name: 'Magistrate Court (CMM / ACMM)' },
-  { id: 7, name: 'Other' }
-];
+import { DEFAULT_COURT_TYPES } from '../data/courtTypes';
+export { DEFAULT_COURT_TYPES };
 
 export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [surveys, setSurveys] = useState([]);
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [questions, setQuestions] = useState(() => {
+    let remarkMap = {};
+    try {
+      remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+    } catch (e) {}
+
+    let initial = SURVEY_QUESTIONS;
     try {
       const saved = localStorage.getItem('survey_questions_list');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return [...parsed].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+          initial = parsed;
         }
       }
     } catch (e) { }
-    return SURVEY_QUESTIONS;
+
+    return [...initial]
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => ({
+        ...q,
+        has_remark: remarkMap[q.key] !== undefined
+          ? Boolean(remarkMap[q.key])
+          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
+      }));
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -76,7 +83,20 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
 
   const handleQuestionsChange = (newQuestionsList) => {
     if (!Array.isArray(newQuestionsList)) return;
-    const sorted = [...newQuestionsList].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    let remarkMap = {};
+    try {
+      remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+    } catch (e) {}
+
+    const sorted = [...newQuestionsList]
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => ({
+        ...q,
+        has_remark: remarkMap[q.key] !== undefined
+          ? Boolean(remarkMap[q.key])
+          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
+      }));
+
     setQuestions(sorted);
     try {
       localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
