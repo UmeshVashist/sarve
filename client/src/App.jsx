@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
 import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
 import Navbar from './components/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
 export default function App() {
@@ -105,11 +106,15 @@ export default function App() {
         )}
 
         {currentScreen === 'prisoner' && (
-          <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
         )}
 
         {currentScreen === 'advocate' && (
-          <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
         )}
       </main>
     </div>

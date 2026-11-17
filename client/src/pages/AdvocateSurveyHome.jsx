@@ -44,7 +44,8 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const [questions, setQuestions] = useState(() => {
     let remarkMap = {};
     try {
-      remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      if (parsed && typeof parsed === 'object') remarkMap = parsed;
     } catch (e) {}
 
     let initial = ADVOCATE_SURVEY_QUESTIONS;
@@ -58,14 +59,19 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       }
     } catch (e) {}
 
-    return [...initial]
+    const safeList = Array.isArray(initial) ? initial.filter(Boolean) : ADVOCATE_SURVEY_QUESTIONS;
+    return [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
-      .map((q) => ({
-        ...q,
-        has_remark: remarkMap[q.key] !== undefined
-          ? Boolean(remarkMap[q.key])
-          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
-      }));
+      .map((q) => {
+        const qKey = q?.key || `custom_${q?.id}`;
+        const hasRemark = remarkMap[qKey] !== undefined
+          ? Boolean(remarkMap[qKey])
+          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        return {
+          ...q,
+          has_remark: hasRemark
+        };
+      });
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,17 +90,23 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     if (!Array.isArray(newQuestionsList)) return;
     let remarkMap = {};
     try {
-      remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      if (parsed && typeof parsed === 'object') remarkMap = parsed;
     } catch (e) {}
 
-    const sorted = [...newQuestionsList]
+    const safeList = newQuestionsList.filter(Boolean);
+    const sorted = [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
-      .map((q) => ({
-        ...q,
-        has_remark: remarkMap[q.key] !== undefined
-          ? Boolean(remarkMap[q.key])
-          : (remarkMap[q.id] !== undefined ? Boolean(remarkMap[q.id]) : Boolean(q.has_remark))
-      }));
+      .map((q) => {
+        const qKey = q?.key || `custom_${q?.id}`;
+        const hasRemark = remarkMap[qKey] !== undefined
+          ? Boolean(remarkMap[qKey])
+          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        return {
+          ...q,
+          has_remark: hasRemark
+        };
+      });
 
     setQuestions(sorted);
     try {
@@ -164,8 +176,12 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/court-types`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        setCourtTypes(data.data);
+      if (data.success && Array.isArray(data.data)) {
+        const serverNames = new Set(data.data.map((c) => (typeof c === 'string' ? c : c?.name).trim().toLowerCase()));
+        const missingDefaults = DEFAULT_COURT_TYPES.filter(
+          (def) => !serverNames.has(def.name.trim().toLowerCase())
+        );
+        setCourtTypes([...data.data, ...missingDefaults]);
       }
     } catch (err) {
       console.warn('Failed to fetch court types:', err);
@@ -210,10 +226,15 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     try {
       const res = await fetch(`${API_BASE_URL}/api/advocate-types`);
       const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        setAdvocateTypes(data.data);
+      if (data.success && Array.isArray(data.data)) {
+        const serverNames = new Set(data.data.map((t) => (typeof t === 'string' ? t : t?.name).trim().toLowerCase()));
+        const missingDefaults = DEFAULT_ADVOCATE_TYPES.filter(
+          (def) => !serverNames.has(def.name.trim().toLowerCase())
+        );
+        const combined = [...data.data, ...missingDefaults];
+        setAdvocateTypes(combined);
         try {
-          localStorage.setItem('advocate_types_list', JSON.stringify(data.data));
+          localStorage.setItem('advocate_types_list', JSON.stringify(combined));
         } catch (e) {}
       }
     } catch (err) {

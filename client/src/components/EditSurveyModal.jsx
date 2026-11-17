@@ -86,7 +86,13 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
         }
       });
 
-      merged.case_type = survey.case_type ? (Array.isArray(survey.case_type) ? survey.case_type : survey.case_type.split(', ').filter(Boolean)) : [];
+      merged.case_type = survey.case_type
+        ? (Array.isArray(survey.case_type)
+            ? survey.case_type
+            : (typeof survey.case_type === 'string'
+                ? survey.case_type.split(', ').filter(Boolean)
+                : [String(survey.case_type)]))
+        : [];
 
       let advocatesDetails = [];
       if (survey.advocates_details) {

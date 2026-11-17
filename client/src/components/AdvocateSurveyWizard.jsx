@@ -57,7 +57,26 @@ export default function AdvocateSurveyWizard({
     if (!list || list.length === 0) {
       list = ADVOCATE_SURVEY_QUESTIONS;
     }
-    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+
+    let remarkMap = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      if (parsed && typeof parsed === 'object') remarkMap = parsed;
+    } catch (e) {}
+
+    return [...list]
+      .filter(Boolean)
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => {
+        const qKey = q?.key || `custom_${q?.id}`;
+        const hasRemark = remarkMap[qKey] !== undefined
+          ? Boolean(remarkMap[qKey])
+          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        return {
+          ...q,
+          has_remark: hasRemark
+        };
+      });
   }, [questions, isOpen]);
 
   const totalQuestions = activeQuestions.length;
@@ -65,11 +84,13 @@ export default function AdvocateSurveyWizard({
   const currentQ = activeQuestions[currentStep];
 
   const choiceOptions = useMemo(() => {
+    const rawOpts = currentQ?.options;
+    const qOpts = Array.isArray(rawOpts) ? rawOpts : (typeof rawOpts === 'string' && rawOpts ? rawOpts.split(',').map((s) => s.trim()) : []);
     if (currentQ?.key === 'primary_court' && Array.isArray(courtTypes) && courtTypes.length > 0) {
       const dynamicNames = courtTypes.map((c) => (typeof c === 'string' ? c : c?.name)).filter(Boolean);
-      return Array.from(new Set([...dynamicNames, ...(currentQ.options || [])]));
+      return Array.from(new Set([...dynamicNames, ...qOpts]));
     }
-    return currentQ?.options || [];
+    return qOpts;
   }, [currentQ, courtTypes]);
 
   useEffect(() => {

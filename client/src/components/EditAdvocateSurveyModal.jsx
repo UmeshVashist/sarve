@@ -69,7 +69,11 @@ export default function EditAdvocateSurveyModal({
       });
 
       merged.case_specialization = survey.case_specialization
-        ? (Array.isArray(survey.case_specialization) ? survey.case_specialization : survey.case_specialization.split(', ').filter(Boolean))
+        ? (Array.isArray(survey.case_specialization)
+            ? survey.case_specialization
+            : (typeof survey.case_specialization === 'string'
+                ? survey.case_specialization.split(', ').filter(Boolean)
+                : [String(survey.case_specialization)]))
         : [];
 
       setFormData(merged);

@@ -6,8 +6,6 @@ import { resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
 import { resolveQuestionRemark } from '../utils/resolveSurveyAnswer';
 
 export default function AdvocateSurveyDetailModal({ isOpen, onClose, survey, questions = ADVOCATE_SURVEY_QUESTIONS }) {
-  if (!isOpen || !survey) return null;
-
   const activeQuestions = useMemo(() => {
     let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
     if (!list) {
@@ -26,6 +24,8 @@ export default function AdvocateSurveyDetailModal({ isOpen, onClose, survey, que
     }
     return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
   }, [questions, isOpen]);
+
+  if (!isOpen || !survey) return null;
 
   const handlePrint = () => {
     window.print();

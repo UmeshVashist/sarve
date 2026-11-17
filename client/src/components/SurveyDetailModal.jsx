@@ -5,8 +5,6 @@ import { SURVEY_QUESTIONS, getQuestionLabel } from '../data/questions';
 import { resolveAnswerForRecord, resolveQuestionRemark } from '../utils/resolveSurveyAnswer';
 
 export default function SurveyDetailModal({ isOpen, onClose, survey, questions = SURVEY_QUESTIONS }) {
-  if (!isOpen || !survey) return null;
-
   const activeQuestions = useMemo(() => {
     let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
     if (!list) {
@@ -25,6 +23,8 @@ export default function SurveyDetailModal({ isOpen, onClose, survey, questions =
     }
     return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
   }, [questions, isOpen]);
+
+  if (!isOpen || !survey) return null;
 
   const handlePrint = () => {
     window.print();

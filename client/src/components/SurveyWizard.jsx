@@ -99,7 +99,26 @@ export default function SurveyWizard({
     if (!list || list.length === 0) {
       list = SURVEY_QUESTIONS;
     }
-    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+
+    let remarkMap = {};
+    try {
+      const parsed = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+      if (parsed && typeof parsed === 'object') remarkMap = parsed;
+    } catch (e) {}
+
+    return [...list]
+      .filter(Boolean)
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
+      .map((q) => {
+        const qKey = q?.key || `custom_${q?.id}`;
+        const hasRemark = remarkMap[qKey] !== undefined
+          ? Boolean(remarkMap[qKey])
+          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        return {
+          ...q,
+          has_remark: hasRemark
+        };
+      });
   }, [questions, isOpen]);
 
   const totalQuestions = activeQuestions.length;
