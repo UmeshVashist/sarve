@@ -8,7 +8,8 @@ export default function AdvocateTypesModal({
   advocateTypes = [],
   onAddAdvocateType,
   onEditAdvocateType,
-  onDeleteAdvocateType
+  onDeleteAdvocateType,
+  onRefresh
 }) {
   const [newTypeName, setNewTypeName] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -22,6 +23,7 @@ export default function AdvocateTypesModal({
       setNewTypeName('');
       setEditingId(null);
       setEditingName('');
+      if (onRefresh) onRefresh();
     }
   }, [isOpen]);
 

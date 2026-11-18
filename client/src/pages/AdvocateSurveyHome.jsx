@@ -313,8 +313,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           });
         } catch (e) {}
       }
+      return { success: true };
     } catch (err) {
       console.warn('Central D1 advocate types sync error:', err);
+      return { success: false, message: err.message };
     }
   };
 
@@ -403,7 +405,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
-    await syncAdvocateTypesToD1(optionsStrings);
+    const syncRes = await syncAdvocateTypesToD1(optionsStrings);
+    if (syncRes && !syncRes.success) {
+      return syncRes;
+    }
 
     return { success: true, data: newItem };
   };
@@ -427,7 +432,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
-    await syncAdvocateTypesToD1(optionsStrings);
+    const syncRes = await syncAdvocateTypesToD1(optionsStrings);
+    if (syncRes && !syncRes.success) {
+      return syncRes;
+    }
 
     return { success: true };
   };
@@ -447,7 +455,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
-    await syncAdvocateTypesToD1(optionsStrings);
+    const syncRes = await syncAdvocateTypesToD1(optionsStrings);
+    if (syncRes && !syncRes.success) {
+      return syncRes;
+    }
 
     return { success: true };
   };
@@ -802,6 +813,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         onAddAdvocateType={handleAddAdvocateType}
         onEditAdvocateType={handleEditAdvocateType}
         onDeleteAdvocateType={handleDeleteAdvocateType}
+        onRefresh={fetchAdvocateTypes}
       />
 
       {/* Manage Advocate Questions Modal */}
