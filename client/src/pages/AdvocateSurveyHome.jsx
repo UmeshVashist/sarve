@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   Download,
@@ -29,6 +29,7 @@ import { downloadAdvocateExcel, resolveAdvocateAnswer } from '../utils/exportAdv
 import { DEFAULT_COURT_TYPES } from '../data/courtTypes';
 
 export default function AdvocateSurveyHome({ onBackToDashboard }) {
+  const advocateTypesStoreIdRef = useRef(16);
   const [surveys, setSurveys] = useState([]);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [advocateTypes, setAdvocateTypes] = useState(() => {
@@ -59,7 +60,8 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       }
     } catch (e) {}
 
-    const safeList = Array.isArray(initial) ? initial.filter(Boolean) : ADVOCATE_SURVEY_QUESTIONS;
+    const safeList = (Array.isArray(initial) ? initial : ADVOCATE_SURVEY_QUESTIONS)
+      .filter((q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store');
     return [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
@@ -94,7 +96,9 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       if (parsed && typeof parsed === 'object') remarkMap = parsed;
     } catch (e) {}
 
-    const safeList = newQuestionsList.filter(Boolean);
+    const safeList = newQuestionsList.filter(
+      (q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store'
+    );
     const sorted = [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
@@ -123,10 +127,29 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-questions`);
+      const res = await fetch(`${API_BASE_URL}/api/advocate-questions?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        handleQuestionsChange(data.data);
+        // Sync advocate types if store record is in response
+        const storeQ = data.data.find(
+          (q) => q.key === '__advocate_types__' || q.type === 'advocate_type_store'
+        );
+        if (storeQ) {
+          advocateTypesStoreIdRef.current = storeQ.id;
+          if (Array.isArray(storeQ.options)) {
+            const loaded = storeQ.options.map((name, idx) => ({ id: idx + 1, name }));
+            setAdvocateTypes(loaded);
+            try {
+              localStorage.setItem('advocate_types_list', JSON.stringify(loaded));
+            } catch (e) {}
+          }
+        }
+
+        // Filter out system store record from visible survey questions
+        const visibleQuestions = data.data.filter(
+          (q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store'
+        );
+        handleQuestionsChange(visibleQuestions);
       }
     } catch (err) {
       console.warn('Failed to load advocate questions from server:', err);
@@ -235,44 +258,129 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     }
   };
 
+  const syncAdvocateTypesToD1 = async (optionsStrings) => {
+    try {
+      let storeId = advocateTypesStoreIdRef.current;
+      if (!storeId) {
+        const qRes = await fetch(`${API_BASE_URL}/api/advocate-questions?_t=${Date.now()}`);
+        const qData = await qRes.json();
+        const found = (qData.data || []).find(
+          (q) => q.key === '__advocate_types__' || q.type === 'advocate_type_store'
+        );
+        if (found) {
+          storeId = found.id;
+          advocateTypesStoreIdRef.current = found.id;
+        }
+      }
+
+      if (storeId) {
+        await fetch(`${API_BASE_URL}/api/advocate-questions/${storeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_num: 9999,
+            label: '__Advocate Types Store__',
+            options: optionsStrings
+          })
+        });
+      } else {
+        const createRes = await fetch(`${API_BASE_URL}/api/advocate-questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_num: 9999,
+            key: '__advocate_types__',
+            label: '__Advocate Types Store__',
+            type: 'advocate_type_store',
+            options: optionsStrings,
+            is_custom: 1
+          })
+        });
+        const createData = await createRes.json();
+        if (createData.data?.id) {
+          advocateTypesStoreIdRef.current = createData.data.id;
+        }
+      }
+
+      // Also update any survey question with type 'advocate_type'
+      const advTypeQuestions = questions.filter((q) => q.type === 'advocate_type');
+      for (const q of advTypeQuestions) {
+        try {
+          await fetch(`${API_BASE_URL}/api/advocate-questions/${q.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ options: optionsStrings })
+          });
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn('Central D1 advocate types sync error:', err);
+    }
+  };
+
   const fetchAdvocateTypes = async () => {
-    let localList = [];
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/advocate-questions?_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          const storeQ = data.data.find(
+            (q) => q.key === '__advocate_types__' || q.type === 'advocate_type_store'
+          );
+          if (storeQ) {
+            advocateTypesStoreIdRef.current = storeQ.id;
+            if (Array.isArray(storeQ.options)) {
+              const loaded = storeQ.options.map((name, idx) => ({ id: idx + 1, name }));
+              setAdvocateTypes(loaded);
+              try {
+                localStorage.setItem('advocate_types_list', JSON.stringify(loaded));
+              } catch (e) {}
+              return loaded;
+            }
+          } else {
+            // First time initialize store in D1
+            const defaultNames = DEFAULT_ADVOCATE_TYPES.map((t) => t.name);
+            const createRes = await fetch(`${API_BASE_URL}/api/advocate-questions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                order_num: 9999,
+                key: '__advocate_types__',
+                label: '__Advocate Types Store__',
+                type: 'advocate_type_store',
+                options: defaultNames,
+                is_custom: 1
+              })
+            });
+            const createData = await createRes.json();
+            if (createData.data?.id) {
+              advocateTypesStoreIdRef.current = createData.data.id;
+            }
+            setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
+            try {
+              localStorage.setItem('advocate_types_list', JSON.stringify(DEFAULT_ADVOCATE_TYPES));
+            } catch (e) {}
+            return DEFAULT_ADVOCATE_TYPES;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Backend advocate types D1 fetch error:', err);
+    }
+
     try {
       const saved = localStorage.getItem('advocate_types_list');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          localList = parsed;
+          setAdvocateTypes(parsed);
+          return parsed;
         }
       }
     } catch (e) {}
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-types`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          const serverNames = new Set(data.data.map((t) => (typeof t === 'string' ? t : t?.name).trim().toLowerCase()));
-          const missingDefaults = DEFAULT_ADVOCATE_TYPES.filter(
-            (def) => !serverNames.has(def.name.trim().toLowerCase())
-          );
-          const combined = [...data.data, ...missingDefaults];
-          setAdvocateTypes(combined);
-          try {
-            localStorage.setItem('advocate_types_list', JSON.stringify(combined));
-          } catch (e) {}
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Backend advocate-types API not reached:', err);
-    }
-
-    if (localList.length > 0) {
-      setAdvocateTypes(localList);
-    } else {
-      setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
-    }
+    setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
+    return DEFAULT_ADVOCATE_TYPES;
   };
 
   const handleAddAdvocateType = async (typeName) => {
@@ -287,34 +395,15 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       return { success: false, message: `Advocate Type "${cleanName}" already exists!` };
     }
 
-    const newId = 'at_' + Date.now();
-    const newItem = { id: newId, name: cleanName };
-
-    // 1. Immediately update local state & localStorage
-    const updated = [...advocateTypes, newItem];
-    setAdvocateTypes(updated);
+    const newItem = { id: Date.now(), name: cleanName };
+    const nextList = [...advocateTypes, newItem];
+    setAdvocateTypes(nextList);
     try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
     } catch (e) {}
 
-    // 2. Background server sync
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-types`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanName })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAdvocateTypes((prev) =>
-            prev.map((item) => (item.id === newId ? data.data : item))
-          );
-        }
-      }
-    } catch (err) {
-      console.warn('Backend sync not available, saved locally:', err);
-    }
+    const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
+    await syncAdvocateTypesToD1(optionsStrings);
 
     return { success: true, data: newItem };
   };
@@ -323,8 +412,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     const cleanName = String(name || '').trim();
     if (!cleanName) return { success: false, message: 'Type name cannot be empty' };
 
-    // 1. Immediately update local state & localStorage
-    const updated = advocateTypes.map((t) => {
+    const nextList = advocateTypes.map((t) => {
       const tId = typeof t === 'string' ? t : (t?.id || t?.name);
       const tName = typeof t === 'string' ? t : (t?.name || '');
       if (tId === id || tName === id || String(tId) === String(id) || tName.toLowerCase() === String(id).toLowerCase()) {
@@ -332,47 +420,36 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       }
       return t;
     });
-    setAdvocateTypes(updated);
+
+    setAdvocateTypes(nextList);
     try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
     } catch (e) {}
 
-    // 2. Background server sync
-    try {
-      await fetch(`${API_BASE_URL}/api/advocate-types/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanName })
-      });
-    } catch (err) {
-      console.warn('Backend sync not available, updated locally:', err);
-    }
+    const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
+    await syncAdvocateTypesToD1(optionsStrings);
 
     return { success: true };
   };
 
   const handleDeleteAdvocateType = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete advocate type "${name}"?`)) return;
+    if (!window.confirm(`Are you sure you want to delete advocate type "${name}"?`)) return { success: false };
 
-    // 1. Immediately update local state & localStorage
-    const updated = advocateTypes.filter((t) => {
+    const nextList = advocateTypes.filter((t) => {
       const tId = typeof t === 'string' ? t : (t?.id || t?.name);
       const tName = typeof t === 'string' ? t : (t?.name || '');
-      return tId !== id && tName !== name && String(tId) !== String(id);
+      return tId !== id && tName !== name && String(tId) !== String(id) && tName.toLowerCase() !== String(name).toLowerCase();
     });
-    setAdvocateTypes(updated);
+
+    setAdvocateTypes(nextList);
     try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
     } catch (e) {}
 
-    // 2. Background server sync
-    try {
-      await fetch(`${API_BASE_URL}/api/advocate-types/${encodeURIComponent(id)}`, {
-        method: 'DELETE'
-      });
-    } catch (err) {
-      console.warn('Backend sync not available, deleted locally:', err);
-    }
+    const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
+    await syncAdvocateTypesToD1(optionsStrings);
+
+    return { success: true };
   };
 
   const handleSearchChange = (e) => {
@@ -522,7 +599,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           <button
             className="btn-case-types"
             style={{ background: '#FFF7ED', borderColor: '#FDBA74', color: '#EA580C' }}
-            onClick={() => setIsCourtTypesOpen(true)}
+            onClick={() => {
+              fetchCourtTypes();
+              setIsCourtTypesOpen(true);
+            }}
             title="Manage dynamic court types"
           >
             <Scale size={17} />
@@ -532,7 +612,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           <button
             className="btn-case-types"
             style={{ background: '#F0FDF4', borderColor: '#86EFAC', color: '#16A34A' }}
-            onClick={() => setIsAdvocateTypesOpen(true)}
+            onClick={() => {
+              fetchAdvocateTypes();
+              setIsAdvocateTypesOpen(true);
+            }}
             title="Manage dynamic advocate types"
           >
             <Briefcase size={17} />

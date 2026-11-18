@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Edit3, Check, Briefcase } from 'lucide-react';
 
@@ -15,6 +15,15 @@ export default function AdvocateTypesModal({
   const [editingName, setEditingName] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setError('');
+      setNewTypeName('');
+      setEditingId(null);
+      setEditingName('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -70,6 +79,20 @@ export default function AdvocateTypesModal({
       setError(err.message || 'Failed to update advocate type');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (typeId, typeName) => {
+    setError('');
+    try {
+      if (onDeleteAdvocateType) {
+        const res = await onDeleteAdvocateType(typeId, typeName);
+        if (res && !res.success && res.message) {
+          setError(res.message);
+        }
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to delete advocate type');
     }
   };
 
@@ -196,7 +219,7 @@ export default function AdvocateTypesModal({
                           <button
                             type="button"
                             className="btn-delete-case-type"
-                            onClick={() => onDeleteAdvocateType(typeId, typeName)}
+                            onClick={() => handleDelete(typeId, typeName)}
                             title="Remove advocate type"
                           >
                             <Trash2 size={15} />
