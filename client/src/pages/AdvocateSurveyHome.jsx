@@ -236,69 +236,142 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   };
 
   const fetchAdvocateTypes = async () => {
+    let localList = [];
+    try {
+      const saved = localStorage.getItem('advocate_types_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localList = parsed;
+        }
+      }
+    } catch (e) {}
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/advocate-types`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
-        const serverNames = new Set(data.data.map((t) => (typeof t === 'string' ? t : t?.name).trim().toLowerCase()));
-        const missingDefaults = DEFAULT_ADVOCATE_TYPES.filter(
-          (def) => !serverNames.has(def.name.trim().toLowerCase())
-        );
-        const combined = [...data.data, ...missingDefaults];
-        setAdvocateTypes(combined);
-        try {
-          localStorage.setItem('advocate_types_list', JSON.stringify(combined));
-        } catch (e) {}
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          const serverNames = new Set(data.data.map((t) => (typeof t === 'string' ? t : t?.name).trim().toLowerCase()));
+          const missingDefaults = DEFAULT_ADVOCATE_TYPES.filter(
+            (def) => !serverNames.has(def.name.trim().toLowerCase())
+          );
+          const combined = [...data.data, ...missingDefaults];
+          setAdvocateTypes(combined);
+          try {
+            localStorage.setItem('advocate_types_list', JSON.stringify(combined));
+          } catch (e) {}
+          return;
+        }
       }
     } catch (err) {
-      console.warn('Failed to fetch advocate types:', err);
+      console.warn('Backend advocate-types API not reached:', err);
+    }
+
+    if (localList.length > 0) {
+      setAdvocateTypes(localList);
+    } else {
+      setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
     }
   };
 
   const handleAddAdvocateType = async (typeName) => {
+    const cleanName = String(typeName || '').trim();
+    if (!cleanName) return { success: false, message: 'Type name cannot be empty' };
+
+    const exists = advocateTypes.some((t) => {
+      const name = typeof t === 'string' ? t : (t?.name || '');
+      return name.trim().toLowerCase() === cleanName.toLowerCase();
+    });
+    if (exists) {
+      return { success: false, message: `Advocate Type "${cleanName}" already exists!` };
+    }
+
+    const newId = 'at_' + Date.now();
+    const newItem = { id: newId, name: cleanName };
+
+    // 1. Immediately update local state & localStorage
+    const updated = [...advocateTypes, newItem];
+    setAdvocateTypes(updated);
+    try {
+      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+    } catch (e) {}
+
+    // 2. Background server sync
     try {
       const res = await fetch(`${API_BASE_URL}/api/advocate-types`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: typeName })
+        body: JSON.stringify({ name: cleanName })
       });
-      const data = await res.json();
-      if (data.success) {
-        fetchAdvocateTypes();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setAdvocateTypes((prev) =>
+            prev.map((item) => (item.id === newId ? data.data : item))
+          );
+        }
       }
-      return data;
     } catch (err) {
-      return { success: false, message: err.message };
+      console.warn('Backend sync not available, saved locally:', err);
     }
+
+    return { success: true, data: newItem };
   };
 
   const handleEditAdvocateType = async (id, name) => {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return { success: false, message: 'Type name cannot be empty' };
+
+    // 1. Immediately update local state & localStorage
+    const updated = advocateTypes.map((t) => {
+      const tId = typeof t === 'string' ? t : (t?.id || t?.name);
+      const tName = typeof t === 'string' ? t : (t?.name || '');
+      if (tId === id || tName === id || String(tId) === String(id) || tName.toLowerCase() === String(id).toLowerCase()) {
+        return typeof t === 'string' ? cleanName : { ...t, name: cleanName };
+      }
+      return t;
+    });
+    setAdvocateTypes(updated);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-types/${id}`, {
+      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+    } catch (e) {}
+
+    // 2. Background server sync
+    try {
+      await fetch(`${API_BASE_URL}/api/advocate-types/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name: cleanName })
       });
-      const data = await res.json();
-      if (data.success) {
-        fetchAdvocateTypes();
-      }
-      return data;
     } catch (err) {
-      return { success: false, message: err.message };
+      console.warn('Backend sync not available, updated locally:', err);
     }
+
+    return { success: true };
   };
 
   const handleDeleteAdvocateType = async (id, name) => {
     if (!window.confirm(`Are you sure you want to delete advocate type "${name}"?`)) return;
+
+    // 1. Immediately update local state & localStorage
+    const updated = advocateTypes.filter((t) => {
+      const tId = typeof t === 'string' ? t : (t?.id || t?.name);
+      const tName = typeof t === 'string' ? t : (t?.name || '');
+      return tId !== id && tName !== name && String(tId) !== String(id);
+    });
+    setAdvocateTypes(updated);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-types/${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        fetchAdvocateTypes();
-      }
+      localStorage.setItem('advocate_types_list', JSON.stringify(updated));
+    } catch (e) {}
+
+    // 2. Background server sync
+    try {
+      await fetch(`${API_BASE_URL}/api/advocate-types/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
     } catch (err) {
-      alert('Failed to delete advocate type');
+      console.warn('Backend sync not available, deleted locally:', err);
     }
   };
 

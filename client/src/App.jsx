@@ -73,6 +73,7 @@ export default function App() {
       {/* Global Top Navbar */}
       <Navbar
         user={user}
+        currentScreen={currentScreen}
         onLogout={handleLogout}
         onHomeClick={() => navigateTo('dashboard')}
       />
