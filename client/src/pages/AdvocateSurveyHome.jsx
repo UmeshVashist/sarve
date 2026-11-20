@@ -61,16 +61,23 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     } catch (e) {}
 
     const safeList = (Array.isArray(initial) ? initial : ADVOCATE_SURVEY_QUESTIONS)
-      .filter((q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store');
+      .filter((q) => q &&
+        q.key !== '__advocate_types__' &&
+        q.type !== 'advocate_type_store' &&
+        q.key !== '__advocate_remarks_map__' &&
+        q.type !== 'remarks_store'
+      );
     return [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
         const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemark = remarkMap[qKey] !== undefined
-          ? Boolean(remarkMap[qKey])
-          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
+        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
+        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
+        const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
         return {
           ...q,
+          note: cleanNote,
           has_remark: hasRemark
         };
       });
@@ -88,26 +95,34 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
 
-  const handleQuestionsChange = (newQuestionsList) => {
+  const handleQuestionsChange = (newQuestionsList, explicitRemarksMap) => {
     if (!Array.isArray(newQuestionsList)) return;
-    let remarkMap = {};
-    try {
-      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-      if (parsed && typeof parsed === 'object') remarkMap = parsed;
-    } catch (e) {}
+    let remarkMap = explicitRemarksMap || {};
+    if (!explicitRemarksMap) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+        if (parsed && typeof parsed === 'object') remarkMap = parsed;
+      } catch (e) {}
+    }
 
     const safeList = newQuestionsList.filter(
-      (q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store'
+      (q) => q &&
+        q.key !== '__advocate_types__' &&
+        q.type !== 'advocate_type_store' &&
+        q.key !== '__advocate_remarks_map__' &&
+        q.type !== 'remarks_store'
     );
     const sorted = [...safeList]
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
         const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemark = remarkMap[qKey] !== undefined
-          ? Boolean(remarkMap[qKey])
-          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
+        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
+        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
+        const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
         return {
           ...q,
+          note: cleanNote,
           has_remark: hasRemark
         };
       });
@@ -145,11 +160,37 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           }
         }
 
-        // Filter out system store record from visible survey questions
-        const visibleQuestions = data.data.filter(
-          (q) => q && q.key !== '__advocate_types__' && q.type !== 'advocate_type_store'
+        // Sync central advocate remarks map if store record is in response
+        const remarksStoreQ = data.data.find(
+          (q) => q.key === '__advocate_remarks_map__' || q.type === 'remarks_store'
         );
-        handleQuestionsChange(visibleQuestions);
+        let serverRemarks = {};
+        if (remarksStoreQ && remarksStoreQ.note) {
+          try {
+            const parsed = JSON.parse(remarksStoreQ.note);
+            if (parsed && typeof parsed === 'object') {
+              serverRemarks = parsed;
+            }
+          } catch (e) {}
+        }
+        let localRemarks = {};
+        try {
+          localRemarks = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+        } catch (e) {}
+        const mergedRemarks = { ...localRemarks, ...serverRemarks };
+        try {
+          localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(mergedRemarks));
+        } catch (e) {}
+
+        // Filter out system store records from visible survey questions
+        const visibleQuestions = data.data.filter(
+          (q) => q &&
+            q.key !== '__advocate_types__' &&
+            q.type !== 'advocate_type_store' &&
+            q.key !== '__advocate_remarks_map__' &&
+            q.type !== 'remarks_store'
+        );
+        handleQuestionsChange(visibleQuestions, mergedRemarks);
       }
     } catch (err) {
       console.warn('Failed to load advocate questions from server:', err);

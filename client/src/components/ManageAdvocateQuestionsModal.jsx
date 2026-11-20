@@ -42,7 +42,14 @@ export default function ManageAdvocateQuestionsModal({
   const [successMsg, setSuccessMsg] = useState('');
 
   const sortedQuestions = useMemo(() => {
-    return [...questions].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    return [...questions]
+      .filter((q) => q &&
+        q.key !== '__advocate_types__' &&
+        q.type !== 'advocate_type_store' &&
+        q.key !== '__advocate_remarks_map__' &&
+        q.type !== 'remarks_store'
+      )
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
   }, [questions]);
 
   if (!isOpen) return null;
@@ -95,9 +102,11 @@ export default function ManageAdvocateQuestionsModal({
       remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
     } catch (e) {}
 
-    const hasRemarkVal = (q.has_remark !== undefined && q.has_remark !== null)
-      ? Boolean(q.has_remark)
-      : Boolean(remarkMap[q.key] ?? remarkMap[q.id]);
+    const hasRemarkVal = Boolean(
+      (q.note && q.note.includes('[REMARK]')) ||
+      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : (remarkMap[q.key] ?? remarkMap[q.id]))
+    );
+    const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
 
     setFormData({
       order_num: q.order_num ?? '',
@@ -105,7 +114,7 @@ export default function ManageAdvocateQuestionsModal({
       placeholder: q.placeholder || '',
       type: q.type || 'text',
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
-      note: q.note || '',
+      note: cleanNote,
       required: Boolean(q.required),
       has_remark: hasRemarkVal
     });
@@ -127,15 +136,23 @@ export default function ManageAdvocateQuestionsModal({
       ? formData.optionsText.split(',').map((s) => s.trim()).filter(Boolean)
       : null;
 
-    const payload = {
+    const baseNote = (formData.note ? formData.note.trim() : '').replace(/\s*\[REMARK\]/g, '').trim();
+    const serverNote = formData.has_remark ? `${baseNote} [REMARK]`.trim() : baseNote;
+
+    const localPayload = {
       order_num: orderNum,
       label: formData.label.trim(),
       placeholder: formData.placeholder.trim(),
       type: formData.type || 'text',
       options: parsedOptions,
-      note: formData.note.trim(),
+      note: baseNote,
       required: Boolean(formData.required),
       has_remark: formData.has_remark ? 1 : 0
+    };
+
+    const serverPayload = {
+      ...localPayload,
+      note: serverNote
     };
 
     setSaving(true);
@@ -146,18 +163,28 @@ export default function ManageAdvocateQuestionsModal({
           if ((item.id && item.id === editingQuestion.id) || item.key === editingQuestion.key) {
             return {
               ...item,
-              ...payload,
+              ...localPayload,
               label: `${orderNum}) ${formData.label.trim()}`
             };
           }
           return item;
         });
-        // Persist has_remark in local advocate remarks map
+        // Persist has_remark in local advocate remarks map and D1 store
         try {
           const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
           remarkMap[editingQuestion.key] = Boolean(formData.has_remark);
           if (editingQuestion.id) remarkMap[editingQuestion.id] = Boolean(formData.has_remark);
           localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
+
+          fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_num: 9999,
+              label: '__Advocate Remarks Store__',
+              note: JSON.stringify(remarkMap)
+            })
+          }).catch(() => {});
         } catch (e) {}
 
         applyQuestionsUpdate(updatedList, 'Advocate Question updated successfully!');
@@ -166,7 +193,7 @@ export default function ManageAdvocateQuestionsModal({
           await fetch(`${API_BASE_URL}/api/advocate-questions/${editingQuestion.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(serverPayload)
           });
         }
       } else {
@@ -176,15 +203,25 @@ export default function ManageAdvocateQuestionsModal({
           id: Date.now(),
           key: newKey,
           is_custom: 1,
-          ...payload,
+          ...localPayload,
           label: `${orderNum}) ${formData.label.trim()}`
         };
 
-        // Persist has_remark in local advocate remarks map
+        // Persist has_remark in local advocate remarks map and D1 store
         try {
           const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
           remarkMap[newKey] = Boolean(formData.has_remark);
           localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
+
+          fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_num: 9999,
+              label: '__Advocate Remarks Store__',
+              note: JSON.stringify(remarkMap)
+            })
+          }).catch(() => {});
         } catch (e) {}
 
         const updatedList = [...sortedQuestions, newQ];
@@ -194,7 +231,7 @@ export default function ManageAdvocateQuestionsModal({
           const res = await fetch(`${API_BASE_URL}/api/advocate-questions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...payload, key: newKey })
+            body: JSON.stringify({ ...serverPayload, key: newKey })
           });
           const d = await res.json();
           if (d.success && d.data?.id) {
@@ -217,6 +254,23 @@ export default function ManageAdvocateQuestionsModal({
 
     const filtered = sortedQuestions.filter((item) => item !== q && item.id !== q.id && item.key !== q.key);
     applyQuestionsUpdate(filtered, 'Advocate Question deleted successfully');
+
+    try {
+      const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+      if (q.key) delete remarkMap[q.key];
+      if (q.id) delete remarkMap[q.id];
+      localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
+
+      fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_num: 9999,
+          label: '__Advocate Remarks Store__',
+          note: JSON.stringify(remarkMap)
+        })
+      }).catch(() => {});
+    } catch (e) {}
 
     if (q.id) {
       try {
@@ -396,12 +450,12 @@ export default function ManageAdvocateQuestionsModal({
                     <span style={{ fontWeight: 800, color: '#EA580C', fontSize: '13px' }}>#{q.order_num ?? idx + 1}</span>
                     <strong style={{ fontSize: '13.5px', color: '#1E293B' }}>{getAdvocateQuestionLabel(q, idx)}</strong>
                     {q.required && <span style={{ color: '#DC2626', fontSize: '11px', fontWeight: 700 }}>*Required</span>}
-                    {(Boolean(q.has_remark) || (() => {
+                    {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
                       try {
                         const m = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
                         return Boolean(m[q.key] ?? m[q.id]);
                       } catch (e) { return false; }
-                    })()) && (
+                    })())) && (
                       <span style={{ background: '#EDE9FE', color: '#7C3AED', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>+ Remark</span>
                     )}
                     {q.type === 'advocate_type' && (
@@ -412,7 +466,10 @@ export default function ManageAdvocateQuestionsModal({
                     ) : null}
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748B' }}>
-                    Type: <span style={{ fontWeight: 600 }}>{q.type}</span> {q.note && `| ${q.note}`}
+                    Type: <span style={{ fontWeight: 600 }}>{q.type}</span> {(() => {
+                      const clean = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+                      return clean ? `| ${clean}` : '';
+                    })()}
                   </div>
                 </div>
 

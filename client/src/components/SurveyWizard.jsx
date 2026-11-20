@@ -107,15 +107,17 @@ export default function SurveyWizard({
     } catch (e) {}
 
     return [...list]
-      .filter(Boolean)
+      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
         const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemark = remarkMap[qKey] !== undefined
-          ? Boolean(remarkMap[qKey])
-          : (remarkMap[q?.id] !== undefined ? Boolean(remarkMap[q?.id]) : Boolean(q?.has_remark));
+        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
+        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
+        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
+        const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
         return {
           ...q,
+          note: cleanNote,
           has_remark: hasRemark
         };
       });
@@ -1998,12 +2000,12 @@ export default function SurveyWizard({
           )}
 
           {/* Question Remark input if has_remark is active */}
-          {(Boolean(currentQ?.has_remark) || (() => {
+          {(Boolean(currentQ?.has_remark || (currentQ?.note && currentQ.note.includes('[REMARK]')) || (() => {
             try {
               const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
               return Boolean(m[currentQ?.key] ?? m[currentQ?.id]);
             } catch (e) { return false; }
-          })()) && (
+          })())) && (
             <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
                 Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:
@@ -2020,11 +2022,14 @@ export default function SurveyWizard({
           )}
 
           {/* User Requested Note */}
-          {currentQ.note && (
-            <div className="wizard-note-banner">
-              <span>{currentQ.note}</span>
-            </div>
-          )}
+          {(() => {
+            const clean = (currentQ?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+            return clean ? (
+              <div className="wizard-note-banner">
+                <span>{clean}</span>
+              </div>
+            ) : null;
+          })()}
 
           {/* Error Banner */}
           {error && (

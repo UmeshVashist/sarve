@@ -279,7 +279,12 @@ export default function EditAdvocateSurveyModal({
                     />
                   )}
 
-                  {Boolean(q.has_remark) && (
+                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
+                    try {
+                      const m = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
+                      return Boolean(m[q.key] ?? m[q.id]);
+                    } catch (e) { return false; }
+                  })())) && (
                     <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
                         Remark (Optional):
@@ -294,6 +299,15 @@ export default function EditAdvocateSurveyModal({
                       />
                     </div>
                   )}
+
+                  {(() => {
+                    const clean = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+                    return clean ? (
+                      <div style={{ fontSize: '11.5px', color: '#B45309', marginTop: '4px', fontWeight: 600 }}>
+                        {clean}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               );
             })}

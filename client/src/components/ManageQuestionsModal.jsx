@@ -44,7 +44,9 @@ export default function ManageQuestionsModal({
 
   // Always keep questions sorted by order_num
   const sortedQuestions = useMemo(() => {
-    return [...questions].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+    return [...questions]
+      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
   }, [questions]);
 
   // Ensure latest server questions are fetched whenever modal opens
@@ -106,9 +108,12 @@ export default function ManageQuestionsModal({
       remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
     } catch (e) {}
 
-    const hasRemarkVal = (q.has_remark !== undefined && q.has_remark !== null)
-      ? Boolean(q.has_remark)
-      : Boolean(remarkMap[q.key] ?? remarkMap[q.id]);
+    const hasRemarkVal = Boolean(
+      (q.note && q.note.includes('[REMARK]')) ||
+      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : (remarkMap[q.key] ?? remarkMap[q.id]))
+    );
+
+    const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
 
     setFormData({
       order_num: q.order_num ?? '',
@@ -116,7 +121,7 @@ export default function ManageQuestionsModal({
       placeholder: q.placeholder || '',
       type: q.type || 'text',
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
-      note: q.note || '',
+      note: cleanNote,
       required: Boolean(q.required),
       has_remark: hasRemarkVal
     });
@@ -246,12 +251,15 @@ export default function ManageQuestionsModal({
         const targetOrder = Number(formData.order_num) || (oldIndex + 1);
         const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length - 1));
 
+        const baseNote = (formData.note ? formData.note.trim() : '').replace(/\s*\[REMARK\]/g, '').trim();
+        const serverNote = formData.has_remark ? `${baseNote} [REMARK]`.trim() : baseNote;
+
         const updatedItem = {
           ...editingQuestion,
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
-          note: formData.note ? formData.note.trim() : '',
+          note: baseNote,
           required: formData.required ? 1 : 0,
           has_remark: formData.has_remark ? 1 : 0,
           label: cleanLabel
@@ -273,12 +281,22 @@ export default function ManageQuestionsModal({
           };
         });
 
-        // Persist has_remark in local remarks map
+        // Persist has_remark in local remarks map and Cloudflare D1
         try {
           const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
           remarkMap[editingQuestion.key] = Boolean(formData.has_remark);
           if (editingQuestion.id) remarkMap[editingQuestion.id] = Boolean(formData.has_remark);
           localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
+
+          fetch(`${API_BASE_URL}/api/questions/30`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_num: 9999,
+              label: '__Remarks Map Store__',
+              note: JSON.stringify(remarkMap)
+            })
+          }).catch(() => {});
         } catch (e) {}
 
         applyQuestionsUpdate(reordered, `Question #${targetIndex + 1} updated successfully!`);
@@ -291,7 +309,7 @@ export default function ManageQuestionsModal({
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
-          note: formData.note ? formData.note.trim() : '',
+          note: serverNote,
           required: formData.required ? 1 : 0,
           has_remark: formData.has_remark ? 1 : 0
         };
@@ -319,6 +337,9 @@ export default function ManageQuestionsModal({
         const targetIndex = Math.max(0, Math.min(targetOrder - 1, sortedQuestions.length));
         const customKey = `custom_${Date.now()}`;
 
+        const baseNote = (formData.note ? formData.note.trim() : '').replace(/\s*\[REMARK\]/g, '').trim();
+        const serverNote = formData.has_remark ? `${baseNote} [REMARK]`.trim() : baseNote;
+
         serverPayload = {
           key: customKey,
           order_num: targetIndex + 1,
@@ -326,7 +347,7 @@ export default function ManageQuestionsModal({
           placeholder: formData.placeholder ? formData.placeholder.trim() : '',
           type: formData.type || 'text',
           options: options && options.length > 0 ? options : null,
-          note: formData.note ? formData.note.trim() : '',
+          note: serverNote,
           required: formData.required ? 1 : 0,
           has_remark: formData.has_remark ? 1 : 0
         };
@@ -348,6 +369,7 @@ export default function ManageQuestionsModal({
           has_remark: Boolean(createdQ.has_remark ?? formData.has_remark),
           is_custom: true,
           options: options && options.length > 0 ? options : null,
+          note: baseNote,
           label: `${targetIndex + 1}) ${cleanLabel}`
         };
 
@@ -364,12 +386,22 @@ export default function ManageQuestionsModal({
           };
         });
 
-        // Persist has_remark in local remarks map
+        // Persist has_remark in local remarks map and Cloudflare D1
         try {
           const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
           remarkMap[customKey] = Boolean(formData.has_remark);
           if (createdQ?.id) remarkMap[createdQ.id] = Boolean(formData.has_remark);
           localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
+
+          fetch(`${API_BASE_URL}/api/questions/30`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order_num: 9999,
+              label: '__Remarks Map Store__',
+              note: JSON.stringify(remarkMap)
+            })
+          }).catch(() => {});
         } catch (e) {}
 
         applyQuestionsUpdate(reordered, `New Question added at #${targetIndex + 1}!`);
@@ -416,6 +448,24 @@ export default function ManageQuestionsModal({
     });
 
     applyQuestionsUpdate(reordered, 'Question deleted successfully!');
+
+    // Clean up remarks map for deleted question and sync to D1 store
+    try {
+      const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
+      if (q.key) delete remarkMap[q.key];
+      if (q.id) delete remarkMap[q.id];
+      localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
+
+      fetch(`${API_BASE_URL}/api/questions/30`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_num: 9999,
+          label: '__Remarks Map Store__',
+          note: JSON.stringify(remarkMap)
+        })
+      }).catch(() => {});
+    } catch (e) {}
 
     try {
       await fetch(`${API_BASE_URL}/api/questions/${q.id}`, { method: 'DELETE' });
@@ -600,22 +650,25 @@ export default function ManageQuestionsModal({
                         <div className="question-meta-row">
                           <span className="badge-qtype">{q.type || 'text'}</span>
                           {q.required ? <span className="badge-required">Required</span> : null}
-                          {(Boolean(q.has_remark) || (() => {
+                          {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
                             try {
                               const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
                               return Boolean(m[q.key] ?? m[q.id]);
                             } catch (e) { return false; }
-                          })()) ? (
+                          })())) ? (
                             <span className="badge-qtype" style={{ background: '#EDE9FE', color: '#7C3AED', borderColor: '#DDD6FE', fontWeight: 700 }}>
                               + Remark
                             </span>
                           ) : null}
                           {q.is_custom ? <span className="badge-custom">Custom</span> : null}
-                          {q.note && (
-                            <span style={{ fontSize: '11.5px', color: '#64748B', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {q.note}
-                            </span>
-                          )}
+                          {(() => {
+                            const clean = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+                            return clean ? (
+                              <span style={{ fontSize: '11.5px', color: '#64748B', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {clean}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
 
