@@ -176,3 +176,62 @@ CREATE INDEX IF NOT EXISTS idx_advocate_reg ON advocate_surveys(advocate_reg_no)
 CREATE INDEX IF NOT EXISTS idx_advocate_name ON advocate_surveys(name);
 CREATE INDEX IF NOT EXISTS idx_questions_order ON questions(order_num);
 CREATE INDEX IF NOT EXISTS idx_adv_questions_order ON advocate_questions(order_num);
+
+
+-- 10. WEB REVIEW MODULE TABLES
+CREATE TABLE IF NOT EXISTS web_review_urls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS web_reviews (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url_id INTEGER,
+  website_name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  reviews TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_web_review_name ON web_reviews(website_name);
+
+
+-- 11. RAASTA FUNCTION MODULE TABLES
+CREATE TABLE IF NOT EXISTS raasta_portals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS raasta_functions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  portal_name TEXT NOT NULL,
+  function_name TEXT NOT NULL,
+  details TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_raasta_portal ON raasta_functions(portal_name);
+
+
+-- 12. WORK ROLE MODULE TABLES
+CREATE TABLE IF NOT EXISTS work_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS work_role_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_name TEXT NOT NULL,
+  work_name TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_role_name ON work_role_entries(role_name);
+

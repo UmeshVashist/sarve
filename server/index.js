@@ -1473,6 +1473,337 @@ app.get('/api/advocate-survey/export/excel', (req, res) => {
   }
 });
 
+// ==========================================
+// Web Review Module APIs
+// ==========================================
+app.get('/api/web-review/urls', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM web_review_urls ORDER BY id DESC').all();
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/web-review/urls', (req, res) => {
+  try {
+    const { name, url: websiteUrl } = req.body;
+    const cleanName = String(name || '').trim();
+    const cleanUrl = String(websiteUrl || '').trim();
+    if (!cleanName || !cleanUrl) {
+      return res.status(400).json({ success: false, message: 'Website name and URL are required' });
+    }
+    const info = db.prepare('INSERT INTO web_review_urls (name, url) VALUES (?, ?)').run(cleanName, cleanUrl);
+    const created = db.prepare('SELECT * FROM web_review_urls WHERE id = ?').get(info.lastInsertRowid);
+    res.json({ success: true, message: 'URL added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/web-review/urls/:id', (req, res) => {
+  try {
+    const { name, url: websiteUrl } = req.body;
+    const cleanName = String(name || '').trim();
+    const cleanUrl = String(websiteUrl || '').trim();
+    db.prepare('UPDATE web_review_urls SET name = ?, url = ? WHERE id = ?').run(cleanName, cleanUrl, req.params.id);
+    res.json({ success: true, message: 'URL updated successfully', data: { id: Number(req.params.id), name: cleanName, url: cleanUrl } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/web-review/urls/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM web_review_urls WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'URL deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/web-review/list', (req, res) => {
+  try {
+    const q = req.query.q;
+    let rows;
+    if (q && q.trim()) {
+      const term = `%${q.trim()}%`;
+      rows = db.prepare('SELECT * FROM web_reviews WHERE website_name LIKE ? OR url LIKE ? OR reviews LIKE ? ORDER BY id DESC').all(term, term, term);
+    } else {
+      rows = db.prepare('SELECT * FROM web_reviews ORDER BY id DESC').all();
+    }
+    const data = rows.map((r) => {
+      let parsed = [];
+      try { parsed = JSON.parse(r.reviews); } catch (e) { parsed = [r.reviews]; }
+      return { ...r, reviews: parsed };
+    });
+    res.json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/web-review/add', (req, res) => {
+  try {
+    const { url_id, website_name, url: websiteUrl, reviews } = req.body;
+    const cleanName = String(website_name || '').trim();
+    const cleanUrl = String(websiteUrl || '').trim();
+    let reviewsArray = Array.isArray(reviews) ? reviews : [reviews];
+    reviewsArray = reviewsArray.map((r) => String(r || '').trim()).filter(Boolean);
+    if (!cleanName || reviewsArray.length === 0) {
+      return res.status(400).json({ success: false, message: 'Website name and at least one review are required' });
+    }
+    const info = db.prepare('INSERT INTO web_reviews (url_id, website_name, url, reviews) VALUES (?, ?, ?, ?)').run(url_id || null, cleanName, cleanUrl, JSON.stringify(reviewsArray));
+    const created = db.prepare('SELECT * FROM web_reviews WHERE id = ?').get(info.lastInsertRowid);
+    res.json({ success: true, message: 'Web Review recorded successfully', data: { ...created, reviews: reviewsArray } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/web-review/:id', (req, res) => {
+  try {
+    const { website_name, url: websiteUrl, reviews } = req.body;
+    const cleanName = String(website_name || '').trim();
+    const cleanUrl = String(websiteUrl || '').trim();
+    let reviewsArray = Array.isArray(reviews) ? reviews : [reviews];
+    reviewsArray = reviewsArray.map((r) => String(r || '').trim()).filter(Boolean);
+    db.prepare('UPDATE web_reviews SET website_name = ?, url = ?, reviews = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cleanName, cleanUrl, JSON.stringify(reviewsArray), req.params.id);
+    res.json({ success: true, message: 'Review updated successfully', data: { id: Number(req.params.id), website_name: cleanName, url: cleanUrl, reviews: reviewsArray } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/web-review/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM web_reviews WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Review deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// Raasta Function Module APIs
+// ==========================================
+app.get('/api/raasta/portals', (req, res) => {
+  try {
+    let rows = db.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
+    if (rows.length === 0) {
+      const defaults = ['e-Courts Portal', 'Prison Management Portal', 'DLSA Legal Aid Portal', 'High Court Case Status', 'Police Department Portal'];
+      for (const p of defaults) {
+        db.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').run(p);
+      }
+      rows = db.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
+    }
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/raasta/portals', (req, res) => {
+  try {
+    const cleanName = String(req.body.name || '').trim();
+    if (!cleanName) return res.status(400).json({ success: false, message: 'Portal name is required' });
+    db.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').run(cleanName);
+    const created = db.prepare('SELECT * FROM raasta_portals WHERE name = ?').get(cleanName);
+    res.json({ success: true, message: 'Portal added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/raasta/portals/:id', (req, res) => {
+  try {
+    const cleanName = String(req.body.name || '').trim();
+    db.prepare('UPDATE raasta_portals SET name = ? WHERE id = ?').run(cleanName, req.params.id);
+    res.json({ success: true, message: 'Portal updated successfully', data: { id: Number(req.params.id), name: cleanName } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/raasta/portals/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM raasta_portals WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Portal deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/raasta/list', (req, res) => {
+  try {
+    const { q, portal } = req.query;
+    let query = 'SELECT * FROM raasta_functions WHERE 1=1';
+    const params = [];
+    if (portal && portal.trim()) {
+      query += ' AND portal_name = ?';
+      params.push(portal.trim());
+    }
+    if (q && q.trim()) {
+      query += ' AND (portal_name LIKE ? OR function_name LIKE ? OR details LIKE ?)';
+      const term = `%${q.trim()}%`;
+      params.push(term, term, term);
+    }
+    query += ' ORDER BY id DESC';
+    const rows = db.prepare(query).all(...params);
+    res.json({ success: true, count: rows.length, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/raasta/add', (req, res) => {
+  try {
+    const { portal_name, function_name, details } = req.body;
+    const cleanPortal = String(portal_name || '').trim();
+    const cleanFunc = String(function_name || '').trim();
+    const cleanDetails = String(details || '').trim();
+    if (!cleanPortal || !cleanFunc) {
+      return res.status(400).json({ success: false, message: 'Portal name and Function name are required' });
+    }
+    const info = db.prepare('INSERT INTO raasta_functions (portal_name, function_name, details) VALUES (?, ?, ?)').run(cleanPortal, cleanFunc, cleanDetails);
+    const created = db.prepare('SELECT * FROM raasta_functions WHERE id = ?').get(info.lastInsertRowid);
+    res.json({ success: true, message: 'Function added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/raasta/:id', (req, res) => {
+  try {
+    const { portal_name, function_name, details } = req.body;
+    const cleanPortal = String(portal_name || '').trim();
+    const cleanFunc = String(function_name || '').trim();
+    const cleanDetails = String(details || '').trim();
+    db.prepare('UPDATE raasta_functions SET portal_name = ?, function_name = ?, details = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cleanPortal, cleanFunc, cleanDetails, req.params.id);
+    res.json({ success: true, message: 'Function updated successfully', data: { id: Number(req.params.id), portal_name: cleanPortal, function_name: cleanFunc, details: cleanDetails } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/raasta/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM raasta_functions WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Function deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// Work Role Module APIs
+// ==========================================
+app.get('/api/work-roles/roles', (req, res) => {
+  try {
+    let rows = db.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
+    if (rows.length === 0) {
+      const defaults = ['Field Officer', 'Survey Verifier', 'Legal Aid Coordinator', 'Case Followup Executive', 'Data Entry Operator'];
+      for (const r of defaults) {
+        db.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').run(r);
+      }
+      rows = db.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
+    }
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/work-roles/roles', (req, res) => {
+  try {
+    const cleanName = String(req.body.name || '').trim();
+    if (!cleanName) return res.status(400).json({ success: false, message: 'Role name is required' });
+    db.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').run(cleanName);
+    const created = db.prepare('SELECT * FROM work_roles WHERE name = ?').get(cleanName);
+    res.json({ success: true, message: 'Role added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/work-roles/roles/:id', (req, res) => {
+  try {
+    const cleanName = String(req.body.name || '').trim();
+    db.prepare('UPDATE work_roles SET name = ? WHERE id = ?').run(cleanName, req.params.id);
+    res.json({ success: true, message: 'Role updated successfully', data: { id: Number(req.params.id), name: cleanName } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/work-roles/roles/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM work_roles WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Role deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/work-roles/list', (req, res) => {
+  try {
+    const { q, role } = req.query;
+    let query = 'SELECT * FROM work_role_entries WHERE 1=1';
+    const params = [];
+    if (role && role.trim()) {
+      query += ' AND role_name = ?';
+      params.push(role.trim());
+    }
+    if (q && q.trim()) {
+      query += ' AND (role_name LIKE ? OR work_name LIKE ?)';
+      const term = `%${q.trim()}%`;
+      params.push(term, term);
+    }
+    query += ' ORDER BY id DESC';
+    const rows = db.prepare(query).all(...params);
+    res.json({ success: true, count: rows.length, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/work-roles/add', (req, res) => {
+  try {
+    const { role_name, work_name } = req.body;
+    const cleanRole = String(role_name || '').trim();
+    const cleanWork = String(work_name || '').trim();
+    if (!cleanRole || !cleanWork) {
+      return res.status(400).json({ success: false, message: 'Role name and Work name are required' });
+    }
+    const info = db.prepare('INSERT INTO work_role_entries (role_name, work_name) VALUES (?, ?)').run(cleanRole, cleanWork);
+    const created = db.prepare('SELECT * FROM work_role_entries WHERE id = ?').get(info.lastInsertRowid);
+    res.json({ success: true, message: 'Work entry added successfully', data: created });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put('/api/work-roles/:id', (req, res) => {
+  try {
+    const { role_name, work_name } = req.body;
+    const cleanRole = String(role_name || '').trim();
+    const cleanWork = String(work_name || '').trim();
+    db.prepare('UPDATE work_role_entries SET role_name = ?, work_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(cleanRole, cleanWork, req.params.id);
+    res.json({ success: true, message: 'Work entry updated successfully', data: { id: Number(req.params.id), role_name: cleanRole, work_name: cleanWork } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete('/api/work-roles/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM work_role_entries WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Work entry deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(`   SURVEY PORTAL SERVER RUNNING ON PORT ${PORT} `);

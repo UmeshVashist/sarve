@@ -313,6 +313,70 @@ async function ensureD1Database(db) {
       await db.prepare("ALTER TABLE advocate_questions ADD COLUMN has_remark INTEGER DEFAULT 0").run();
     } catch (e) {}
 
+    // 9. Web Review URLs
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS web_review_urls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    // 10. Web Reviews
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS web_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url_id INTEGER,
+        website_name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        reviews TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    // 11. Raasta Portals
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS raasta_portals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    // 12. Raasta Functions
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS raasta_functions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        portal_name TEXT NOT NULL,
+        function_name TEXT NOT NULL,
+        details TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    // 13. Work Roles
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS work_roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    // 14. Work Role Entries
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS work_role_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_name TEXT NOT NULL,
+        work_name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
     isD1Initialized = true;
   } catch (err) {
     console.error('ensureD1Database error:', err);
@@ -1314,6 +1378,389 @@ export default {
         const id = path.split('/')[3];
         await env.DB.prepare('DELETE FROM advocate_surveys WHERE id = ?').bind(id).run();
         return new Response(JSON.stringify({ success: true, message: 'Advocate survey deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================
+      // 16. Web Review Module APIs
+      // ==========================================
+      if (path === '/api/web-review/urls' && method === 'GET') {
+        const list = await env.DB.prepare('SELECT * FROM web_review_urls ORDER BY id DESC').all();
+        return new Response(JSON.stringify({ success: true, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/web-review/urls' && method === 'POST') {
+        const { name, url: websiteUrl } = await request.json();
+        const cleanName = String(name || '').trim();
+        const cleanUrl = String(websiteUrl || '').trim();
+        if (!cleanName || !cleanUrl) {
+          return new Response(JSON.stringify({ success: false, message: 'Website name and URL are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        await env.DB.prepare('INSERT INTO web_review_urls (name, url) VALUES (?, ?)').bind(cleanName, cleanUrl).run();
+        const created = await env.DB.prepare('SELECT * FROM web_review_urls WHERE name = ? AND url = ? ORDER BY id DESC').bind(cleanName, cleanUrl).first();
+        return new Response(JSON.stringify({ success: true, message: 'URL added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/web-review/urls/') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const { name, url: websiteUrl } = await request.json();
+        const cleanName = String(name || '').trim();
+        const cleanUrl = String(websiteUrl || '').trim();
+        await env.DB.prepare('UPDATE web_review_urls SET name = ?, url = ? WHERE id = ?').bind(cleanName, cleanUrl, id).run();
+        return new Response(JSON.stringify({ success: true, message: 'URL updated successfully', data: { id: Number(id), name: cleanName, url: cleanUrl } }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/web-review/urls/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.prepare('DELETE FROM web_review_urls WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'URL deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path === '/api/web-review/list' && method === 'GET') {
+        const q = url.searchParams.get('q');
+        let query = 'SELECT * FROM web_reviews ORDER BY id DESC';
+        let list;
+        if (q && q.trim()) {
+          const term = `%${q.trim()}%`;
+          list = await env.DB.prepare(
+            'SELECT * FROM web_reviews WHERE website_name LIKE ? OR url LIKE ? OR reviews LIKE ? ORDER BY id DESC'
+          ).bind(term, term, term).all();
+        } else {
+          list = await env.DB.prepare(query).all();
+        }
+        const records = (list.results || []).map((r) => {
+          let parsedReviews = [];
+          try {
+            parsedReviews = typeof r.reviews === 'string' ? JSON.parse(r.reviews) : (r.reviews || []);
+          } catch (e) {
+            parsedReviews = r.reviews ? [r.reviews] : [];
+          }
+          return { ...r, reviews: parsedReviews };
+        });
+        return new Response(JSON.stringify({ success: true, count: records.length, data: records }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/web-review/add' && method === 'POST') {
+        const body = await request.json();
+        const website_name = String(body.website_name || '').trim();
+        const website_url = String(body.url || '').trim();
+        const rawReviews = body.reviews;
+        let reviewsArray = Array.isArray(rawReviews) ? rawReviews : [rawReviews];
+        reviewsArray = reviewsArray.map((r) => String(r || '').trim()).filter(Boolean);
+
+        if (!website_name) {
+          return new Response(JSON.stringify({ success: false, message: 'Website name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        if (reviewsArray.length === 0) {
+          return new Response(JSON.stringify({ success: false, message: 'At least one review input is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const reviewsJson = JSON.stringify(reviewsArray);
+        await env.DB.prepare(
+          'INSERT INTO web_reviews (url_id, website_name, url, reviews) VALUES (?, ?, ?, ?)'
+        ).bind(body.url_id || null, website_name, website_url, reviewsJson).run();
+
+        const created = await env.DB.prepare('SELECT * FROM web_reviews ORDER BY id DESC LIMIT 1').first();
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Web Review recorded successfully',
+          data: { ...created, reviews: reviewsArray }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/web-review/') && method === 'PUT') {
+        const id = path.split('/')[3];
+        const body = await request.json();
+        const website_name = String(body.website_name || '').trim();
+        const website_url = String(body.url || '').trim();
+        let reviewsArray = Array.isArray(body.reviews) ? body.reviews : [body.reviews];
+        reviewsArray = reviewsArray.map((r) => String(r || '').trim()).filter(Boolean);
+
+        await env.DB.prepare(
+          'UPDATE web_reviews SET website_name = ?, url = ?, reviews = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(website_name, website_url, JSON.stringify(reviewsArray), id).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Review updated successfully',
+          data: { id: Number(id), website_name, url: website_url, reviews: reviewsArray }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/web-review/') && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM web_reviews WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Review deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================
+      // 17. Raasta Function Module APIs
+      // ==========================================
+      if (path === '/api/raasta/portals' && method === 'GET') {
+        let list = await env.DB.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
+        if (!list.results || list.results.length === 0) {
+          const defaults = ['e-Courts Portal', 'Prison Management Portal', 'DLSA Legal Aid Portal', 'High Court Case Status', 'Police Department Portal'];
+          for (const p of defaults) {
+            await env.DB.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').bind(p).run();
+          }
+          list = await env.DB.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
+        }
+        return new Response(JSON.stringify({ success: true, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/raasta/portals' && method === 'POST') {
+        const { name } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Portal name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        await env.DB.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').bind(cleanName).run();
+        const created = await env.DB.prepare('SELECT * FROM raasta_portals WHERE name = ?').bind(cleanName).first();
+        return new Response(JSON.stringify({ success: true, message: 'Portal added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/raasta/portals/') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const { name } = await request.json();
+        const cleanName = String(name || '').trim();
+        await env.DB.prepare('UPDATE raasta_portals SET name = ? WHERE id = ?').bind(cleanName, id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Portal updated successfully', data: { id: Number(id), name: cleanName } }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/raasta/portals/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.prepare('DELETE FROM raasta_portals WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Portal deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path === '/api/raasta/list' && method === 'GET') {
+        const q = url.searchParams.get('q');
+        const portal = url.searchParams.get('portal');
+        let query = 'SELECT * FROM raasta_functions WHERE 1=1';
+        const params = [];
+        if (portal && portal.trim()) {
+          query += ' AND portal_name = ?';
+          params.push(portal.trim());
+        }
+        if (q && q.trim()) {
+          query += ' AND (portal_name LIKE ? OR function_name LIKE ? OR details LIKE ?)';
+          const term = `%${q.trim()}%`;
+          params.push(term, term, term);
+        }
+        query += ' ORDER BY id DESC';
+        const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+        const list = await stmt.all();
+        return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/raasta/add' && method === 'POST') {
+        const { portal_name, function_name, details } = await request.json();
+        const cleanPortal = String(portal_name || '').trim();
+        const cleanFunc = String(function_name || '').trim();
+        const cleanDetails = String(details || '').trim();
+
+        if (!cleanPortal || !cleanFunc) {
+          return new Response(JSON.stringify({ success: false, message: 'Portal name and Function name are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await env.DB.prepare(
+          'INSERT INTO raasta_functions (portal_name, function_name, details) VALUES (?, ?, ?)'
+        ).bind(cleanPortal, cleanFunc, cleanDetails).run();
+
+        const created = await env.DB.prepare('SELECT * FROM raasta_functions ORDER BY id DESC LIMIT 1').first();
+        return new Response(JSON.stringify({ success: true, message: 'Function added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/raasta/') && method === 'PUT') {
+        const id = path.split('/')[3];
+        const { portal_name, function_name, details } = await request.json();
+        const cleanPortal = String(portal_name || '').trim();
+        const cleanFunc = String(function_name || '').trim();
+        const cleanDetails = String(details || '').trim();
+
+        await env.DB.prepare(
+          'UPDATE raasta_functions SET portal_name = ?, function_name = ?, details = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(cleanPortal, cleanFunc, cleanDetails, id).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Function updated successfully',
+          data: { id: Number(id), portal_name: cleanPortal, function_name: cleanFunc, details: cleanDetails }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/raasta/') && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM raasta_functions WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Function deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================
+      // 18. Work Role Module APIs
+      // ==========================================
+      if (path === '/api/work-roles/roles' && method === 'GET') {
+        let list = await env.DB.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
+        if (!list.results || list.results.length === 0) {
+          const defaults = ['Field Officer', 'Survey Verifier', 'Legal Aid Coordinator', 'Case Followup Executive', 'Data Entry Operator'];
+          for (const r of defaults) {
+            await env.DB.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').bind(r).run();
+          }
+          list = await env.DB.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
+        }
+        return new Response(JSON.stringify({ success: true, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/work-roles/roles' && method === 'POST') {
+        const { name } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Role name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        await env.DB.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').bind(cleanName).run();
+        const created = await env.DB.prepare('SELECT * FROM work_roles WHERE name = ?').bind(cleanName).first();
+        return new Response(JSON.stringify({ success: true, message: 'Role added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/work-roles/roles/') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const { name } = await request.json();
+        const cleanName = String(name || '').trim();
+        await env.DB.prepare('UPDATE work_roles SET name = ? WHERE id = ?').bind(cleanName, id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Role updated successfully', data: { id: Number(id), name: cleanName } }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/work-roles/roles/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.prepare('DELETE FROM work_roles WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Role deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path === '/api/work-roles/list' && method === 'GET') {
+        const q = url.searchParams.get('q');
+        const role = url.searchParams.get('role');
+        let query = 'SELECT * FROM work_role_entries WHERE 1=1';
+        const params = [];
+        if (role && role.trim()) {
+          query += ' AND role_name = ?';
+          params.push(role.trim());
+        }
+        if (q && q.trim()) {
+          query += ' AND (role_name LIKE ? OR work_name LIKE ?)';
+          const term = `%${q.trim()}%`;
+          params.push(term, term);
+        }
+        query += ' ORDER BY id DESC';
+        const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+        const list = await stmt.all();
+        return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      if (path === '/api/work-roles/add' && method === 'POST') {
+        const { role_name, work_name } = await request.json();
+        const cleanRole = String(role_name || '').trim();
+        const cleanWork = String(work_name || '').trim();
+
+        if (!cleanRole || !cleanWork) {
+          return new Response(JSON.stringify({ success: false, message: 'Role name and Work name are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await env.DB.prepare(
+          'INSERT INTO work_role_entries (role_name, work_name) VALUES (?, ?)'
+        ).bind(cleanRole, cleanWork).run();
+
+        const created = await env.DB.prepare('SELECT * FROM work_role_entries ORDER BY id DESC LIMIT 1').first();
+        return new Response(JSON.stringify({ success: true, message: 'Work entry added successfully', data: created }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/work-roles/') && method === 'PUT') {
+        const id = path.split('/')[3];
+        const { role_name, work_name } = await request.json();
+        const cleanRole = String(role_name || '').trim();
+        const cleanWork = String(work_name || '').trim();
+
+        await env.DB.prepare(
+          'UPDATE work_role_entries SET role_name = ?, work_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(cleanRole, cleanWork, id).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Work entry updated successfully',
+          data: { id: Number(id), role_name: cleanRole, work_name: cleanWork }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path.startsWith('/api/work-roles/') && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM work_role_entries WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Work entry deleted successfully' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

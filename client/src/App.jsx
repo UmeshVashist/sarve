@@ -3,6 +3,9 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
 import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
+import WebReviewHome from './pages/WebReviewHome';
+import RaastaFunctionHome from './pages/RaastaFunctionHome';
+import WorkRoleHome from './pages/WorkRoleHome';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
@@ -133,13 +136,14 @@ export default function App() {
       navigateTo('prisoner');
     } else if (optionId === 'advocate') {
       navigateTo('advocate');
+    } else if (optionId === 'web_review') {
+      navigateTo('web_review');
+    } else if (optionId === 'raasta') {
+      navigateTo('raasta');
+    } else if (optionId === 'work_role') {
+      navigateTo('work_role');
     } else {
-      const labels = {
-        citizen: 'Citizen Survey',
-        other: 'Other Survey'
-      };
-      setToastMessage(`${labels[optionId] || optionId} portal module is currently in development and will be activated in the next phase!`);
-      setTimeout(() => setToastMessage(''), 5000);
+      navigateTo('dashboard');
     }
   };
 
@@ -194,6 +198,24 @@ export default function App() {
         {currentScreen === 'advocate' && (
           <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
             <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'web_review' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <WebReviewHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'raasta' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <RaastaFunctionHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'work_role' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <WorkRoleHome onBackToDashboard={() => navigateTo('dashboard')} />
           </ErrorBoundary>
         )}
       </main>

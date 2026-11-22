@@ -15,16 +15,22 @@ export default function DashboardPage({ onSelectOption }) {
       isPrimary: true
     },
     {
-      id: 'citizen',
-      title: 'Citizen Survey',
-      tag: 'Coming Soon',
-      isPrimary: false
+      id: 'web_review',
+      title: 'Web Review',
+      tag: 'Active Module',
+      isPrimary: true
     },
     {
-      id: 'other',
-      title: 'Other',
-      tag: 'Coming Soon',
-      isPrimary: false
+      id: 'raasta',
+      title: 'Raasta Function',
+      tag: 'Active Module',
+      isPrimary: true
+    },
+    {
+      id: 'work_role',
+      title: 'Work Role',
+      tag: 'Active Module',
+      isPrimary: true
     }
   ];
 
@@ -33,12 +39,12 @@ export default function DashboardPage({ onSelectOption }) {
       <div className="dashboard-title-area">
         <h1 className="dashboard-heading">Select Survey Category</h1>
         <p className="dashboard-subheading">
-          Choose a survey category to view recorded records, add new questionnaires, and export Excel reports.
+          Choose a category to view recorded records, manage options, and export Excel reports.
         </p>
       </div>
 
-      {/* 4 Big Peach/Coral Option Cards matching user's uploaded reference image */}
-      <div className="cards-grid-4">
+      {/* 5 Big Peach/Coral Option Cards */}
+      <div className="cards-grid-4 cards-grid-5">
         {options.map((opt) => (
           <button
             key={opt.id}

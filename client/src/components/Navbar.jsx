@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase } from 'lucide-react';
 
 export default function Navbar({ user, currentScreen = 'dashboard', onLogout, onHomeClick }) {
   const getModuleConfig = () => {
@@ -24,11 +24,41 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
           border: '#FED7AA',
           icon: Scale
         };
+      case 'web_review':
+        return {
+          title: 'Web Review Module',
+          badgeText: 'Web Review',
+          subtitle: 'Website URL & Performance Reviews Directory',
+          bg: '#F0FDF4',
+          color: '#15803D',
+          border: '#BBF7D0',
+          icon: Globe
+        };
+      case 'raasta':
+        return {
+          title: 'Raasta Function Module',
+          badgeText: 'Raasta Function',
+          subtitle: 'Portal Operations, Functions & Execution Details',
+          bg: '#FAF5FF',
+          color: '#7E22CE',
+          border: '#E9D5FF',
+          icon: Compass
+        };
+      case 'work_role':
+        return {
+          title: 'Work Role Module',
+          badgeText: 'Work Role',
+          subtitle: 'Organizational Roles & Work Task Allocation',
+          bg: '#FEF3C7',
+          color: '#B45309',
+          border: '#FDE68A',
+          icon: Briefcase
+        };
       default:
         return {
           title: 'Main Dashboard',
           badgeText: 'Dashboard',
-          subtitle: 'Prisoner & Advocacy Field Survey System',
+          subtitle: 'Legal Survey, Web Review & Operations System',
           bg: '#F8FAFC',
           color: '#475569',
           border: '#E2E8F0',
