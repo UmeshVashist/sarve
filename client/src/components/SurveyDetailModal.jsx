@@ -6,23 +6,11 @@ import { resolveAnswerForRecord, resolveQuestionRemark } from '../utils/resolveS
 
 export default function SurveyDetailModal({ isOpen, onClose, survey, questions = SURVEY_QUESTIONS }) {
   const activeQuestions = useMemo(() => {
-    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
-    if (!list) {
-      try {
-        const saved = localStorage.getItem('survey_questions_list');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        }
-      } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-      list = SURVEY_QUESTIONS;
-    }
-    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
-  }, [questions, isOpen]);
+    const list = (Array.isArray(questions) && questions.length > 0) ? questions : SURVEY_QUESTIONS;
+    return [...list]
+      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
 
   if (!isOpen || !survey) return null;
 

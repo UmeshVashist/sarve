@@ -27,23 +27,11 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
   }, [courtTypes, isOpen]);
 
   const activeQuestions = useMemo(() => {
-    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
-    if (!list) {
-      try {
-        const saved = localStorage.getItem('survey_questions_list');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        }
-      } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-      list = SURVEY_QUESTIONS;
-    }
-    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
-  }, [questions, isOpen]);
+    const list = (Array.isArray(questions) && questions.length > 0) ? questions : SURVEY_QUESTIONS;
+    return [...list]
+      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
 
   useEffect(() => {
     if (survey) {
@@ -56,21 +44,9 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
         }
       }
 
-      // Merge local cache if available
-      let localCached = {};
-      try {
-        const utctKey = String(survey.utct_no || '').trim().toLowerCase();
-        if (utctKey) {
-          const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
-          if (localMap[utctKey]) {
-            localCached = localMap[utctKey];
-          }
-        }
-      } catch (e) {}
-
-      const merged = { ...customAnswers, ...localCached, ...survey };
+      const merged = { ...customAnswers, ...survey };
       // Ensure custom answers aren't overwritten by undefined in survey
-      Object.entries({ ...localCached, ...customAnswers }).forEach(([k, v]) => {
+      Object.entries(customAnswers).forEach(([k, v]) => {
         if (v !== undefined && v !== null && (merged[k] === undefined || merged[k] === null || merged[k] === '')) {
           merged[k] = v;
         }
@@ -199,19 +175,6 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
         case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || ''),
         custom_answers: JSON.stringify(customObj)
       };
-
-      // Cache locally
-      try {
-        const utctKey = String(payload.utct_no || '').trim().toLowerCase();
-        if (utctKey) {
-          const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
-          localMap[utctKey] = { ...payload, ...customObj };
-          localStorage.setItem('local_survey_answers_map', JSON.stringify(localMap));
-          localStorage.setItem(`survey_answers_${utctKey}`, JSON.stringify({ ...payload, ...customObj }));
-        }
-      } catch (storageErr) {
-        console.warn('Could not cache edited survey:', storageErr);
-      }
 
       const res = await fetch(`${API_BASE_URL}/api/survey/${survey.id}`, {
         method: 'PUT',
@@ -738,12 +701,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                     </div>
                   )}
 
-                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
-                    try {
-                      const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-                      return Boolean(m[q.key] ?? m[q.id]);
-                    } catch (e) { return false; }
-                  })())) && (
+                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')))) && (
                     <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
                         Remark (Optional):

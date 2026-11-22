@@ -32,55 +32,21 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const advocateTypesStoreIdRef = useRef(16);
   const [surveys, setSurveys] = useState([]);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
-  const [advocateTypes, setAdvocateTypes] = useState(() => {
-    try {
-      const saved = localStorage.getItem('advocate_types_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return DEFAULT_ADVOCATE_TYPES;
-  });
+  const [advocateTypes, setAdvocateTypes] = useState(DEFAULT_ADVOCATE_TYPES);
   const [questions, setQuestions] = useState(() => {
-    let remarkMap = {};
-    try {
-      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-      if (parsed && typeof parsed === 'object') remarkMap = parsed;
-    } catch (e) {}
-
-    let initial = ADVOCATE_SURVEY_QUESTIONS;
-    try {
-      const saved = localStorage.getItem('advocate_questions_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          initial = parsed;
-        }
-      }
-    } catch (e) {}
-
-    const safeList = (Array.isArray(initial) ? initial : ADVOCATE_SURVEY_QUESTIONS)
+    return [...ADVOCATE_SURVEY_QUESTIONS]
       .filter((q) => q &&
         q.key !== '__advocate_types__' &&
         q.type !== 'advocate_type_store' &&
         q.key !== '__advocate_remarks_map__' &&
         q.type !== 'remarks_store'
-      );
-    return [...safeList]
+      )
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
-      .map((q) => {
-        const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
-        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
-        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
-        const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
-        return {
-          ...q,
-          note: cleanNote,
-          has_remark: hasRemark
-        };
-      });
+      .map((q) => ({
+        ...q,
+        note: (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim(),
+        has_remark: Boolean(q?.has_remark || (typeof q?.note === 'string' && q.note.includes('[REMARK]')))
+      }));
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,13 +63,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
 
   const handleQuestionsChange = (newQuestionsList, explicitRemarksMap) => {
     if (!Array.isArray(newQuestionsList)) return;
-    let remarkMap = explicitRemarksMap || {};
-    if (!explicitRemarksMap) {
-      try {
-        const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-        if (parsed && typeof parsed === 'object') remarkMap = parsed;
-      } catch (e) {}
-    }
+    const remarkMap = explicitRemarksMap || {};
 
     const safeList = newQuestionsList.filter(
       (q) => q &&
@@ -128,9 +88,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       });
 
     setQuestions(sorted);
-    try {
-      localStorage.setItem('advocate_questions_list', JSON.stringify(sorted));
-    } catch (e) {}
   };
 
   useEffect(() => {
@@ -151,12 +108,9 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         );
         if (storeQ) {
           advocateTypesStoreIdRef.current = storeQ.id;
-          if (Array.isArray(storeQ.options)) {
+          if (Array.isArray(storeQ.options) && storeQ.options.length > 0) {
             const loaded = storeQ.options.map((name, idx) => ({ id: idx + 1, name }));
             setAdvocateTypes(loaded);
-            try {
-              localStorage.setItem('advocate_types_list', JSON.stringify(loaded));
-            } catch (e) {}
           }
         }
 
@@ -173,14 +127,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
             }
           } catch (e) {}
         }
-        let localRemarks = {};
-        try {
-          localRemarks = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-        } catch (e) {}
-        const mergedRemarks = { ...localRemarks, ...serverRemarks };
-        try {
-          localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(mergedRemarks));
-        } catch (e) {}
 
         // Filter out system store records from visible survey questions
         const visibleQuestions = data.data.filter(
@@ -190,7 +136,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
             q.key !== '__advocate_remarks_map__' &&
             q.type !== 'remarks_store'
         );
-        handleQuestionsChange(visibleQuestions, mergedRemarks);
+        handleQuestionsChange(visibleQuestions, serverRemarks);
       }
     } catch (err) {
       console.warn('Failed to load advocate questions from server:', err);
@@ -206,14 +152,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
-        let localMap = {};
-        try {
-          localMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-        } catch (e) {}
-
         const merged = (data.data || []).filter(Boolean).map((s) => {
-          const regKey = String(s.advocate_reg_no || s.id || '').trim().toLowerCase();
-          const cached = localMap[regKey] || {};
           let serverCustom = {};
           if (s.custom_answers) {
             try {
@@ -221,7 +160,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
             } catch (e) {}
           }
           return {
-            ...cached,
             ...s,
             ...serverCustom
           };
@@ -372,12 +310,9 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           );
           if (storeQ) {
             advocateTypesStoreIdRef.current = storeQ.id;
-            if (Array.isArray(storeQ.options)) {
+            if (Array.isArray(storeQ.options) && storeQ.options.length > 0) {
               const loaded = storeQ.options.map((name, idx) => ({ id: idx + 1, name }));
               setAdvocateTypes(loaded);
-              try {
-                localStorage.setItem('advocate_types_list', JSON.stringify(loaded));
-              } catch (e) {}
               return loaded;
             }
           } else {
@@ -400,9 +335,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
               advocateTypesStoreIdRef.current = createData.data.id;
             }
             setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
-            try {
-              localStorage.setItem('advocate_types_list', JSON.stringify(DEFAULT_ADVOCATE_TYPES));
-            } catch (e) {}
             return DEFAULT_ADVOCATE_TYPES;
           }
         }
@@ -410,17 +342,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     } catch (err) {
       console.warn('Backend advocate types D1 fetch error:', err);
     }
-
-    try {
-      const saved = localStorage.getItem('advocate_types_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setAdvocateTypes(parsed);
-          return parsed;
-        }
-      }
-    } catch (e) {}
 
     setAdvocateTypes(DEFAULT_ADVOCATE_TYPES);
     return DEFAULT_ADVOCATE_TYPES;
@@ -441,9 +362,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     const newItem = { id: Date.now(), name: cleanName };
     const nextList = [...advocateTypes, newItem];
     setAdvocateTypes(nextList);
-    try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
-    } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
     const syncRes = await syncAdvocateTypesToD1(optionsStrings);
@@ -468,9 +386,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     });
 
     setAdvocateTypes(nextList);
-    try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
-    } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
     const syncRes = await syncAdvocateTypesToD1(optionsStrings);
@@ -491,9 +406,6 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     });
 
     setAdvocateTypes(nextList);
-    try {
-      localStorage.setItem('advocate_types_list', JSON.stringify(nextList));
-    } catch (e) {}
 
     const optionsStrings = nextList.map((t) => (typeof t === 'string' ? t : t.name));
     const syncRes = await syncAdvocateTypesToD1(optionsStrings);

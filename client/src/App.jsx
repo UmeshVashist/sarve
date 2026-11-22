@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
@@ -7,8 +7,19 @@ import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
 
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes auto-logout
+
 export default function App() {
   const [user, setUser] = useState(() => {
+    // Check if session expired during tab close / idle
+    const lastActive = sessionStorage.getItem('survey_last_active');
+    if (lastActive && Date.now() - Number(lastActive) > INACTIVITY_TIMEOUT_MS) {
+      sessionStorage.clear();
+      localStorage.removeItem('survey_user');
+      localStorage.removeItem('sarve_user');
+      return null;
+    }
+
     const saved = localStorage.getItem('survey_user') || localStorage.getItem('sarve_user');
     if (!saved) return null;
     try {
@@ -22,32 +33,100 @@ export default function App() {
     }
   });
 
-  // Remember current screen across page reloads (Stay on Prisoner Survey if reloaded!)
+  // Remember current screen across page reloads
   const [currentScreen, setCurrentScreen] = useState(() => {
     return localStorage.getItem('survey_current_screen') || localStorage.getItem('sarve_current_screen') || 'dashboard';
   });
   const [toastMessage, setToastMessage] = useState('');
+  const lastActiveRef = useRef(Date.now());
+
+  // Clean up any legacy offline cache data keys from browser localStorage
+  useEffect(() => {
+    const legacyKeys = [
+      'local_survey_answers_map',
+      'local_advocate_survey_answers_map',
+      'survey_questions_list',
+      'advocate_questions_list',
+      'survey_questions_remarks_map',
+      'advocate_questions_remarks_map',
+      'advocate_types_list',
+      'case_types_list',
+      'court_types_list'
+    ];
+    legacyKeys.forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {}
+    });
+  }, []);
 
   const navigateTo = (screen) => {
     setCurrentScreen(screen);
-    localStorage.setItem('survey_current_screen', screen);
+    try {
+      localStorage.setItem('survey_current_screen', screen);
+    } catch (e) {}
   };
 
   const handleLoginSuccess = (userData) => {
     const updatedUser = { ...userData, username: 'meet' };
+    lastActiveRef.current = Date.now();
+    try {
+      sessionStorage.setItem('survey_last_active', String(Date.now()));
+      localStorage.setItem('survey_user', JSON.stringify(updatedUser));
+    } catch (e) {}
     setUser(updatedUser);
-    localStorage.setItem('survey_user', JSON.stringify(updatedUser));
     navigateTo('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback((reason = '') => {
     setUser(null);
-    localStorage.removeItem('survey_user');
-    localStorage.removeItem('sarve_user');
-    localStorage.removeItem('survey_current_screen');
-    localStorage.removeItem('sarve_current_screen');
+    try {
+      localStorage.removeItem('survey_user');
+      localStorage.removeItem('sarve_user');
+      localStorage.removeItem('survey_current_screen');
+      localStorage.removeItem('sarve_current_screen');
+      sessionStorage.removeItem('survey_last_active');
+    } catch (e) {}
     setCurrentScreen('dashboard');
-  };
+
+    if (reason === 'inactivity') {
+      setToastMessage('Aap 10 minutes tak inactive the, isliye system ne security ke liye auto-logout kar diya hai. Kripya dobara login karein.');
+      setTimeout(() => setToastMessage(''), 7000);
+    }
+  }, []);
+
+  // 10-Minute Inactivity Auto-Logout Tracking
+  useEffect(() => {
+    if (!user) return;
+
+    lastActiveRef.current = Date.now();
+    try {
+      sessionStorage.setItem('survey_last_active', String(Date.now()));
+    } catch (e) {}
+
+    const updateActivity = () => {
+      lastActiveRef.current = Date.now();
+      try {
+        sessionStorage.setItem('survey_last_active', String(Date.now()));
+      } catch (e) {}
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, updateActivity, { passive: true }));
+
+    // Check every 10 seconds if user has been inactive for >= 10 minutes
+    const intervalId = setInterval(() => {
+      const elapsed = Date.now() - lastActiveRef.current;
+      if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+        handleLogout('inactivity');
+      }
+    }, 10000);
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, updateActivity));
+      clearInterval(intervalId);
+    };
+  }, [user, handleLogout]);
 
   const handleSelectDashboardOption = (optionId) => {
     if (optionId === 'prisoner') {

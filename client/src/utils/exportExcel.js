@@ -82,22 +82,9 @@ export function downloadSurveyExcel(
   const exportMode = (typeof options === 'string' ? options : options?.mode) || 'multi-row';
 
   // 1. Resolve questions list
-  let qList = Array.isArray(customQuestions) && customQuestions.length > 0 ? customQuestions : null;
-  if (!qList) {
-    try {
-      const saved = localStorage.getItem('survey_questions_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          qList = parsed;
-        }
-      }
-    } catch (e) {}
-  }
-
-  if (!qList || qList.length === 0) {
-    qList = SURVEY_QUESTIONS;
-  }
+  const qList = (Array.isArray(customQuestions) && customQuestions.length > 0)
+    ? customQuestions
+    : SURVEY_QUESTIONS;
 
   const sortedQuestions = [...qList].sort(
     (a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0)

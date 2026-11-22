@@ -52,40 +52,14 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [caseTypes, setCaseTypes] = useState(DEFAULT_CASE_TYPES);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [questions, setQuestions] = useState(() => {
-    let remarkMap = {};
-    try {
-      const parsed = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-      if (parsed && typeof parsed === 'object') remarkMap = parsed;
-    } catch (e) {}
-
-    let initial = SURVEY_QUESTIONS;
-    try {
-      const saved = localStorage.getItem('survey_questions_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          initial = parsed;
-        }
-      }
-    } catch (e) { }
-
-    const safeList = (Array.isArray(initial) ? initial.filter(Boolean) : SURVEY_QUESTIONS)
-      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store');
-
-    return [...safeList]
+    return [...SURVEY_QUESTIONS]
+      .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
-      .map((q) => {
-        const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
-        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
-        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
-        const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
-        return {
-          ...q,
-          note: cleanNote,
-          has_remark: hasRemark
-        };
-      });
+      .map((q) => ({
+        ...q,
+        note: (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim(),
+        has_remark: Boolean(q?.has_remark || (typeof q?.note === 'string' && q.note.includes('[REMARK]')))
+      }));
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -93,13 +67,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
 
   const handleQuestionsChange = (newQuestionsList, explicitRemarksMap) => {
     if (!Array.isArray(newQuestionsList)) return;
-    let remarkMap = explicitRemarksMap || {};
-    if (!explicitRemarksMap) {
-      try {
-        const parsed = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-        if (parsed && typeof parsed === 'object') remarkMap = parsed;
-      } catch (e) {}
-    }
+    const remarkMap = explicitRemarksMap || {};
 
     const safeList = newQuestionsList
       .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store');
@@ -120,9 +88,6 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       });
 
     setQuestions(sorted);
-    try {
-      localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
-    } catch (e) { }
   };
 
   // Modals state
@@ -231,18 +196,8 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
           } catch (e) {}
         }
 
-        // Merge server remarks with local remarks
-        let localRemarks = {};
-        try {
-          localRemarks = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-        } catch (e) {}
-        const mergedRemarks = { ...localRemarks, ...serverRemarks };
-        try {
-          localStorage.setItem('survey_questions_remarks_map', JSON.stringify(mergedRemarks));
-        } catch (e) {}
-
         const visibleQuestions = data.data.filter(q => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store');
-        handleQuestionsChange(visibleQuestions, mergedRemarks);
+        handleQuestionsChange(visibleQuestions, serverRemarks);
       }
     } catch (err) {
       console.warn('Failed to load questions from server:', err);
@@ -258,14 +213,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
-        let localMap = {};
-        try {
-          localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
-        } catch (e) {}
-
         const merged = (data.data || []).filter(Boolean).map((s) => {
-          const utctKey = String(s.utct_no || '').trim().toLowerCase();
-          const cached = localMap[utctKey] || {};
           let serverCustom = {};
           if (s.custom_answers) {
             try {
@@ -273,7 +221,6 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
             } catch (e) {}
           }
           return {
-            ...cached,
             ...s,
             ...serverCustom
           };

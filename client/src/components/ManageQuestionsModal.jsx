@@ -69,9 +69,6 @@ export default function ManageQuestionsModal({
     if (onUpdateQuestions) {
       onUpdateQuestions(sorted);
     }
-    try {
-      localStorage.setItem('survey_questions_list', JSON.stringify(sorted));
-    } catch (e) {}
 
     if (message) {
       showSuccess(message);
@@ -103,14 +100,9 @@ export default function ManageQuestionsModal({
     // Strip leading number prefix so user can edit cleanly
     const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
 
-    let remarkMap = {};
-    try {
-      remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-    } catch (e) {}
-
     const hasRemarkVal = Boolean(
       (q.note && q.note.includes('[REMARK]')) ||
-      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : (remarkMap[q.key] ?? remarkMap[q.id]))
+      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : false)
     );
 
     const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
@@ -281,20 +273,15 @@ export default function ManageQuestionsModal({
           };
         });
 
-        // Persist has_remark in local remarks map and Cloudflare D1
+        // Persist has_remark in Cloudflare D1 store
         try {
-          const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-          remarkMap[editingQuestion.key] = Boolean(formData.has_remark);
-          if (editingQuestion.id) remarkMap[editingQuestion.id] = Boolean(formData.has_remark);
-          localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
-
           fetch(`${API_BASE_URL}/api/questions/30`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               order_num: 9999,
               label: '__Remarks Map Store__',
-              note: JSON.stringify(remarkMap)
+              note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
             })
           }).catch(() => {});
         } catch (e) {}
@@ -386,20 +373,15 @@ export default function ManageQuestionsModal({
           };
         });
 
-        // Persist has_remark in local remarks map and Cloudflare D1
+        // Persist has_remark in Cloudflare D1 store
         try {
-          const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-          remarkMap[customKey] = Boolean(formData.has_remark);
-          if (createdQ?.id) remarkMap[createdQ.id] = Boolean(formData.has_remark);
-          localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
-
           fetch(`${API_BASE_URL}/api/questions/30`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               order_num: 9999,
               label: '__Remarks Map Store__',
-              note: JSON.stringify(remarkMap)
+              note: JSON.stringify({ [customKey]: Boolean(formData.has_remark) })
             })
           }).catch(() => {});
         } catch (e) {}
@@ -449,24 +431,6 @@ export default function ManageQuestionsModal({
 
     applyQuestionsUpdate(reordered, 'Question deleted successfully!');
 
-    // Clean up remarks map for deleted question and sync to D1 store
-    try {
-      const remarkMap = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-      if (q.key) delete remarkMap[q.key];
-      if (q.id) delete remarkMap[q.id];
-      localStorage.setItem('survey_questions_remarks_map', JSON.stringify(remarkMap));
-
-      fetch(`${API_BASE_URL}/api/questions/30`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_num: 9999,
-          label: '__Remarks Map Store__',
-          note: JSON.stringify(remarkMap)
-        })
-      }).catch(() => {});
-    } catch (e) {}
-
     try {
       await fetch(`${API_BASE_URL}/api/questions/${q.id}`, { method: 'DELETE' });
       await fetch(`${API_BASE_URL}/api/questions/reorder`, {
@@ -492,9 +456,6 @@ export default function ManageQuestionsModal({
     }
 
     applyQuestionsUpdate(SURVEY_QUESTIONS, 'Questions reset to default 24 successfully!');
-    try {
-      localStorage.removeItem('survey_questions_list');
-    } catch (e) {}
 
     try {
       await fetch(`${API_BASE_URL}/api/questions/reset`, { method: 'POST' });
@@ -650,12 +611,7 @@ export default function ManageQuestionsModal({
                         <div className="question-meta-row">
                           <span className="badge-qtype">{q.type || 'text'}</span>
                           {q.required ? <span className="badge-required">Required</span> : null}
-                          {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
-                            try {
-                              const m = JSON.parse(localStorage.getItem('survey_questions_remarks_map') || '{}');
-                              return Boolean(m[q.key] ?? m[q.id]);
-                            } catch (e) { return false; }
-                          })())) ? (
+                          {Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]'))) ? (
                             <span className="badge-qtype" style={{ background: '#EDE9FE', color: '#7C3AED', borderColor: '#DDD6FE', fontWeight: 700 }}>
                               + Remark
                             </span>

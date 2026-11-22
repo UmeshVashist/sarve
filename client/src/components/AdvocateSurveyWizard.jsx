@@ -42,27 +42,7 @@ export default function AdvocateSurveyWizard({
 
   // Questions sorted by order_num
   const activeQuestions = useMemo(() => {
-    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
-    if (!list) {
-      try {
-        const saved = localStorage.getItem('advocate_questions_list');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        }
-      } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-      list = ADVOCATE_SURVEY_QUESTIONS;
-    }
-
-    let remarkMap = {};
-    try {
-      const parsed = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-      if (parsed && typeof parsed === 'object') remarkMap = parsed;
-    } catch (e) {}
+    const list = (Array.isArray(questions) && questions.length > 0) ? questions : ADVOCATE_SURVEY_QUESTIONS;
 
     return [...list]
       .filter((q) => q &&
@@ -73,10 +53,10 @@ export default function AdvocateSurveyWizard({
       )
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
-        const qKey = q?.key || `custom_${q?.id}`;
-        const hasRemarkFromNote = typeof q?.note === 'string' && q.note.includes('[REMARK]');
-        const hasRemarkFromMap = Boolean(remarkMap[qKey] ?? remarkMap[q?.id]);
-        const hasRemark = Boolean(hasRemarkFromNote || hasRemarkFromMap || q?.has_remark);
+        const hasRemark = Boolean(
+          (typeof q?.note === 'string' && q.note.includes('[REMARK]')) ||
+          q?.has_remark
+        );
         const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
         return {
           ...q,
@@ -84,7 +64,7 @@ export default function AdvocateSurveyWizard({
           has_remark: hasRemark
         };
       });
-  }, [questions, isOpen]);
+  }, [questions]);
 
   const totalQuestions = activeQuestions.length;
   const isReviewMode = currentStep === totalQuestions;
@@ -314,14 +294,6 @@ export default function AdvocateSurveyWizard({
         case_specialization: Array.isArray(formData.case_specialization) ? formData.case_specialization.join(', ') : (formData.case_specialization || ''),
         custom_answers: JSON.stringify(customObj)
       };
-
-      // Local storage cache
-      try {
-        const regKey = String(payload.advocate_reg_no || payload.name || Date.now()).trim().toLowerCase();
-        const localMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-        localMap[regKey] = { ...payload, ...customObj };
-        localStorage.setItem('local_advocate_survey_answers_map', JSON.stringify(localMap));
-      } catch (e) {}
 
       const res = await fetch(`${API_BASE_URL}/api/advocate-survey/add`, {
         method: 'POST',
@@ -666,12 +638,7 @@ export default function AdvocateSurveyWizard({
           )}
 
           {/* Question Remark input if has_remark is active */}
-          {(Boolean(currentQ?.has_remark || (currentQ?.note && currentQ.note.includes('[REMARK]')) || (() => {
-            try {
-              const m = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-              return Boolean(m[currentQ?.key] ?? m[currentQ?.id]);
-            } catch (e) { return false; }
-          })())) && (
+          {(Boolean(currentQ?.has_remark || (currentQ?.note && currentQ.note.includes('[REMARK]')))) && (
             <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
                 Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:

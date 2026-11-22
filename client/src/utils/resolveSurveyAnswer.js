@@ -2,13 +2,12 @@ import { STANDARD_KEYS } from '../data/questions';
 
 /**
  * Robust multi-layer answer resolver for any survey record and question (standard or custom).
- * Resolves across:
+ * Resolves purely from Cloudflare D1 database record:
  * 1. Direct record property r[q.key]
  * 2. Server custom_answers JSON object
- * 3. Browser localStorage cached answers map
- * 4. Question ID property
- * 5. Fuzzy match by sanitized label/slug (e.g. 'remark')
- * 6. Positional index matching for custom questions
+ * 3. Question ID property
+ * 4. Fuzzy match by sanitized label/slug
+ * 5. Positional index matching for custom questions
  */
 export function resolveAnswerForRecord(r, q, allQuestions = []) {
   if (!r || !q) return '';
@@ -53,35 +52,16 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
     return Array.isArray(val) ? val.join(', ') : String(val);
   }
 
-  // 3. Check browser localStorage cache
-  let localCached = {};
-  try {
-    const utctKey = String(r.utct_no || '').trim().toLowerCase();
-    if (utctKey) {
-      const localMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
-      if (localMap[utctKey]) localCached = localMap[utctKey];
-      if (!localCached || Object.keys(localCached).length === 0) {
-        const direct = localStorage.getItem(`survey_answers_${utctKey}`);
-        if (direct) localCached = JSON.parse(direct);
-      }
-    }
-  } catch (e) {}
-
-  if (localCached[q.key] !== undefined && localCached[q.key] !== null && String(localCached[q.key]).trim() !== '') {
-    const val = localCached[q.key];
-    return Array.isArray(val) ? val.join(', ') : String(val);
-  }
-
-  // 4. Check q.id if different from q.key
+  // 3. Check q.id if different from q.key
   if (q.id && q.id !== q.key) {
-    const fromId = r[q.id] ?? customAnswers[q.id] ?? localCached[q.id];
+    const fromId = r[q.id] ?? customAnswers[q.id];
     if (fromId !== undefined && fromId !== null && String(fromId).trim() !== '') {
       return Array.isArray(fromId) ? fromId.join(', ') : String(fromId);
     }
   }
 
-  // Pool all available custom answers
-  const allCustomPool = { ...localCached, ...customAnswers };
+  // Pool all available custom answers directly from Cloudflare D1 record
+  const allCustomPool = { ...customAnswers };
   Object.keys(r).forEach((k) => {
     if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers', 'S.No'].includes(k)) {
       if (r[k] !== undefined && r[k] !== null && String(r[k]).trim() !== '') {
@@ -90,7 +70,7 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
     }
   });
 
-  // 5. Fuzzy match by sanitized label/slug (especially for 'Remark', 'notes', etc.)
+  // 4. Fuzzy match by sanitized label/slug
   const cleanQLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   if (cleanQLabel) {
     for (const [k, v] of Object.entries(allCustomPool)) {
@@ -103,7 +83,7 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
     }
   }
 
-  // 6. Positional index fallback for custom questions
+  // 5. Positional index fallback for custom questions
   const customQuestions = (allQuestions || []).filter(
     (item) => item.is_custom || !STANDARD_KEYS.includes(item.key)
   );
@@ -127,7 +107,7 @@ export function resolveAnswerForRecord(r, q, allQuestions = []) {
 }
 
 /**
- * Resolves remark entered for any question q on record r
+ * Resolves remark entered for any question q on record r purely from Cloudflare D1 data
  */
 export function resolveQuestionRemark(r, q) {
   if (!r || !q) return '';
@@ -157,20 +137,6 @@ export function resolveQuestionRemark(r, q) {
   if (idRemarkKey && customAnswers[idRemarkKey] !== undefined && customAnswers[idRemarkKey] !== null && String(customAnswers[idRemarkKey]).trim() !== '') {
     return String(customAnswers[idRemarkKey]).trim();
   }
-
-  // 3. LocalStorage
-  try {
-    const utctKey = String(r.utct_no || r.advocate_reg_no || r.id || '').trim().toLowerCase();
-    if (utctKey) {
-      const pMap = JSON.parse(localStorage.getItem('local_survey_answers_map') || '{}');
-      const aMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-      const cached = pMap[utctKey] || aMap[utctKey];
-      if (cached) {
-        if (cached[remarkKey]) return String(cached[remarkKey]).trim();
-        if (idRemarkKey && cached[idRemarkKey]) return String(cached[idRemarkKey]).trim();
-      }
-    }
-  } catch (e) {}
 
   return '';
 }

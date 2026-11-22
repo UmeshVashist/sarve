@@ -26,23 +26,8 @@ export function resolveAdvocateAnswer(r, q, allQuestions = []) {
     return Array.isArray(val) ? val.join(', ') : String(val);
   }
 
-  // 3. LocalStorage cache check
-  let localCached = {};
-  try {
-    const regKey = String(r.advocate_reg_no || r.id || '').trim().toLowerCase();
-    if (regKey) {
-      const localMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-      if (localMap[regKey]) localCached = localMap[regKey];
-    }
-  } catch (e) {}
-
-  if (localCached[q.key] !== undefined && localCached[q.key] !== null && String(localCached[q.key]).trim() !== '') {
-    const val = localCached[q.key];
-    return Array.isArray(val) ? val.join(', ') : String(val);
-  }
-
-  // 4. Fuzzy match by sanitized label/slug
-  const pool = { ...localCached, ...customAnswers, ...r };
+  // 3. Fuzzy match by sanitized label/slug from Cloudflare D1 record
+  const pool = { ...customAnswers, ...r };
   const cleanQLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   if (cleanQLabel) {
     for (const [k, v] of Object.entries(pool)) {
@@ -64,23 +49,8 @@ export function downloadAdvocateExcel(records, filename = 'Advocate_Survey_Repor
     return;
   }
 
-  // 1. Resolve questions list: priority passed prop -> localStorage -> default ADVOCATE_SURVEY_QUESTIONS
-  let qList = Array.isArray(customQuestions) && customQuestions.length > 0 ? customQuestions : null;
-  if (!qList) {
-    try {
-      const saved = localStorage.getItem('advocate_questions_list');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          qList = parsed;
-        }
-      }
-    } catch (e) {}
-  }
-
-  if (!qList || qList.length === 0) {
-    qList = ADVOCATE_SURVEY_QUESTIONS;
-  }
+  // 1. Resolve questions list: priority passed prop -> default ADVOCATE_SURVEY_QUESTIONS
+  let qList = Array.isArray(customQuestions) && customQuestions.length > 0 ? customQuestions : ADVOCATE_SURVEY_QUESTIONS;
 
   const sortedQuestions = [...qList].sort(
     (a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0)

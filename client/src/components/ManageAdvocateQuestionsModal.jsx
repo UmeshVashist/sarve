@@ -64,9 +64,6 @@ export default function ManageAdvocateQuestionsModal({
     if (onUpdateQuestions) {
       onUpdateQuestions(sorted);
     }
-    try {
-      localStorage.setItem('advocate_questions_list', JSON.stringify(sorted));
-    } catch (e) {}
 
     if (message) {
       showSuccess(message);
@@ -97,14 +94,9 @@ export default function ManageAdvocateQuestionsModal({
     setEditingQuestion(q);
     const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
 
-    let remarkMap = {};
-    try {
-      remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-    } catch (e) {}
-
     const hasRemarkVal = Boolean(
       (q.note && q.note.includes('[REMARK]')) ||
-      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : (remarkMap[q.key] ?? remarkMap[q.id]))
+      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : false)
     );
     const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
 
@@ -169,20 +161,15 @@ export default function ManageAdvocateQuestionsModal({
           }
           return item;
         });
-        // Persist has_remark in local advocate remarks map and D1 store
+        // Persist has_remark in D1 store
         try {
-          const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-          remarkMap[editingQuestion.key] = Boolean(formData.has_remark);
-          if (editingQuestion.id) remarkMap[editingQuestion.id] = Boolean(formData.has_remark);
-          localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
-
           fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               order_num: 9999,
               label: '__Advocate Remarks Store__',
-              note: JSON.stringify(remarkMap)
+              note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
             })
           }).catch(() => {});
         } catch (e) {}
@@ -207,19 +194,15 @@ export default function ManageAdvocateQuestionsModal({
           label: `${orderNum}) ${formData.label.trim()}`
         };
 
-        // Persist has_remark in local advocate remarks map and D1 store
+        // Persist has_remark in D1 store
         try {
-          const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-          remarkMap[newKey] = Boolean(formData.has_remark);
-          localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
-
           fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               order_num: 9999,
               label: '__Advocate Remarks Store__',
-              note: JSON.stringify(remarkMap)
+              note: JSON.stringify({ [newKey]: Boolean(formData.has_remark) })
             })
           }).catch(() => {});
         } catch (e) {}
@@ -254,23 +237,6 @@ export default function ManageAdvocateQuestionsModal({
 
     const filtered = sortedQuestions.filter((item) => item !== q && item.id !== q.id && item.key !== q.key);
     applyQuestionsUpdate(filtered, 'Advocate Question deleted successfully');
-
-    try {
-      const remarkMap = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-      if (q.key) delete remarkMap[q.key];
-      if (q.id) delete remarkMap[q.id];
-      localStorage.setItem('advocate_questions_remarks_map', JSON.stringify(remarkMap));
-
-      fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_num: 9999,
-          label: '__Advocate Remarks Store__',
-          note: JSON.stringify(remarkMap)
-        })
-      }).catch(() => {});
-    } catch (e) {}
 
     if (q.id) {
       try {
@@ -450,12 +416,7 @@ export default function ManageAdvocateQuestionsModal({
                     <span style={{ fontWeight: 800, color: '#EA580C', fontSize: '13px' }}>#{q.order_num ?? idx + 1}</span>
                     <strong style={{ fontSize: '13.5px', color: '#1E293B' }}>{getAdvocateQuestionLabel(q, idx)}</strong>
                     {q.required && <span style={{ color: '#DC2626', fontSize: '11px', fontWeight: 700 }}>*Required</span>}
-                    {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
-                      try {
-                        const m = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-                        return Boolean(m[q.key] ?? m[q.id]);
-                      } catch (e) { return false; }
-                    })())) && (
+                    {Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]'))) && (
                       <span style={{ background: '#EDE9FE', color: '#7C3AED', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>+ Remark</span>
                     )}
                     {q.type === 'advocate_type' && (

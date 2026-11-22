@@ -20,23 +20,11 @@ export default function EditAdvocateSurveyModal({
   const [saving, setSaving] = useState(false);
 
   const activeQuestions = useMemo(() => {
-    let list = Array.isArray(questions) && questions.length > 0 ? questions : null;
-    if (!list) {
-      try {
-        const saved = localStorage.getItem('advocate_questions_list');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed;
-          }
-        }
-      } catch (e) {}
-    }
-    if (!list || list.length === 0) {
-      list = ADVOCATE_SURVEY_QUESTIONS;
-    }
-    return [...list].sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
-  }, [questions, isOpen]);
+    const list = (Array.isArray(questions) && questions.length > 0) ? questions : ADVOCATE_SURVEY_QUESTIONS;
+    return [...list]
+      .filter((q) => q && q.key !== '__advocate_types__' && q.key !== '__advocate_remarks_map__' && q.type !== 'advocate_type_store' && q.type !== 'remarks_store')
+      .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0));
+  }, [questions]);
 
   useEffect(() => {
     if (survey) {
@@ -49,16 +37,7 @@ export default function EditAdvocateSurveyModal({
         }
       }
 
-      let localCached = {};
-      try {
-        const regKey = String(survey.advocate_reg_no || survey.id || '').trim().toLowerCase();
-        if (regKey) {
-          const localMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-          if (localMap[regKey]) localCached = localMap[regKey];
-        }
-      } catch (e) {}
-
-      const merged = { ...customAnswers, ...localCached, ...survey };
+      const merged = { ...customAnswers, ...survey };
 
       // Ensure every question has a value
       activeQuestions.forEach((q) => {
@@ -116,16 +95,6 @@ export default function EditAdvocateSurveyModal({
         case_specialization: Array.isArray(formData.case_specialization) ? formData.case_specialization.join(', ') : (formData.case_specialization || ''),
         custom_answers: JSON.stringify(customObj)
       };
-
-      // Local storage cache
-      try {
-        const regKey = String(payload.advocate_reg_no || payload.id || '').trim().toLowerCase();
-        if (regKey) {
-          const localMap = JSON.parse(localStorage.getItem('local_advocate_survey_answers_map') || '{}');
-          localMap[regKey] = { ...payload, ...customObj };
-          localStorage.setItem('local_advocate_survey_answers_map', JSON.stringify(localMap));
-        }
-      } catch (storageErr) {}
 
       const res = await fetch(`${API_BASE_URL}/api/advocate-survey/${survey.id}`, {
         method: 'PUT',
@@ -279,12 +248,7 @@ export default function EditAdvocateSurveyModal({
                     />
                   )}
 
-                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')) || (() => {
-                    try {
-                      const m = JSON.parse(localStorage.getItem('advocate_questions_remarks_map') || '{}');
-                      return Boolean(m[q.key] ?? m[q.id]);
-                    } catch (e) { return false; }
-                  })())) && (
+                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')))) && (
                     <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
                         Remark (Optional):
