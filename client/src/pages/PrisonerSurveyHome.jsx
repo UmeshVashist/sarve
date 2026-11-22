@@ -119,11 +119,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       const res = await fetch(`${API_BASE_URL}/api/court-types`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        const serverNames = new Set(data.data.map((c) => (typeof c === 'string' ? c : c?.name).trim().toLowerCase()));
-        const missingDefaults = DEFAULT_COURT_TYPES.filter(
-          (def) => !serverNames.has(def.name.trim().toLowerCase())
-        );
-        setCourtTypes([...data.data, ...missingDefaults]);
+        setCourtTypes(data.data);
       }
     } catch (err) {
       console.warn('Failed to fetch court types:', err);

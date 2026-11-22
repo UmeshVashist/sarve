@@ -179,11 +179,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       const res = await fetch(`${API_BASE_URL}/api/court-types`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        const serverNames = new Set(data.data.map((c) => (typeof c === 'string' ? c : c?.name).trim().toLowerCase()));
-        const missingDefaults = DEFAULT_COURT_TYPES.filter(
-          (def) => !serverNames.has(def.name.trim().toLowerCase())
-        );
-        setCourtTypes([...data.data, ...missingDefaults]);
+        setCourtTypes(data.data);
       }
     } catch (err) {
       console.warn('Failed to fetch court types:', err);
@@ -310,11 +306,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           );
           if (storeQ) {
             advocateTypesStoreIdRef.current = storeQ.id;
-            if (Array.isArray(storeQ.options) && storeQ.options.length > 0) {
-              const loaded = storeQ.options.map((name, idx) => ({ id: idx + 1, name }));
-              setAdvocateTypes(loaded);
-              return loaded;
-            }
+            const optList = Array.isArray(storeQ.options) ? storeQ.options : [];
+            const loaded = optList.map((name, idx) => ({ id: idx + 1, name }));
+            setAdvocateTypes(loaded);
+            return loaded;
           } else {
             // First time initialize store in D1
             const defaultNames = DEFAULT_ADVOCATE_TYPES.map((t) => t.name);

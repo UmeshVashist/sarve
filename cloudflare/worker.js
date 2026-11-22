@@ -946,22 +946,7 @@ export default {
       // 13. Court Types CRUD
       // ==========================================
       if (path === '/api/court-types' && method === 'GET') {
-        let list = await env.DB.prepare('SELECT * FROM court_types ORDER BY id ASC').all();
-        if (!list.results || list.results.length === 0) {
-          const defaultCourts = [
-            'District Court',
-            'Sessions Court',
-            'High Court',
-            'Supreme Court',
-            'Special / NDPS Court',
-            'Magistrate Court (CMM / ACMM)',
-            'Other'
-          ];
-          for (const name of defaultCourts) {
-            await env.DB.prepare('INSERT OR IGNORE INTO court_types (name) VALUES (?)').bind(name).run();
-          }
-          list = await env.DB.prepare('SELECT * FROM court_types ORDER BY id ASC').all();
-        }
+        const list = await env.DB.prepare('SELECT * FROM court_types ORDER BY id ASC').all();
         return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });
@@ -1005,24 +990,7 @@ export default {
       // 13b. Advocate Types CRUD (Dropdown Options)
       // ==========================================
       if (path === '/api/advocate-types' && method === 'GET') {
-        let list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
-        if (!list.results || list.results.length === 0) {
-          const defaultAdvTypes = [
-            'Private Advocate',
-            'DLSA / Legal Aid Advocate',
-            'High Court Legal Services Committee (HCLSC) Advocate',
-            'Remand Advocate',
-            'Amicus Curiae',
-            'Senior Advocate',
-            'Government Pleader / Public Prosecutor',
-            'Panel Advocate',
-            'Other'
-          ];
-          for (const t of defaultAdvTypes) {
-            await env.DB.prepare('INSERT OR IGNORE INTO advocate_types (name) VALUES (?)').bind(t).run();
-          }
-          list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
-        }
+        const list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
         return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });
@@ -1523,14 +1491,7 @@ export default {
       // 17. Raasta Function Module APIs
       // ==========================================
       if (path === '/api/raasta/portals' && method === 'GET') {
-        let list = await env.DB.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
-        if (!list.results || list.results.length === 0) {
-          const defaults = ['e-Courts Portal', 'Prison Management Portal', 'DLSA Legal Aid Portal', 'High Court Case Status', 'Police Department Portal'];
-          for (const p of defaults) {
-            await env.DB.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').bind(p).run();
-          }
-          list = await env.DB.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
-        }
+        const list = await env.DB.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
         return new Response(JSON.stringify({ success: true, data: list.results || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });
@@ -1647,14 +1608,7 @@ export default {
       // 18. Work Role Module APIs
       // ==========================================
       if (path === '/api/work-roles/roles' && method === 'GET') {
-        let list = await env.DB.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
-        if (!list.results || list.results.length === 0) {
-          const defaults = ['Field Officer', 'Survey Verifier', 'Legal Aid Coordinator', 'Case Followup Executive', 'Data Entry Operator'];
-          for (const r of defaults) {
-            await env.DB.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').bind(r).run();
-          }
-          list = await env.DB.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
-        }
+        const list = await env.DB.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
         return new Response(JSON.stringify({ success: true, data: list.results || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
         });

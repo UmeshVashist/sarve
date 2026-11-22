@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Globe, Search, ExternalLink } from 'lucide-react';
+import { X, Plus, Trash2, Globe, Search, ExternalLink, Check } from 'lucide-react';
 
 export default function AddWebReviewModal({
   isOpen,
@@ -19,13 +19,28 @@ export default function AddWebReviewModal({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const searchContainerRef = useRef(null);
   const searchInputRef = useRef(null);
   const reviewInputsRef = useRef([]);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setShowSearchDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setError('');
       setSubmitting(false);
+      setShowSearchDropdown(false);
       if (initialData) {
         setSelectedUrlId(initialData.url_id || null);
         setWebsiteName(initialData.website_name || '');
@@ -40,9 +55,6 @@ export default function AddWebReviewModal({
         setWebsiteSearch('');
         setReviews(['']);
       }
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
     }
   }, [isOpen, initialData]);
 
@@ -68,6 +80,10 @@ export default function AddWebReviewModal({
   };
 
   const handleSearchKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredUrls.length > 0) {
@@ -178,7 +194,7 @@ export default function AddWebReviewModal({
             )}
 
             {/* Step 1: Website Search & Selection */}
-            <div style={{ position: 'relative' }}>
+            <div ref={searchContainerRef} style={{ position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B' }}>
                   1) Search Website Name <span style={{ color: '#EF4444' }}>*</span>
@@ -203,11 +219,22 @@ export default function AddWebReviewModal({
                   placeholder="Type to search website name (e.g. e-Courts, Google, High Court)..."
                   value={websiteSearch}
                   onChange={(e) => {
-                    setWebsiteSearch(e.target.value);
-                    setWebsiteName(e.target.value);
-                    setShowSearchDropdown(true);
+                    const val = e.target.value;
+                    setWebsiteSearch(val);
+                    setWebsiteName(val);
+                    if (val.trim()) {
+                      setShowSearchDropdown(true);
+                    } else {
+                      setSelectedUrlId(null);
+                      setWebsiteUrl('');
+                      setShowSearchDropdown(false);
+                    }
                   }}
-                  onFocus={() => setShowSearchDropdown(true)}
+                  onFocus={() => {
+                    if (filteredUrls.length > 0 && !selectedUrlId) {
+                      setShowSearchDropdown(true);
+                    }
+                  }}
                   onKeyDown={handleSearchKeyDown}
                 />
                 <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -220,12 +247,12 @@ export default function AddWebReviewModal({
                   top: '100%',
                   left: 0,
                   right: 0,
-                  zIndex: 50,
+                  zIndex: 100,
                   background: '#FFFFFF',
                   borderRadius: '10px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.18)',
                   border: '1px solid #CBD5E1',
-                  maxHeight: '200px',
+                  maxHeight: '190px',
                   overflowY: 'auto',
                   marginTop: '4px'
                 }}>
@@ -255,6 +282,52 @@ export default function AddWebReviewModal({
                       </div>
                     ))
                   )}
+                </div>
+              )}
+
+              {/* Selected Website Badge */}
+              {websiteName && !showSearchDropdown && (
+                <div style={{
+                  marginTop: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '7px 12px',
+                  background: '#F0FDF4',
+                  border: '1.5px solid #86EFAC',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                    <Check size={16} color="#15803D" style={{ flexShrink: 0 }} />
+                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#15803D', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      Selected: {websiteName}
+                    </span>
+                    {websiteUrl && (
+                      <span style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        ({websiteUrl})
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSearchDropdown(true);
+                      searchInputRef.current?.focus();
+                    }}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: '6px',
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    Change
+                  </button>
                 </div>
               )}
 

@@ -1589,14 +1589,7 @@ app.delete('/api/web-review/:id', (req, res) => {
 // ==========================================
 app.get('/api/raasta/portals', (req, res) => {
   try {
-    let rows = db.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
-    if (rows.length === 0) {
-      const defaults = ['e-Courts Portal', 'Prison Management Portal', 'DLSA Legal Aid Portal', 'High Court Case Status', 'Police Department Portal'];
-      for (const p of defaults) {
-        db.prepare('INSERT OR IGNORE INTO raasta_portals (name) VALUES (?)').run(p);
-      }
-      rows = db.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
-    }
+    const rows = db.prepare('SELECT * FROM raasta_portals ORDER BY name ASC').all();
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -1700,14 +1693,7 @@ app.delete('/api/raasta/:id', (req, res) => {
 // ==========================================
 app.get('/api/work-roles/roles', (req, res) => {
   try {
-    let rows = db.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
-    if (rows.length === 0) {
-      const defaults = ['Field Officer', 'Survey Verifier', 'Legal Aid Coordinator', 'Case Followup Executive', 'Data Entry Operator'];
-      for (const r of defaults) {
-        db.prepare('INSERT OR IGNORE INTO work_roles (name) VALUES (?)').run(r);
-      }
-      rows = db.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
-    }
+    const rows = db.prepare('SELECT * FROM work_roles ORDER BY name ASC').all();
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

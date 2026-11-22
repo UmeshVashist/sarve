@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, ArrowLeft, Download,
-  Trash2, Edit3, UserCheck, ListFilter
+  Trash2, Edit3, UserCheck, ListFilter, X
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import WorkRolesModal from '../components/WorkRolesModal';
@@ -143,122 +143,141 @@ export default function WorkRoleHome({ onBackToDashboard }) {
   };
 
   return (
-    <div className="survey-home-container animate-fade-in" style={{ padding: '24px 32px' }}>
-      {/* Top Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <button
-          onClick={onBackToDashboard}
-          className="btn-wizard-prev"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#FFFFFF', border: '1px solid #CBD5E1' }}
-        >
+    <div className="survey-page-container animate-fade-in">
+      {/* Top Navigation */}
+      <div className="page-top-nav">
+        <button className="btn-back-nav" onClick={onBackToDashboard}>
           <ArrowLeft size={16} />
           <span>Back to All Categories</span>
         </button>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={() => {
-              setEditingEntry(null);
-              setIsAddEntryModalOpen(true);
-            }}
-            className="btn-primary-admin"
-            style={{ background: '#B45309', borderColor: '#B45309', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Plus size={16} />
-            <span>+ Add Work Entry</span>
-          </button>
-
-          <button
-            onClick={() => setIsRolesModalOpen(true)}
-            className="btn-case-types"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Briefcase size={15} color="#B45309" />
-            <span>Manage Roles ({roles.length})</span>
-          </button>
-
-          <button
-            onClick={() => downloadWorkRoleExcel(entries)}
-            className="btn-export-excel"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Download size={15} />
-            <span>Export Excel</span>
-          </button>
-
-          <button
+            className="btn-back-nav"
             onClick={() => {
               fetchRoles();
               fetchEntries(searchQuery, selectedRoleFilter);
             }}
-            className="btn-refresh"
-            style={{ padding: '9px 12px' }}
-            title="Refresh from Cloudflare Database"
+            title="Refresh Data"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Stats Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '14px', border: '1px solid #E2E8F0' }}>
-          <div style={{ background: '#FEF3C7', color: '#B45309', padding: '12px', borderRadius: '12px' }}>
+      {/* KPI Stats Banner */}
+      <div className="stats-banner">
+        <div className="stat-card">
+          <div className="stat-icon orange">
             <Briefcase size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{entries.length}</div>
-            <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Total Assigned Work Entries</div>
+            <div className="stat-value">{entries.length}</div>
+            <div className="stat-label">Total Assigned Work Entries</div>
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '14px', border: '1px solid #E2E8F0' }}>
-          <div style={{ background: '#EFF6FF', color: '#2563EB', padding: '12px', borderRadius: '12px' }}>
+        <div className="stat-card">
+          <div className="stat-icon blue">
             <UserCheck size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{roles.length}</div>
-            <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Configured Roles</div>
+            <div className="stat-value">{roles.length}</div>
+            <div className="stat-label">Configured Roles</div>
           </div>
         </div>
       </div>
 
-      {/* Search & Role Filter Dropdown Toolbar */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '450px' }}>
-          <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            type="text"
-            className="form-control"
-            style={{ paddingLeft: '36px' }}
-            placeholder="Search by role name or work/task name..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              fetchEntries(e.target.value, selectedRoleFilter);
-            }}
-          />
-        </div>
-
-        {/* Role Name Filter Dropdown (Required by user) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ListFilter size={16} color="#64748B" />
-          <select
-            className="form-control"
-            style={{ minWidth: '190px', fontSize: '13px' }}
-            value={selectedRoleFilter}
-            onChange={(e) => {
-              setSelectedRoleFilter(e.target.value);
-              fetchEntries(searchQuery, e.target.value);
+      {/* Actions and Search Bar */}
+      <div className="survey-action-bar">
+        {/* Buttons Group */}
+        <div className="action-buttons-group">
+          <button
+            className="btn-add-data"
+            onClick={() => {
+              setEditingEntry(null);
+              setIsAddModalOpen(true);
             }}
           >
-            <option value="">All Roles ({entries.length})</option>
-            {roles.map((r) => (
-              <option key={r.id || r.name} value={r.name}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            <Plus size={18} />
+            <span>Add Work Entry</span>
+          </button>
+
+          <button
+            className="btn-download-excel"
+            onClick={() => downloadWorkRoleExcel(entries)}
+            title="Download Complete Excel Sheet"
+          >
+            <Download size={18} />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            className="btn-case-types"
+            onClick={() => setIsRolesModalOpen(true)}
+            title="Manage dynamic work roles"
+          >
+            <Briefcase size={17} />
+            <span>Manage Roles ({roles.length})</span>
+          </button>
+        </div>
+
+        {/* Search & Role Filter Container */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: '1 1 360px', justifyContent: 'flex-end' }}>
+          <div className="search-container" style={{ margin: 0, minWidth: '220px', flex: '1 1 240px' }}>
+            <Search size={18} className="search-icon" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by role name or work/task name..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                fetchEntries(e.target.value, selectedRoleFilter);
+              }}
+            />
+            {searchQuery && (
+              <button
+                className="search-clear-btn"
+                onClick={() => {
+                  setSearchQuery('');
+                  fetchEntries('', selectedRoleFilter);
+                }}
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ListFilter size={16} color="#64748B" />
+            <select
+              value={selectedRoleFilter}
+              onChange={(e) => {
+                setSelectedRoleFilter(e.target.value);
+                fetchEntries(searchQuery, e.target.value);
+              }}
+              style={{
+                padding: '9px 14px',
+                borderRadius: '10px',
+                border: '1.5px solid #CBD5E1',
+                background: '#FFFFFF',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                color: '#1E293B',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">All Roles ({roles.length})</option>
+              {roles.map((r) => (
+                <option key={r.id || r.name} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

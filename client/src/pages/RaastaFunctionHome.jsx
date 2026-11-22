@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Compass, Plus, Search, RefreshCw, ArrowLeft, Download,
-  Trash2, Edit3, Layers, ListFilter
+  Trash2, Edit3, Layers, ListFilter, X
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import RaastaPortalsModal from '../components/RaastaPortalsModal';
@@ -143,122 +143,141 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
   };
 
   return (
-    <div className="survey-home-container animate-fade-in" style={{ padding: '24px 32px' }}>
-      {/* Top Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <button
-          onClick={onBackToDashboard}
-          className="btn-wizard-prev"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#FFFFFF', border: '1px solid #CBD5E1' }}
-        >
+    <div className="survey-page-container animate-fade-in">
+      {/* Top Navigation */}
+      <div className="page-top-nav">
+        <button className="btn-back-nav" onClick={onBackToDashboard}>
           <ArrowLeft size={16} />
           <span>Back to All Categories</span>
         </button>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={() => {
-              setEditingFunction(null);
-              setIsAddFunctionModalOpen(true);
-            }}
-            className="btn-primary-admin"
-            style={{ background: '#7E22CE', borderColor: '#7E22CE', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Plus size={16} />
-            <span>+ Add Raasta Function</span>
-          </button>
-
-          <button
-            onClick={() => setIsPortalsModalOpen(true)}
-            className="btn-case-types"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Compass size={15} color="#7E22CE" />
-            <span>Manage Portals ({portals.length})</span>
-          </button>
-
-          <button
-            onClick={() => downloadRaastaExcel(functions)}
-            className="btn-export-excel"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Download size={15} />
-            <span>Export Excel</span>
-          </button>
-
-          <button
+            className="btn-back-nav"
             onClick={() => {
               fetchPortals();
               fetchFunctions(searchQuery, selectedPortalFilter);
             }}
-            className="btn-refresh"
-            style={{ padding: '9px 12px' }}
-            title="Refresh from Cloudflare Database"
+            title="Refresh Data"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Stats Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '14px', border: '1px solid #E2E8F0' }}>
-          <div style={{ background: '#FAF5FF', color: '#7E22CE', padding: '12px', borderRadius: '12px' }}>
+      {/* KPI Stats Banner */}
+      <div className="stats-banner">
+        <div className="stat-card">
+          <div className="stat-icon purple">
             <Compass size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{functions.length}</div>
-            <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Total Functions Defined</div>
+            <div className="stat-value">{functions.length}</div>
+            <div className="stat-label">Total Functions Defined</div>
           </div>
         </div>
 
-        <div style={{ background: '#FFFFFF', padding: '16px 20px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: '14px', border: '1px solid #E2E8F0' }}>
-          <div style={{ background: '#EFF6FF', color: '#2563EB', padding: '12px', borderRadius: '12px' }}>
+        <div className="stat-card">
+          <div className="stat-icon blue">
             <Layers size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A' }}>{portals.length}</div>
-            <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Available Portals</div>
+            <div className="stat-value">{portals.length}</div>
+            <div className="stat-label">Available Portals</div>
           </div>
         </div>
       </div>
 
-      {/* Search & Portal Filter Toolbar */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: '450px' }}>
-          <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            type="text"
-            className="form-control"
-            style={{ paddingLeft: '36px' }}
-            placeholder="Search by portal name, function, or details..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              fetchFunctions(e.target.value, selectedPortalFilter);
-            }}
-          />
-        </div>
-
-        {/* Portal Filter Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <ListFilter size={16} color="#64748B" />
-          <select
-            className="form-control"
-            style={{ minWidth: '190px', fontSize: '13px' }}
-            value={selectedPortalFilter}
-            onChange={(e) => {
-              setSelectedPortalFilter(e.target.value);
-              fetchFunctions(searchQuery, e.target.value);
+      {/* Actions and Search Bar */}
+      <div className="survey-action-bar">
+        {/* Buttons Group */}
+        <div className="action-buttons-group">
+          <button
+            className="btn-add-data"
+            onClick={() => {
+              setEditingFunction(null);
+              setIsAddFunctionModalOpen(true);
             }}
           >
-            <option value="">All Portals ({functions.length})</option>
-            {portals.map((p) => (
-              <option key={p.id || p.name} value={p.name}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <Plus size={18} />
+            <span>Add Raasta Function</span>
+          </button>
+
+          <button
+            className="btn-download-excel"
+            onClick={() => downloadRaastaExcel(functions)}
+            title="Download Complete Excel Sheet"
+          >
+            <Download size={18} />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            className="btn-case-types"
+            onClick={() => setIsPortalsModalOpen(true)}
+            title="Manage dynamic portal names"
+          >
+            <Compass size={17} />
+            <span>Manage Portals ({portals.length})</span>
+          </button>
+        </div>
+
+        {/* Search & Filter Container */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: '1 1 360px', justifyContent: 'flex-end' }}>
+          <div className="search-container" style={{ margin: 0, minWidth: '220px', flex: '1 1 240px' }}>
+            <Search size={18} className="search-icon" />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by portal name, function, or details..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                fetchFunctions(e.target.value, selectedPortalFilter);
+              }}
+            />
+            {searchQuery && (
+              <button
+                className="search-clear-btn"
+                onClick={() => {
+                  setSearchQuery('');
+                  fetchFunctions('', selectedPortalFilter);
+                }}
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ListFilter size={16} color="#64748B" />
+            <select
+              value={selectedPortalFilter}
+              onChange={(e) => {
+                setSelectedPortalFilter(e.target.value);
+                fetchFunctions(searchQuery, e.target.value);
+              }}
+              style={{
+                padding: '9px 14px',
+                borderRadius: '10px',
+                border: '1.5px solid #CBD5E1',
+                background: '#FFFFFF',
+                fontSize: '13.5px',
+                fontWeight: 600,
+                color: '#1E293B',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">All Portals ({portals.length})</option>
+              {portals.map((p) => (
+                <option key={p.id || p.name} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
