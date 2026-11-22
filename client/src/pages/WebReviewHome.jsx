@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   Globe, Plus, Search, RefreshCw, ArrowLeft, Download,
-  Trash2, Edit3, ExternalLink, MessageSquare, CheckCircle, ListFilter, X
+  Trash2, Edit3, ExternalLink, MessageSquare, CheckCircle, ListFilter, X, Eye
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import WebReviewUrlsModal from '../components/WebReviewUrlsModal';
 import AddWebReviewModal from '../components/AddWebReviewModal';
+import ViewWebReviewsModal from '../components/ViewWebReviewsModal';
 import { downloadWebReviewExcel } from '../utils/exportWebReviewExcel';
 
 export default function WebReviewHome({ onBackToDashboard }) {
@@ -17,6 +18,7 @@ export default function WebReviewHome({ onBackToDashboard }) {
   const [isUrlsModalOpen, setIsUrlsModalOpen] = useState(false);
   const [isAddReviewModalOpen, setIsAddReviewModalOpen] = useState(false);
   const [editingReview, setEditingReview] = useState(null);
+  const [viewingReview, setViewingReview] = useState(null);
 
   // Fetch URLs from Cloudflare Database
   const fetchUrls = async () => {
@@ -354,14 +356,40 @@ export default function WebReviewHome({ onBackToDashboard }) {
                       </td>
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {revList.map((rev, rIdx) => (
+                          {revList.slice(0, 3).map((rev, rIdx) => (
                             <div key={rIdx} style={{ display: 'flex', alignItems: 'baseline', gap: '6px', fontSize: '12.5px' }}>
-                              <span style={{ fontWeight: 800, color: '#15803D', fontSize: '11px', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px' }}>
+                              <span style={{ fontWeight: 800, color: '#15803D', fontSize: '11px', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', flexShrink: 0 }}>
                                 #{rIdx + 1}
                               </span>
-                              <span style={{ color: '#334155' }}>{rev}</span>
+                              <span style={{ color: '#334155', wordBreak: 'break-word' }}>{rev}</span>
                             </div>
                           ))}
+                          {revList.length > 3 && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingReview(r)}
+                              style={{
+                                alignSelf: 'flex-start',
+                                marginTop: '2px',
+                                background: '#F0FDF4',
+                                border: '1px solid #86EFAC',
+                                borderRadius: '6px',
+                                padding: '2px 8px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                color: '#15803D',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                              }}
+                              title="Click to view all reviews"
+                            >
+                              <Plus size={12} />
+                              <span>{revList.length - 3} more</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', fontSize: '12px', color: '#64748B' }}>
@@ -369,6 +397,15 @@ export default function WebReviewHome({ onBackToDashboard }) {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            style={{ background: '#F1F5F9', border: 'none', padding: '6px', borderRadius: '6px', cursor: 'pointer', color: '#15803D' }}
+                            onClick={() => setViewingReview(r)}
+                            title="View All Reviews"
+                          >
+                            <Eye size={15} />
+                          </button>
                           <button
                             type="button"
                             className="btn-action-icon"
@@ -399,6 +436,18 @@ export default function WebReviewHome({ onBackToDashboard }) {
           </div>
         )}
       </div>
+
+      {/* View All Reviews Modal */}
+      <ViewWebReviewsModal
+        isOpen={Boolean(viewingReview)}
+        onClose={() => setViewingReview(null)}
+        reviewData={viewingReview}
+        onEditReview={(r) => {
+          setViewingReview(null);
+          setEditingReview(r);
+          setIsAddReviewModalOpen(true);
+        }}
+      />
 
       {/* Manage URLs Modal */}
       <WebReviewUrlsModal

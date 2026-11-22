@@ -573,6 +573,73 @@
   transform: translateY(-1px);
 }
 
+/* ==========================================================================
+   GLOBAL KEYBOARD TAB FOCUS HIGHLIGHT (ACCESSIBILITY & TAB NAVIGATION)
+   Highlights any button, input, or control when focused via Tab key
+   ========================================================================== */
+:focus-visible {
+  outline: 3px solid #2563EB !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.4) !important;
+  z-index: 50 !important;
+  transition: outline 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease !important;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+.option-card-big:focus-visible {
+  outline: 3px solid #1D4ED8 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(29, 78, 216, 0.45) !important;
+  transform: translateY(-2px) !important;
+}
+
+.btn-add-data:focus-visible,
+.btn-modal-done:focus-visible {
+  outline: 3px solid #C2410C !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(234, 88, 12, 0.45) !important;
+}
+
+.btn-download-excel:focus-visible,
+.btn-export-excel:focus-visible {
+  outline: 3px solid #047857 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(5, 150, 105, 0.45) !important;
+}
+
+.btn-case-types:focus-visible,
+.btn-primary-admin:focus-visible {
+  outline: 3px solid #1E40AF !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 6px rgba(30, 64, 175, 0.45) !important;
+}
+
+.btn-back-nav:focus-visible,
+.btn-action-icon:focus-visible,
+.btn-delete-case-type:focus-visible,
+.wizard-close-btn:focus-visible,
+.search-clear-btn:focus-visible,
+.btn-wizard-prev:focus-visible,
+.btn-wizard-next:focus-visible {
+  outline: 3px solid #2563EB !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.4) !important;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.form-control:focus-visible,
+.search-input:focus-visible,
+.wizard-input-box:focus-visible {
+  outline: 3px solid #2563EB !important;
+  outline-offset: 1px !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.3) !important;
+  border-color: #2563EB !important;
+}
+
 /* Search Bar */
 .search-container {
   position: relative;

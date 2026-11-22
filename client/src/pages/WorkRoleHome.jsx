@@ -197,7 +197,7 @@ export default function WorkRoleHome({ onBackToDashboard }) {
             className="btn-add-data"
             onClick={() => {
               setEditingEntry(null);
-              setIsAddModalOpen(true);
+              setIsAddEntryModalOpen(true);
             }}
           >
             <Plus size={18} />
