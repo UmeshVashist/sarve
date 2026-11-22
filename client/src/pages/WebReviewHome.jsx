@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Globe, Plus, Search, RefreshCw, ArrowLeft, Download,
   Trash2, Edit3, ExternalLink, MessageSquare, CheckCircle, ListFilter, X, Eye
@@ -19,6 +19,7 @@ export default function WebReviewHome({ onBackToDashboard }) {
   const [isAddReviewModalOpen, setIsAddReviewModalOpen] = useState(false);
   const [editingReview, setEditingReview] = useState(null);
   const [viewingReview, setViewingReview] = useState(null);
+  const addDataBtnRef = useRef(null);
 
   // Fetch URLs from Cloudflare Database
   const fetchUrls = async () => {
@@ -120,6 +121,10 @@ export default function WebReviewHome({ onBackToDashboard }) {
       const data = await res.json();
       if (data.success) {
         fetchReviews(searchQuery);
+        // Automatically focus Add Data button after saving
+        setTimeout(() => {
+          addDataBtnRef.current?.focus();
+        }, 120);
       }
       return data;
     } catch (err) {
@@ -216,6 +221,7 @@ export default function WebReviewHome({ onBackToDashboard }) {
         {/* Buttons Group */}
         <div className="action-buttons-group">
           <button
+            ref={addDataBtnRef}
             className="btn-add-data"
             onClick={() => {
               setEditingReview(null);

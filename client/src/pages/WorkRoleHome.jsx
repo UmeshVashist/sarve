@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, ArrowLeft, Download,
   Trash2, Edit3, UserCheck, ListFilter, X
@@ -17,6 +17,7 @@ export default function WorkRoleHome({ onBackToDashboard }) {
   const [isRolesModalOpen, setIsRolesModalOpen] = useState(false);
   const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
+  const addDataBtnRef = useRef(null);
 
   // Fetch Roles from Cloudflare Database
   const fetchRoles = async () => {
@@ -120,6 +121,10 @@ export default function WorkRoleHome({ onBackToDashboard }) {
       const data = await res.json();
       if (data.success) {
         fetchEntries(searchQuery, selectedRoleFilter);
+        // Automatically focus Add Data button after saving
+        setTimeout(() => {
+          addDataBtnRef.current?.focus();
+        }, 120);
       }
       return data;
     } catch (err) {
@@ -194,6 +199,7 @@ export default function WorkRoleHome({ onBackToDashboard }) {
         {/* Buttons Group */}
         <div className="action-buttons-group">
           <button
+            ref={addDataBtnRef}
             className="btn-add-data"
             onClick={() => {
               setEditingEntry(null);

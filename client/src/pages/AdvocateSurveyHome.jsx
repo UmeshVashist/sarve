@@ -30,6 +30,7 @@ import { DEFAULT_COURT_TYPES } from '../data/courtTypes';
 
 export default function AdvocateSurveyHome({ onBackToDashboard }) {
   const advocateTypesStoreIdRef = useRef(16);
+  const addDataBtnRef = useRef(null);
   const [surveys, setSurveys] = useState([]);
   const [courtTypes, setCourtTypes] = useState(DEFAULT_COURT_TYPES);
   const [advocateTypes, setAdvocateTypes] = useState(DEFAULT_ADVOCATE_TYPES);
@@ -539,6 +540,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       <div className="survey-action-bar">
         <div className="action-buttons-group">
           <button
+            ref={addDataBtnRef}
             className="btn-add-data"
             onClick={() => setIsWizardOpen(true)}
           >
@@ -740,6 +742,10 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
             setSurveys((prev) => [newSurvey, ...(prev || []).filter((s) => s && s.id !== newSurvey.id)]);
           }
           fetchSurveys();
+          // Automatically focus Add Data button after saving
+          setTimeout(() => {
+            addDataBtnRef.current?.focus();
+          }, 120);
         }}
       />
 

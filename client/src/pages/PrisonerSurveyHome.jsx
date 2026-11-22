@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   Download,
@@ -98,6 +98,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [selectedSurveyForDetail, setSelectedSurveyForDetail] = useState(null);
   const [selectedSurveyForEdit, setSelectedSurveyForEdit] = useState(null);
+  const addDataBtnRef = useRef(null);
 
   // Fetch surveys, case types, court types, and questions on mount
   useEffect(() => {
@@ -405,7 +406,7 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
       <div className="survey-action-bar">
         {/* Buttons Group */}
         <div className="action-buttons-group">
-          <button className="btn-add-data" onClick={() => setIsWizardOpen(true)}>
+          <button ref={addDataBtnRef} className="btn-add-data" onClick={() => setIsWizardOpen(true)}>
             <Plus size={18} />
             <span>Add Data</span>
           </button>
@@ -615,6 +616,10 @@ export default function PrisonerSurveyHome({ onBackToDashboard }) {
             setSurveys((prev) => [newSurvey, ...(prev || []).filter((s) => s && s.id !== newSurvey.id)]);
           }
           fetchSurveys();
+          // Automatically focus Add Data button after saving
+          setTimeout(() => {
+            addDataBtnRef.current?.focus();
+          }, 120);
         }}
       />
 

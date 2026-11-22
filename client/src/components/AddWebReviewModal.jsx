@@ -55,6 +55,10 @@ export default function AddWebReviewModal({
         setWebsiteSearch('');
         setReviews(['']);
       }
+      // Auto-focus 1st input (search website) on modal open
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 60);
     }
   }, [isOpen, initialData]);
 
@@ -230,7 +234,7 @@ export default function AddWebReviewModal({
                       setShowSearchDropdown(false);
                     }
                   }}
-                  onFocus={() => {
+                  onClick={() => {
                     if (filteredUrls.length > 0 && !selectedUrlId) {
                       setShowSearchDropdown(true);
                     }

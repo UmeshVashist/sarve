@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Briefcase, Plus } from 'lucide-react';
 
@@ -15,6 +15,8 @@ export default function AddWorkRoleEntryModal({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const firstFieldRef = useRef(null);
+
   useEffect(() => {
     if (isOpen) {
       setError('');
@@ -26,6 +28,10 @@ export default function AddWorkRoleEntryModal({
         setRoleName(roles[0]?.name || '');
         setWorkName('');
       }
+      // Auto-focus 1st option (role dropdown/input) on open
+      setTimeout(() => {
+        firstFieldRef.current?.focus();
+      }, 60);
     }
   }, [isOpen, initialData, roles]);
 
@@ -116,6 +122,7 @@ export default function AddWorkRoleEntryModal({
                 </div>
               ) : (
                 <select
+                  ref={firstFieldRef}
                   className="form-control"
                   value={roleName}
                   onChange={(e) => setRoleName(e.target.value)}
@@ -144,7 +151,6 @@ export default function AddWorkRoleEntryModal({
                 value={workName}
                 onChange={(e) => setWorkName(e.target.value)}
                 required
-                autoFocus
               />
             </div>
           </div>

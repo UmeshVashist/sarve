@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Compass, Plus, Search, RefreshCw, ArrowLeft, Download,
   Trash2, Edit3, Layers, ListFilter, X
@@ -17,6 +17,7 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
   const [isPortalsModalOpen, setIsPortalsModalOpen] = useState(false);
   const [isAddFunctionModalOpen, setIsAddFunctionModalOpen] = useState(false);
   const [editingFunction, setEditingFunction] = useState(null);
+  const addDataBtnRef = useRef(null);
 
   // Fetch Portals from Cloudflare Database
   const fetchPortals = async () => {
@@ -120,6 +121,10 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
       const data = await res.json();
       if (data.success) {
         fetchFunctions(searchQuery, selectedPortalFilter);
+        // Automatically focus Add Data button after saving
+        setTimeout(() => {
+          addDataBtnRef.current?.focus();
+        }, 120);
       }
       return data;
     } catch (err) {
@@ -194,6 +199,7 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
         {/* Buttons Group */}
         <div className="action-buttons-group">
           <button
+            ref={addDataBtnRef}
             className="btn-add-data"
             onClick={() => {
               setEditingFunction(null);

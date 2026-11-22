@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Compass, Plus } from 'lucide-react';
 
@@ -16,6 +16,8 @@ export default function AddRaastaFunctionModal({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const firstFieldRef = useRef(null);
+
   useEffect(() => {
     if (isOpen) {
       setError('');
@@ -29,8 +31,22 @@ export default function AddRaastaFunctionModal({
         setFunctionName('');
         setDetails('');
       }
+      // Auto-focus 1st option (portal dropdown/input) on open
+      setTimeout(() => {
+        firstFieldRef.current?.focus();
+      }, 60);
     }
   }, [isOpen, initialData, portals]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -110,6 +126,7 @@ export default function AddRaastaFunctionModal({
                 </div>
               ) : (
                 <select
+                  ref={firstFieldRef}
                   className="form-control"
                   value={portalName}
                   onChange={(e) => setPortalName(e.target.value)}
