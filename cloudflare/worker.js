@@ -340,6 +340,21 @@ export default {
       if (env.DB) {
         await ensureD1Database(env.DB);
       }
+
+      // 0. Root Health Check & API Status
+      if ((path === '/' || path === '/api' || path === '/api/health') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            status: 'online',
+            success: true,
+            message: 'Survey Portal API is Live & Healthy!',
+            version: '2.0.0',
+            database: 'Cloudflare D1 Connected'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // 1. Auth Login (Authenticated via Database)
       if (path === '/api/auth/login' && method === 'POST') {
         const { username, password } = await request.json();

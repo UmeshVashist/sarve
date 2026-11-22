@@ -94,6 +94,16 @@ function extractCustomAnswers(data, existingCustom = {}) {
   return JSON.stringify(custom);
 }
 
+// 0. Health & Root Status
+app.get(['/', '/api', '/api/health'], (req, res) => {
+  res.json({
+    status: 'online',
+    success: true,
+    message: 'Survey Portal API is Live & Healthy!',
+    version: '2.0.0'
+  });
+});
+
 // 1. Auth Endpoint (Authenticated via SQLite database - supports any case like meet, Meet, MEET)
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
