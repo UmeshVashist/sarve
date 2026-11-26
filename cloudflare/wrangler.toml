@@ -9,6 +9,11 @@ binding = "DB"
 database_name = "sarve_d1_database"
 database_id = "a598a52d-a593-4206-8a51-4ed263dca84d"
 
+# Cloudflare R2 Object Storage binding for Doc Store
+[[r2_buckets]]
+binding = "DOCS_BUCKET"
+bucket_name = "survey-doc-store"
+
 [vars]
 ENVIRONMENT = "production"
 

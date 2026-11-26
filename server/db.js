@@ -211,6 +211,19 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS doc_store_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_name TEXT NOT NULL,
+      file_key TEXT UNIQUE NOT NULL,
+      folder_path TEXT DEFAULT '/',
+      file_size INTEGER DEFAULT 0,
+      content_type TEXT,
+      storage_type TEXT DEFAULT 'R2',
+      uploaded_by TEXT DEFAULT 'Admin',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Seed new_prisoner_questions from questions if empty

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase, FolderArchive } from 'lucide-react';
 
 export default function Navbar({ user, currentScreen = 'dashboard', onLogout, onHomeClick }) {
   const getModuleConfig = () => {
@@ -63,6 +63,16 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
           color: '#B45309',
           border: '#FDE68A',
           icon: Briefcase
+        };
+      case 'doc_store':
+        return {
+          title: 'Doc Store Module',
+          badgeText: 'Doc Store',
+          subtitle: 'Cloudflare R2 Object Storage & Directory Manager',
+          bg: '#CCFBF1',
+          color: '#0D9488',
+          border: '#99F6E4',
+          icon: FolderArchive
         };
       default:
         return {

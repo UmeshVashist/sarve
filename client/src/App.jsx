@@ -7,6 +7,7 @@ import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
 import WebReviewHome from './pages/WebReviewHome';
 import RaastaFunctionHome from './pages/RaastaFunctionHome';
 import WorkRoleHome from './pages/WorkRoleHome';
+import DocStoreHome from './pages/DocStoreHome';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
@@ -145,6 +146,8 @@ export default function App() {
       navigateTo('raasta');
     } else if (optionId === 'work_role') {
       navigateTo('work_role');
+    } else if (optionId === 'doc_store') {
+      navigateTo('doc_store');
     } else {
       navigateTo('dashboard');
     }
@@ -225,6 +228,12 @@ export default function App() {
         {currentScreen === 'work_role' && (
           <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
             <WorkRoleHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'doc_store' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <DocStoreHome onBackToDashboard={() => navigateTo('dashboard')} />
           </ErrorBoundary>
         )}
       </main>

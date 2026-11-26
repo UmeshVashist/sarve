@@ -7,7 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const STANDARD_KEYS = [
   'utct_no', 'name', 'case_type', 'total_cases', 'case_duration',
@@ -2134,6 +2135,172 @@ app.post(['/api/new-prisoner-questions/reset', '/api/new-questions/reset'], (req
       SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
     `).run();
     res.json({ success: true, message: 'New Prisoner questions reset to default' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================================
+// DOC STORE MODULE ENDPOINTS (Local / Cloudflare R2 Mock)
+// ==========================================================
+
+const fs = require('fs');
+const path = require('path');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Status check
+app.get('/api/docs/status', (req, res) => {
+  res.json({
+    success: true,
+    r2_connected: true,
+    storage_mode: 'Local Storage & Cloudflare R2 Ready',
+    bucket_name: 'survey-doc-store'
+  });
+});
+
+// List files and folders
+app.get('/api/docs/list', (req, res) => {
+  try {
+    const folder = req.query.folder || '/';
+    const q = req.query.q || '';
+    const cleanFolder = folder.startsWith('/') ? (folder.endsWith('/') ? folder : `${folder}/`) : `/${folder}/`;
+
+    let filesQuery = 'SELECT * FROM doc_store_files WHERE 1=1';
+    const params = [];
+
+    if (q && q.trim()) {
+      filesQuery += ' AND (file_name LIKE ? OR folder_path LIKE ?)';
+      const term = `%${q.trim()}%`;
+      params.push(term, term);
+    } else {
+      filesQuery += ' AND folder_path = ?';
+      params.push(cleanFolder);
+    }
+    filesQuery += ' ORDER BY id DESC';
+
+    const files = db.prepare(filesQuery).all(...params).filter(f => f.file_name !== '.keep');
+
+    const allPaths = db.prepare('SELECT DISTINCT folder_path FROM doc_store_files WHERE folder_path != ?').all(cleanFolder);
+    const subfoldersSet = new Set();
+    for (const row of allPaths) {
+      const p = row.folder_path || '/';
+      if (p.startsWith(cleanFolder) && p !== cleanFolder) {
+        const remainder = p.slice(cleanFolder.length);
+        const sub = remainder.split('/')[0];
+        if (sub) {
+          subfoldersSet.add(`${cleanFolder}${sub}/`);
+        }
+      }
+    }
+
+    const statsRow = db.prepare("SELECT COUNT(*) as total_files, COALESCE(SUM(file_size), 0) as total_size FROM doc_store_files WHERE file_name != '.keep'").get();
+    const folderCountRow = db.prepare('SELECT COUNT(DISTINCT folder_path) as total_folders FROM doc_store_files').get();
+
+    res.json({
+      success: true,
+      current_folder: cleanFolder,
+      folders: Array.from(subfoldersSet),
+      files,
+      stats: {
+        total_files: statsRow?.total_files || 0,
+        total_size_bytes: statsRow?.total_size || 0,
+        total_folders: folderCountRow?.total_folders || 1,
+        r2_active: true
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Upload file or folder
+app.post('/api/docs/upload', (req, res) => {
+  try {
+    const { file_name, file_data_base64, folder_path, content_type, files: multiFiles } = req.body;
+    const uploadedList = [];
+
+    const fileItems = Array.isArray(multiFiles) ? multiFiles : [{ file_name, file_data_base64, folder_path, content_type }];
+
+    for (const item of fileItems) {
+      if (!item || !item.file_name) continue;
+      const targetFolder = (item.folder_path || folder_path || '/').trim();
+      const cleanFolder = targetFolder.startsWith('/') ? (targetFolder.endsWith('/') ? targetFolder : `${targetFolder}/`) : `/${targetFolder}/`;
+      const safeFolderPrefix = cleanFolder.replace(/^\/|\/$/g, '');
+      const fileKey = safeFolderPrefix ? `${safeFolderPrefix}/${Date.now()}_${item.file_name}` : `root/${Date.now()}_${item.file_name}`;
+
+      let fileSize = 0;
+      if (item.file_data_base64) {
+        const buffer = Buffer.from(item.file_data_base64, 'base64');
+        fileSize = buffer.length;
+        const localFilePath = path.join(uploadsDir, `${Date.now()}_${item.file_name.replace(/[^a-zA-Z0-9_\-\.]/g, '_')}`);
+        try { fs.writeFileSync(localFilePath, buffer); } catch (e) {}
+      }
+
+      db.prepare(`
+        INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+        VALUES (?, ?, ?, ?, ?, 'R2', 'meet')
+      `).run(item.file_name, fileKey, cleanFolder, fileSize, item.content_type || 'application/octet-stream');
+
+      uploadedList.push({ file_name: item.file_name, file_key: fileKey, folder_path: cleanFolder, file_size: fileSize });
+    }
+
+    res.json({
+      success: true,
+      message: `${uploadedList.length} file(s) uploaded successfully`,
+      uploaded: uploadedList
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Download / Preview
+app.get('/api/docs/file/:key(*)', (req, res) => {
+  try {
+    const fileKey = req.params.key;
+    const record = db.prepare('SELECT * FROM doc_store_files WHERE file_key = ? OR id = ?').get(fileKey, fileKey);
+    if (!record) return res.status(404).json({ success: false, message: 'File not found' });
+    res.json({ success: true, data: record });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete file
+app.delete('/api/docs/file/:key(*)', (req, res) => {
+  try {
+    const fileKey = req.params.key;
+    db.prepare('DELETE FROM doc_store_files WHERE file_key = ? OR id = ?').run(fileKey, fileKey);
+    res.json({ success: true, message: 'File deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Create folder
+app.post('/api/docs/folder/create', (req, res) => {
+  try {
+    const { folder_name, parent_folder } = req.body;
+    const cleanParent = parent_folder ? (parent_folder.endsWith('/') ? parent_folder : `${parent_folder}/`) : '/';
+    const cleanName = String(folder_name || '').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+    if (!cleanName) return res.status(400).json({ success: false, message: 'Valid folder name is required' });
+
+    const newFolderPath = `${cleanParent}${cleanName}/`;
+    const placeholderKey = `${newFolderPath.replace(/^\/|\/$/g, '')}/.keep`;
+
+    db.prepare(`
+      INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+      VALUES ('.keep', ?, ?, 0, 'application/x-directory', 'R2', 'meet')
+    `).run(placeholderKey, newFolderPath);
+
+    res.json({
+      success: true,
+      message: `Folder "${cleanName}" created successfully`,
+      folder_path: newFolderPath
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

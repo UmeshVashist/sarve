@@ -37,6 +37,12 @@ export default function DashboardPage({ onSelectOption }) {
       title: 'Work Role',
       tag: 'Active Module',
       isPrimary: true
+    },
+    {
+      id: 'doc_store',
+      title: 'Doc Store',
+      tag: 'R2 Cloud Storage',
+      isPrimary: true
     }
   ];
 
@@ -49,8 +55,8 @@ export default function DashboardPage({ onSelectOption }) {
         </p>
       </div>
 
-      {/* 6 Big Peach/Coral Option Cards */}
-      <div className="cards-grid-4 cards-grid-5 cards-grid-6">
+      {/* 7 Big Peach/Coral Option Cards */}
+      <div className="cards-grid-4 cards-grid-5 cards-grid-6 cards-grid-7">
         {options.map((opt) => (
           <button
             key={opt.id}

@@ -296,4 +296,23 @@ INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder
 SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions;
 
 
+-- 15. DOC STORE FILES TABLE (Cloudflare R2 Object Metadata)
+CREATE TABLE IF NOT EXISTS doc_store_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_name TEXT NOT NULL,
+  file_key TEXT UNIQUE NOT NULL,
+  folder_path TEXT DEFAULT '/',
+  file_size INTEGER DEFAULT 0,
+  content_type TEXT,
+  storage_type TEXT DEFAULT 'R2',
+  uploaded_by TEXT DEFAULT 'Admin',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_folder ON doc_store_files(folder_path);
+CREATE INDEX IF NOT EXISTS idx_doc_name ON doc_store_files(file_name);
+
+
+
 

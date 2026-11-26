@@ -443,6 +443,22 @@ async function ensureD1Database(db) {
       }
     }
 
+    // 17. Doc Store Files Table (Cloudflare R2 Object Metadata)
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS doc_store_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT NOT NULL,
+        file_key TEXT UNIQUE NOT NULL,
+        folder_path TEXT DEFAULT '/',
+        file_size INTEGER DEFAULT 0,
+        content_type TEXT,
+        storage_type TEXT DEFAULT 'R2',
+        uploaded_by TEXT DEFAULT 'Admin',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
     isD1Initialized = true;
   } catch (err) {
     console.error('ensureD1Database error:', err);
@@ -2316,6 +2332,243 @@ export default {
           SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
         `).run();
         return new Response(JSON.stringify({ success: true, message: 'New Prisoner questions reset to default' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================================
+      // DOC STORE MODULE ENDPOINTS (Cloudflare R2 Object Storage)
+      // ==========================================================
+
+      // Status check / R2 info
+      if (path === '/api/docs/status' && method === 'GET') {
+        const hasR2 = Boolean(env.DOCS_BUCKET);
+        return new Response(JSON.stringify({
+          success: true,
+          r2_connected: hasR2,
+          storage_mode: hasR2 ? 'Cloudflare R2 Object Storage' : 'Pending R2 Binding',
+          bucket_name: 'survey-doc-store'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // List Files and Folders
+      if (path === '/api/docs/list' && method === 'GET') {
+        const folder = url.searchParams.get('folder') || '/';
+        const q = url.searchParams.get('q') || '';
+        const cleanFolder = folder.startsWith('/') ? (folder.endsWith('/') ? folder : `${folder}/`) : `/${folder}/`;
+
+        let filesQuery = 'SELECT * FROM doc_store_files WHERE 1=1';
+        const params = [];
+
+        if (q && q.trim()) {
+          filesQuery += ' AND (file_name LIKE ? OR folder_path LIKE ?)';
+          const term = `%${q.trim()}%`;
+          params.push(term, term);
+        } else {
+          filesQuery += ' AND folder_path = ?';
+          params.push(cleanFolder);
+        }
+        filesQuery += ' ORDER BY id DESC';
+
+        const stmt = params.length > 0 ? env.DB.prepare(filesQuery).bind(...params) : env.DB.prepare(filesQuery);
+        const filesResult = await stmt.all();
+        const files = (filesResult.results || []).filter(f => f.file_name !== '.keep');
+
+        // Get distinct subfolders inside cleanFolder
+        const allPaths = await env.DB.prepare('SELECT DISTINCT folder_path FROM doc_store_files WHERE folder_path != ?').bind(cleanFolder).all();
+        const subfoldersSet = new Set();
+        for (const row of allPaths.results || []) {
+          const p = row.folder_path || '/';
+          if (p.startsWith(cleanFolder) && p !== cleanFolder) {
+            const remainder = p.slice(cleanFolder.length);
+            const sub = remainder.split('/')[0];
+            if (sub) {
+              subfoldersSet.add(`${cleanFolder}${sub}/`);
+            }
+          }
+        }
+
+        // Aggregate statistics
+        const statsRow = await env.DB.prepare("SELECT COUNT(*) as total_files, COALESCE(SUM(file_size), 0) as total_size FROM doc_store_files WHERE file_name != '.keep'").first();
+        const folderCountRow = await env.DB.prepare('SELECT COUNT(DISTINCT folder_path) as total_folders FROM doc_store_files').first();
+
+        return new Response(JSON.stringify({
+          success: true,
+          current_folder: cleanFolder,
+          folders: Array.from(subfoldersSet),
+          files,
+          stats: {
+            total_files: statsRow?.total_files || 0,
+            total_size_bytes: statsRow?.total_size || 0,
+            total_folders: folderCountRow?.total_folders || 1,
+            r2_active: Boolean(env.DOCS_BUCKET)
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      // Upload File or Folder files
+      if (path === '/api/docs/upload' && method === 'POST') {
+        const contentType = request.headers.get('content-type') || '';
+        let uploadedList = [];
+
+        if (contentType.includes('multipart/form-data')) {
+          const formData = await request.formData();
+          const targetFolder = (formData.get('folder_path') || '/').toString().trim();
+          const cleanFolder = targetFolder.startsWith('/') ? (targetFolder.endsWith('/') ? targetFolder : `${targetFolder}/`) : `/${targetFolder}/`;
+          
+          const files = formData.getAll('files').concat(formData.getAll('file')).filter(Boolean);
+
+          for (const item of files) {
+            if (typeof item === 'object' && item.name) {
+              const fileName = item.name;
+              const relPath = (item.webkitRelativePath || formData.get(`rel_${fileName}`) || '').toString().trim();
+              let finalFolder = cleanFolder;
+              if (relPath && relPath.includes('/')) {
+                const subDir = relPath.slice(0, relPath.lastIndexOf('/') + 1);
+                finalFolder = cleanFolder === '/' ? `/${subDir}` : `${cleanFolder}${subDir}`;
+              }
+
+              const safeFolderPrefix = finalFolder.replace(/^\/|\/$/g, '');
+              const fileKey = safeFolderPrefix ? `${safeFolderPrefix}/${Date.now()}_${fileName}` : `root/${Date.now()}_${fileName}`;
+              const fileSize = item.size || 0;
+              const fileType = item.type || 'application/octet-stream';
+
+              // 1. Upload directly to Cloudflare R2
+              if (env.DOCS_BUCKET) {
+                try {
+                  await env.DOCS_BUCKET.put(fileKey, item.stream(), {
+                    httpMetadata: { contentType: fileType }
+                  });
+                } catch (r2Err) {
+                  console.error('R2 put error:', r2Err);
+                }
+              }
+
+              // 2. Save file metadata in D1
+              await env.DB.prepare(`
+                INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+                VALUES (?, ?, ?, ?, ?, ?, 'meet')
+              `).bind(fileName, fileKey, finalFolder, fileSize, fileType, env.DOCS_BUCKET ? 'R2' : 'Pending_R2').run();
+
+              uploadedList.push({ file_name: fileName, file_key: fileKey, folder_path: finalFolder, file_size: fileSize });
+            }
+          }
+        } else {
+          // JSON base64 upload
+          const body = await request.json();
+          const { file_name, file_data_base64, folder_path, content_type } = body;
+          const targetFolder = (folder_path || '/').trim();
+          const cleanFolder = targetFolder.startsWith('/') ? (targetFolder.endsWith('/') ? targetFolder : `${targetFolder}/`) : `/${targetFolder}/`;
+          const safeFolderPrefix = cleanFolder.replace(/^\/|\/$/g, '');
+          const fileKey = safeFolderPrefix ? `${safeFolderPrefix}/${Date.now()}_${file_name}` : `root/${Date.now()}_${file_name}`;
+
+          if (env.DOCS_BUCKET && file_data_base64) {
+            const buffer = Uint8Array.from(atob(file_data_base64), c => c.charCodeAt(0));
+            await env.DOCS_BUCKET.put(fileKey, buffer, {
+              httpMetadata: { contentType: content_type || 'application/octet-stream' }
+            });
+          }
+
+          const fileSize = file_data_base64 ? Math.round((file_data_base64.length * 3) / 4) : 0;
+          await env.DB.prepare(`
+            INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+            VALUES (?, ?, ?, ?, ?, ?, 'meet')
+          `).bind(file_name, fileKey, cleanFolder, fileSize, content_type || 'application/octet-stream', env.DOCS_BUCKET ? 'R2' : 'Pending_R2').run();
+
+          uploadedList.push({ file_name, file_key: fileKey, folder_path: cleanFolder, file_size: fileSize });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `${uploadedList.length} file(s) uploaded successfully to Doc Store R2`,
+          uploaded: uploadedList
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Download / Preview File from R2
+      if (path.startsWith('/api/docs/file/') && method === 'GET') {
+        const rawKey = path.replace('/api/docs/file/', '');
+        const fileKey = decodeURIComponent(rawKey);
+
+        const record = await env.DB.prepare('SELECT * FROM doc_store_files WHERE file_key = ? OR id = ?').bind(fileKey, fileKey).first();
+
+        if (env.DOCS_BUCKET) {
+          const targetKey = record?.file_key || fileKey;
+          const r2Object = await env.DOCS_BUCKET.get(targetKey);
+          if (r2Object) {
+            const headers = new Headers();
+            r2Object.writeHttpMetadata(headers);
+            headers.set('etag', r2Object.httpEtag);
+            headers.set('Access-Control-Allow-Origin', '*');
+            headers.set('Content-Disposition', `inline; filename="${record?.file_name || 'download'}"`);
+            return new Response(r2Object.body, { headers });
+          }
+        }
+
+        if (!record) {
+          return new Response(JSON.stringify({ success: false, message: 'File not found in Doc Store' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'File metadata retrieved. To enable binary download, ensure R2 bucket is bound in Cloudflare.',
+          data: record
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Delete File
+      if (path.startsWith('/api/docs/file/') && method === 'DELETE') {
+        const rawKey = path.replace('/api/docs/file/', '');
+        const fileKey = decodeURIComponent(rawKey);
+
+        const record = await env.DB.prepare('SELECT * FROM doc_store_files WHERE file_key = ? OR id = ?').bind(fileKey, fileKey).first();
+        if (record) {
+          if (env.DOCS_BUCKET) {
+            try { await env.DOCS_BUCKET.delete(record.file_key); } catch (e) {}
+          }
+          await env.DB.prepare('DELETE FROM doc_store_files WHERE id = ?').bind(record.id).run();
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'File deleted successfully from Doc Store' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Create empty folder
+      if (path === '/api/docs/folder/create' && method === 'POST') {
+        const { folder_name, parent_folder } = await request.json();
+        const cleanParent = parent_folder ? (parent_folder.endsWith('/') ? parent_folder : `${parent_folder}/`) : '/';
+        const cleanName = String(folder_name || '').replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Valid folder name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const newFolderPath = `${cleanParent}${cleanName}/`;
+
+        const placeholderKey = `${newFolderPath.replace(/^\/|\/$/g, '')}/.keep`;
+        await env.DB.prepare(`
+          INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+          VALUES ('.keep', ?, ?, 0, 'application/x-directory', 'R2', 'meet')
+        `).bind(placeholderKey, newFolderPath).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Folder "${cleanName}" created successfully`,
+          folder_path: newFolderPath
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
