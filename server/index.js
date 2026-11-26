@@ -1842,9 +1842,38 @@ app.get(['/api/new-survey/:id', '/api/new-prisoner/:id'], (req, res) => {
 app.post(['/api/new-survey/add', '/api/new-prisoner/add'], (req, res) => {
   try {
     const d = req.body;
-    const existing = db.prepare('SELECT id FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))').get(d.utct_no);
+    let utctNo = String(d.utct_no || '').trim();
+    let prisonerName = String(d.name || '').trim();
+
+    if (!utctNo && d && typeof d === 'object') {
+      for (const [k, v] of Object.entries(d)) {
+        if (v && typeof v === 'string' && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+          utctNo = v.trim();
+          break;
+        }
+      }
+    }
+    if (!prisonerName && d && typeof d === 'object') {
+      let foundUtct = false;
+      for (const [k, v] of Object.entries(d)) {
+        if (v && typeof v === 'string' && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+          if (!foundUtct && v.trim() === utctNo) {
+            foundUtct = true;
+            continue;
+          }
+          prisonerName = v.trim();
+          break;
+        }
+      }
+    }
+    if (!utctNo) {
+      return res.status(400).json({ success: false, message: 'UT/CT Number is required' });
+    }
+    if (!prisonerName) prisonerName = 'Prisoner';
+
+    const existing = db.prepare('SELECT id FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))').get(utctNo);
     if (existing) {
-      return res.status(400).json({ success: false, message: `UT/CT No. "${d.utct_no}" already exists in New Prisoner records!` });
+      return res.status(400).json({ success: false, message: `UT/CT No. "${utctNo}" already exists in New Prisoner records!` });
     }
 
     const customJson = extractCustomAnswers(d);
@@ -1867,7 +1896,7 @@ app.post(['/api/new-survey/add', '/api/new-prisoner/add'], (req, res) => {
     `);
 
     const info = stmt.run(
-      d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+      utctNo, prisonerName, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
       Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
       Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
       d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',

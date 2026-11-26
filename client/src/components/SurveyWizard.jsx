@@ -930,7 +930,7 @@ export default function SurveyWizard({
     setError('');
 
     try {
-      // 1. Gather all custom question answers into a dedicated object
+      // Gather all custom question answers into a dedicated object
       const customObj = {};
       Object.keys(formData).forEach((k) => {
         if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
@@ -940,8 +940,16 @@ export default function SurveyWizard({
         }
       });
 
+      // Auto-detect utct_no and name from questions if custom keys were used
+      const q1Key = activeQuestions[0]?.key;
+      const q2Key = activeQuestions[1]?.key;
+      const utctVal = (formData.utct_no || (q1Key ? formData[q1Key] : '') || '').trim();
+      const nameVal = (formData.name || (q2Key ? formData[q2Key] : '') || 'Prisoner').trim();
+
       const payload = {
         ...formData,
+        utct_no: utctVal || (formData[Object.keys(formData)[0]] ? String(formData[Object.keys(formData)[0]]).trim() : ''),
+        name: nameVal,
         case_type: Array.isArray(formData.case_type) ? formData.case_type.join(', ') : (formData.case_type || ''),
         custom_answers: JSON.stringify(customObj)
       };
@@ -958,7 +966,7 @@ export default function SurveyWizard({
         onSurveySaved(savedRecord);
         onClose();
       } else {
-        setError(data.message || 'Failed to save survey. Check duplicate UT/CT no.');
+        setError(data.message || data.error || 'Failed to save survey. Check duplicate UT/CT no.');
       }
     } catch (err) {
       setError('Connection to backend failed. Please ensure Node.js server is running.');

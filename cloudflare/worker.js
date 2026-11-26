@@ -1792,6 +1792,42 @@ export default {
       // Check UT/CT uniqueness in new_prisoner_surveys
       if ((path.startsWith('/api/new-survey/check-utct') || path.startsWith('/api/new-prisoner/check-utct')) && method === 'GET') {
         const utctNo = (url.searchParams.get('no') || url.searchParams.get('utctNo') || decodeURIComponent(path.split('/')[4] || '')).trim();
+        try {
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              utct_no TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              case_type TEXT,
+              total_cases INTEGER DEFAULT 0,
+              case_duration TEXT,
+              total_advocates_hired INTEGER DEFAULT 0,
+              times_in_jail INTEGER DEFAULT 0,
+              advocate_name_number TEXT,
+              advocates_details TEXT DEFAULT '[]',
+              known_unknown_advocate TEXT,
+              high_court_advocate TEXT,
+              advocate_payment_advance TEXT,
+              first_advocate_by_io TEXT,
+              know_case_process TEXT,
+              lawyer_collects_details_evidence TEXT,
+              know_fees_reasonable TEXT,
+              complete_fees_total_initially TEXT,
+              work_transparency_tracking TEXT,
+              know_legal_step_correct TEXT,
+              case_prolonged_expensive TEXT,
+              pairvi_knowledge_reason TEXT,
+              court_docs_fees_timing TEXT,
+              know_trustworthy_platform TEXT,
+              priority_money_vs_release TEXT,
+              prisoner_psychologic_survey TEXT,
+              custom_answers TEXT DEFAULT '{}',
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+          `).run();
+        } catch (e) {}
+
         const existing = await env.DB.prepare(
           'SELECT id, utct_no, name FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
         ).bind(utctNo).first();
@@ -1809,6 +1845,42 @@ export default {
       // List New Prisoner Surveys
       if ((path === '/api/new-survey/list' || path === '/api/new-prisoner/list') && method === 'GET') {
         const q = url.searchParams.get('q') || '';
+        try {
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              utct_no TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              case_type TEXT,
+              total_cases INTEGER DEFAULT 0,
+              case_duration TEXT,
+              total_advocates_hired INTEGER DEFAULT 0,
+              times_in_jail INTEGER DEFAULT 0,
+              advocate_name_number TEXT,
+              advocates_details TEXT DEFAULT '[]',
+              known_unknown_advocate TEXT,
+              high_court_advocate TEXT,
+              advocate_payment_advance TEXT,
+              first_advocate_by_io TEXT,
+              know_case_process TEXT,
+              lawyer_collects_details_evidence TEXT,
+              know_fees_reasonable TEXT,
+              complete_fees_total_initially TEXT,
+              work_transparency_tracking TEXT,
+              know_legal_step_correct TEXT,
+              case_prolonged_expensive TEXT,
+              pairvi_knowledge_reason TEXT,
+              court_docs_fees_timing TEXT,
+              know_trustworthy_platform TEXT,
+              priority_money_vs_release TEXT,
+              prisoner_psychologic_survey TEXT,
+              custom_answers TEXT DEFAULT '{}',
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+          `).run();
+        } catch (e) {}
+
         let result;
         if (q) {
           const searchPattern = `%${q}%`;
@@ -1878,13 +1950,89 @@ export default {
       // Add New Prisoner Survey
       if ((path === '/api/new-survey/add' || path === '/api/new-prisoner/add') && method === 'POST') {
         const d = await request.json();
+
+        // 1. Ensure table exists in case D1 migration was pending
+        try {
+          await env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              utct_no TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              case_type TEXT,
+              total_cases INTEGER DEFAULT 0,
+              case_duration TEXT,
+              total_advocates_hired INTEGER DEFAULT 0,
+              times_in_jail INTEGER DEFAULT 0,
+              advocate_name_number TEXT,
+              advocates_details TEXT DEFAULT '[]',
+              known_unknown_advocate TEXT,
+              high_court_advocate TEXT,
+              advocate_payment_advance TEXT,
+              first_advocate_by_io TEXT,
+              know_case_process TEXT,
+              lawyer_collects_details_evidence TEXT,
+              know_fees_reasonable TEXT,
+              complete_fees_total_initially TEXT,
+              work_transparency_tracking TEXT,
+              know_legal_step_correct TEXT,
+              case_prolonged_expensive TEXT,
+              pairvi_knowledge_reason TEXT,
+              court_docs_fees_timing TEXT,
+              know_trustworthy_platform TEXT,
+              priority_money_vs_release TEXT,
+              prisoner_psychologic_survey TEXT,
+              custom_answers TEXT DEFAULT '{}',
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+          `).run();
+        } catch (tblErr) {}
+
+        let utctNo = String(d.utct_no || '').trim();
+        let prisonerName = String(d.name || '').trim();
+
+        // Fallback: If utct_no was not provided under 'utct_no', find first non-empty field
+        if (!utctNo && d && typeof d === 'object') {
+          for (const [k, v] of Object.entries(d)) {
+            if (v && typeof v === 'string' && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+              utctNo = v.trim();
+              break;
+            }
+          }
+        }
+
+        // Fallback: If name was not provided under 'name', find second non-empty field
+        if (!prisonerName && d && typeof d === 'object') {
+          let foundUtct = false;
+          for (const [k, v] of Object.entries(d)) {
+            if (v && typeof v === 'string' && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
+              if (!foundUtct && v.trim() === utctNo) {
+                foundUtct = true;
+                continue;
+              }
+              prisonerName = v.trim();
+              break;
+            }
+          }
+        }
+
+        if (!utctNo) {
+          return new Response(
+            JSON.stringify({ success: false, message: 'UT/CT Number is required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        if (!prisonerName) {
+          prisonerName = 'Prisoner';
+        }
+
         const existing = await env.DB.prepare(
           'SELECT id FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
-        ).bind(d.utct_no).first();
+        ).bind(utctNo).first();
 
         if (existing) {
           return new Response(
-            JSON.stringify({ success: false, message: `UT/CT No. "${d.utct_no}" already exists in New Prisoner records!` }),
+            JSON.stringify({ success: false, message: `UT/CT No. "${utctNo}" already exists in New Prisoner records!` }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -1892,35 +2040,43 @@ export default {
         const customJson = extractCustomAnswers(d);
         const advDetailsJson = typeof d.advocates_details === 'string' ? d.advocates_details : JSON.stringify(d.advocates_details || []);
 
-        await env.DB.prepare(`
-          INSERT INTO new_prisoner_surveys (
-            utct_no, name, case_type, total_cases, case_duration,
-            total_advocates_hired, times_in_jail, advocate_name_number,
-            advocates_details,
-            known_unknown_advocate, high_court_advocate, advocate_payment_advance,
-            first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
-            know_fees_reasonable, complete_fees_total_initially,
-            work_transparency_tracking, know_legal_step_correct,
-            case_prolonged_expensive, pairvi_knowledge_reason,
-            court_docs_fees_timing, know_trustworthy_platform,
-            priority_money_vs_release, prisoner_psychologic_survey,
-            custom_answers
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
-          Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
-          Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
-          d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
-          d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
-          d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
-          d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
-          d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
-          d.prisoner_psychologic_survey || '', customJson
-        ).run();
+        try {
+          await env.DB.prepare(`
+            INSERT INTO new_prisoner_surveys (
+              utct_no, name, case_type, total_cases, case_duration,
+              total_advocates_hired, times_in_jail, advocate_name_number,
+              advocates_details,
+              known_unknown_advocate, high_court_advocate, advocate_payment_advance,
+              first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
+              know_fees_reasonable, complete_fees_total_initially,
+              work_transparency_tracking, know_legal_step_correct,
+              case_prolonged_expensive, pairvi_knowledge_reason,
+              court_docs_fees_timing, know_trustworthy_platform,
+              priority_money_vs_release, prisoner_psychologic_survey,
+              custom_answers
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            utctNo, prisonerName, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+            Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+            Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
+            d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
+            d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
+            d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
+            d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
+            d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
+            d.prisoner_psychologic_survey || '', customJson
+          ).run();
+        } catch (insertErr) {
+          console.error('Insert new_prisoner_surveys error:', insertErr);
+          return new Response(
+            JSON.stringify({ success: false, message: `Database insert failed: ${insertErr.message}` }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         const savedRecord = await env.DB.prepare(
           'SELECT * FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
-        ).bind(d.utct_no).first();
+        ).bind(utctNo).first();
 
         let savedCustom = {};
         if (savedRecord?.custom_answers) {
