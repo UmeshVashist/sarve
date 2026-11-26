@@ -296,37 +296,6 @@ async function ensureD1Database(db) {
       );
     `).run();
 
-    // 16. New Prisoner Questions Table (Separate questions for New Prisoner module)
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS new_prisoner_questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_num INTEGER NOT NULL,
-        key TEXT UNIQUE NOT NULL,
-        label TEXT NOT NULL,
-        placeholder TEXT,
-        type TEXT DEFAULT 'text',
-        options TEXT,
-        required INTEGER DEFAULT 0,
-        note TEXT,
-        has_remark INTEGER DEFAULT 0,
-        is_custom INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `).run();
-
-    const newQCount = (await db.prepare('SELECT COUNT(*) as c FROM new_prisoner_questions').first())?.c || 0;
-    if (newQCount === 0) {
-      try {
-        await db.prepare(`
-          INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
-          SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
-        `).run();
-      } catch (seedErr) {
-        console.warn('Seeding new_prisoner_questions failed:', seedErr);
-      }
-    }
-
     // 8. Ensure prisoner_surveys columns: advocates_details and custom_answers
     try {
       await db.prepare("ALTER TABLE prisoner_surveys ADD COLUMN advocates_details TEXT DEFAULT '[]'").run();
