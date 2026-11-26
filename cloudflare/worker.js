@@ -377,6 +377,41 @@ async function ensureD1Database(db) {
       );
     `).run();
 
+    // 15. New Prisoner Surveys Table
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        utct_no TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        case_type TEXT,
+        total_cases INTEGER DEFAULT 0,
+        case_duration TEXT,
+        total_advocates_hired INTEGER DEFAULT 0,
+        times_in_jail INTEGER DEFAULT 0,
+        advocate_name_number TEXT,
+        advocates_details TEXT DEFAULT '[]',
+        known_unknown_advocate TEXT,
+        high_court_advocate TEXT,
+        advocate_payment_advance TEXT,
+        first_advocate_by_io TEXT,
+        know_case_process TEXT,
+        lawyer_collects_details_evidence TEXT,
+        know_fees_reasonable TEXT,
+        complete_fees_total_initially TEXT,
+        work_transparency_tracking TEXT,
+        know_legal_step_correct TEXT,
+        case_prolonged_expensive TEXT,
+        pairvi_knowledge_reason TEXT,
+        court_docs_fees_timing TEXT,
+        know_trustworthy_platform TEXT,
+        priority_money_vs_release TEXT,
+        prisoner_psychologic_survey TEXT,
+        custom_answers TEXT DEFAULT '{}',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
     isD1Initialized = true;
   } catch (err) {
     console.error('ensureD1Database error:', err);
@@ -1715,6 +1750,226 @@ export default {
         const id = path.split('/')[3];
         await env.DB.prepare('DELETE FROM work_role_entries WHERE id = ?').bind(id).run();
         return new Response(JSON.stringify({ success: true, message: 'Work entry deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================================
+      // NEW PRISONER SURVEY MODULE ENDPOINTS (/api/new-survey / /api/new-prisoner)
+      // ==========================================================
+
+      // Check UT/CT uniqueness in new_prisoner_surveys
+      if ((path.startsWith('/api/new-survey/check-utct') || path.startsWith('/api/new-prisoner/check-utct')) && method === 'GET') {
+        const utctNo = (url.searchParams.get('no') || url.searchParams.get('utctNo') || decodeURIComponent(path.split('/')[4] || '')).trim();
+        const existing = await env.DB.prepare(
+          'SELECT id, utct_no, name FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
+        ).bind(utctNo).first();
+
+        return new Response(
+          JSON.stringify({
+            exists: !!existing,
+            message: existing ? `UT/CT No. "${utctNo}" already exists in New Prisoner records!` : 'Available',
+            survey: existing || null
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // List New Prisoner Surveys
+      if ((path === '/api/new-survey/list' || path === '/api/new-prisoner/list') && method === 'GET') {
+        const q = url.searchParams.get('q') || '';
+        let result;
+        if (q) {
+          const searchPattern = `%${q}%`;
+          result = await env.DB.prepare(
+            `SELECT * FROM new_prisoner_surveys WHERE utct_no LIKE ? OR name LIKE ? OR case_type LIKE ? ORDER BY id DESC`
+          ).bind(searchPattern, searchPattern, searchPattern).all();
+        } else {
+          result = await env.DB.prepare('SELECT * FROM new_prisoner_surveys ORDER BY id DESC').all();
+        }
+
+        const data = (result.results || []).map((r) => {
+          let custom = {};
+          if (r.custom_answers) {
+            try { custom = JSON.parse(r.custom_answers); } catch (e) {}
+          }
+          let advocates_details = [];
+          if (r.advocates_details) {
+            try {
+              advocates_details = typeof r.advocates_details === 'string' ? JSON.parse(r.advocates_details) : r.advocates_details;
+            } catch (e) {
+              advocates_details = [];
+            }
+          }
+          if ((!Array.isArray(advocates_details) || advocates_details.length === 0) && custom.advocates_details) {
+            try {
+              advocates_details = typeof custom.advocates_details === 'string' ? JSON.parse(custom.advocates_details) : custom.advocates_details;
+            } catch (e) {}
+          }
+          delete custom.advocates_details;
+          return { ...r, ...custom, advocates_details: Array.isArray(advocates_details) ? advocates_details : [] };
+        });
+
+        return new Response(
+          JSON.stringify({ success: true, count: data.length, data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' } }
+        );
+      }
+
+      // Get single New Prisoner Survey by ID
+      if ((path.startsWith('/api/new-survey/') || path.startsWith('/api/new-prisoner/')) && method === 'GET' && !path.includes('check-utct') && !path.includes('list')) {
+        const id = path.split('/')[3];
+        const survey = await env.DB.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').bind(id).first();
+        if (!survey) {
+          return new Response(JSON.stringify({ success: false, message: 'Survey record not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        let custom = {};
+        if (survey.custom_answers) {
+          try { custom = JSON.parse(survey.custom_answers); } catch (e) {}
+        }
+        let advocates_details = [];
+        if (survey.advocates_details) {
+          try {
+            advocates_details = typeof survey.advocates_details === 'string' ? JSON.parse(survey.advocates_details) : survey.advocates_details;
+          } catch (e) {
+            advocates_details = [];
+          }
+        }
+        delete custom.advocates_details;
+        return new Response(JSON.stringify({ success: true, data: { ...survey, ...custom, advocates_details: Array.isArray(advocates_details) ? advocates_details : [] } }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Add New Prisoner Survey
+      if ((path === '/api/new-survey/add' || path === '/api/new-prisoner/add') && method === 'POST') {
+        const d = await request.json();
+        const existing = await env.DB.prepare(
+          'SELECT id FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
+        ).bind(d.utct_no).first();
+
+        if (existing) {
+          return new Response(
+            JSON.stringify({ success: false, message: `UT/CT No. "${d.utct_no}" already exists in New Prisoner records!` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const customJson = extractCustomAnswers(d);
+        const advDetailsJson = typeof d.advocates_details === 'string' ? d.advocates_details : JSON.stringify(d.advocates_details || []);
+
+        await env.DB.prepare(`
+          INSERT INTO new_prisoner_surveys (
+            utct_no, name, case_type, total_cases, case_duration,
+            total_advocates_hired, times_in_jail, advocate_name_number,
+            advocates_details,
+            known_unknown_advocate, high_court_advocate, advocate_payment_advance,
+            first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
+            know_fees_reasonable, complete_fees_total_initially,
+            work_transparency_tracking, know_legal_step_correct,
+            case_prolonged_expensive, pairvi_knowledge_reason,
+            court_docs_fees_timing, know_trustworthy_platform,
+            priority_money_vs_release, prisoner_psychologic_survey,
+            custom_answers
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+          Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+          Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
+          d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
+          d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
+          d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
+          d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
+          d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
+          d.prisoner_psychologic_survey || '', customJson
+        ).run();
+
+        const savedRecord = await env.DB.prepare(
+          'SELECT * FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
+        ).bind(d.utct_no).first();
+
+        let savedCustom = {};
+        if (savedRecord?.custom_answers) {
+          try { savedCustom = JSON.parse(savedRecord.custom_answers); } catch (e) {}
+        }
+        let savedAdvDetails = [];
+        if (savedRecord?.advocates_details) {
+          try { savedAdvDetails = JSON.parse(savedRecord.advocates_details); } catch (e) {}
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'New Prisoner record saved successfully', data: { ...savedRecord, advocates_details: savedAdvDetails, ...savedCustom } || d }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update New Prisoner Survey
+      if ((path.startsWith('/api/new-survey/') || path.startsWith('/api/new-prisoner/')) && method === 'PUT') {
+        const id = path.split('/')[3];
+        const d = await request.json();
+
+        const existing = await env.DB.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').bind(id).first();
+        let existingCustom = {};
+        if (existing?.custom_answers) {
+          try { existingCustom = JSON.parse(existing.custom_answers); } catch (e) {}
+        }
+        const customJson = extractCustomAnswers(d, existingCustom);
+        const advDetailsJson = typeof d.advocates_details === 'string' ? d.advocates_details : JSON.stringify(d.advocates_details || []);
+
+        await env.DB.prepare(`
+          UPDATE new_prisoner_surveys SET
+            utct_no = ?, name = ?, case_type = ?, total_cases = ?, case_duration = ?,
+            total_advocates_hired = ?, times_in_jail = ?, advocate_name_number = ?,
+            advocates_details = ?,
+            known_unknown_advocate = ?, high_court_advocate = ?, advocate_payment_advance = ?,
+            first_advocate_by_io = ?, know_case_process = ?, lawyer_collects_details_evidence = ?,
+            know_fees_reasonable = ?, complete_fees_total_initially = ?,
+            work_transparency_tracking = ?, know_legal_step_correct = ?,
+            case_prolonged_expensive = ?, pairvi_knowledge_reason = ?,
+            court_docs_fees_timing = ?, know_trustworthy_platform = ?,
+            priority_money_vs_release = ?, prisoner_psychologic_survey = ?,
+            custom_answers = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(
+          d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+          Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+          Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
+          d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
+          d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
+          d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
+          d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
+          d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
+          d.prisoner_psychologic_survey || '', customJson,
+          id
+        ).run();
+
+        const numId = Number(id) || id;
+        const updatedRecord = await env.DB.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').bind(numId).first();
+        let updatedCustom = {};
+        if (updatedRecord?.custom_answers) {
+          try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
+        }
+        let updatedAdvDetails = [];
+        if (updatedRecord?.advocates_details) {
+          try { updatedAdvDetails = JSON.parse(updatedRecord.advocates_details); } catch (e) {}
+        }
+        const finalData = updatedRecord
+          ? { ...updatedRecord, advocates_details: updatedAdvDetails, ...updatedCustom, id: numId }
+          : { ...d, id: numId };
+        return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: finalData }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Delete New Prisoner Survey
+      if ((path.startsWith('/api/new-survey/') || path.startsWith('/api/new-prisoner/')) && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM new_prisoner_surveys WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Deleted successfully' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

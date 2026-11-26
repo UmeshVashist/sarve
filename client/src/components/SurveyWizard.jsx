@@ -41,7 +41,8 @@ export default function SurveyWizard({
   onCourtTypeAdded,
   onCourtTypeEdited,
   onCourtTypeDeleted,
-  onSurveySaved
+  onSurveySaved,
+  apiEndpoint = '/api/survey'
 }) {
   const [currentStep, setCurrentStep] = useState(0); // 0 to N-1 for questions, N for Review Summary
   const [formData, setFormData] = useState({});
@@ -674,7 +675,7 @@ export default function SurveyWizard({
       const utctTrimmed = String(currentVal).trim();
       setCheckingUtct(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/survey/check-utct?no=${encodeURIComponent(utctTrimmed)}`);
+        const res = await fetch(`${API_BASE_URL}${apiEndpoint}/check-utct?no=${encodeURIComponent(utctTrimmed)}`);
         const data = await res.json();
         if (data.exists) {
           setError(`❌ Error: UT/CT No. "${utctTrimmed}" already exists in the database! Please enter a unique number.`);
@@ -945,7 +946,7 @@ export default function SurveyWizard({
         custom_answers: JSON.stringify(customObj)
       };
 
-      const res = await fetch(`${API_BASE_URL}/api/survey/add`, {
+      const res = await fetch(`${API_BASE_URL}${apiEndpoint}/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

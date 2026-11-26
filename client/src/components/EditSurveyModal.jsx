@@ -5,7 +5,7 @@ import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/quest
 import { API_BASE_URL } from '../config';
 import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 
-export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], courtTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated }) {
+export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [], courtTypes = [], questions = SURVEY_QUESTIONS, onSurveyUpdated, apiEndpoint = '/api/survey' }) {
   const [formData, setFormData] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -176,7 +176,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
         custom_answers: JSON.stringify(customObj)
       };
 
-      const res = await fetch(`${API_BASE_URL}/api/survey/${survey.id}`, {
+      const res = await fetch(`${API_BASE_URL}${apiEndpoint}/${survey.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

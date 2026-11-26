@@ -9,6 +9,12 @@ export default function DashboardPage({ onSelectOption }) {
       isPrimary: true
     },
     {
+      id: 'new_prisoner',
+      title: 'New Prisoner',
+      tag: 'Active Module',
+      isPrimary: true
+    },
+    {
       id: 'advocate',
       title: 'Advocate Survey',
       tag: 'Active Module',
@@ -43,8 +49,8 @@ export default function DashboardPage({ onSelectOption }) {
         </p>
       </div>
 
-      {/* 5 Big Peach/Coral Option Cards */}
-      <div className="cards-grid-4 cards-grid-5">
+      {/* 6 Big Peach/Coral Option Cards */}
+      <div className="cards-grid-4 cards-grid-5 cards-grid-6">
         {options.map((opt) => (
           <button
             key={opt.id}

@@ -14,6 +14,16 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
           border: '#BFDBFE',
           icon: Users
         };
+      case 'new_prisoner':
+        return {
+          title: 'New Prisoner Module',
+          badgeText: 'New Prisoner',
+          subtitle: 'UT / CT New Prisoner Field Records Management',
+          bg: '#EEF2FF',
+          color: '#4338CA',
+          border: '#C7D2FE',
+          icon: Users
+        };
       case 'advocate':
         return {
           title: 'Advocate Survey Module',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
+import NewPrisonerSurveyHome from './pages/NewPrisonerSurveyHome';
 import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
 import WebReviewHome from './pages/WebReviewHome';
 import RaastaFunctionHome from './pages/RaastaFunctionHome';
@@ -134,6 +135,8 @@ export default function App() {
   const handleSelectDashboardOption = (optionId) => {
     if (optionId === 'prisoner') {
       navigateTo('prisoner');
+    } else if (optionId === 'new_prisoner') {
+      navigateTo('new_prisoner');
     } else if (optionId === 'advocate') {
       navigateTo('advocate');
     } else if (optionId === 'web_review') {
@@ -192,6 +195,12 @@ export default function App() {
         {currentScreen === 'prisoner' && (
           <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
             <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'new_prisoner' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <NewPrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
           </ErrorBoundary>
         )}
 

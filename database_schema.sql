@@ -235,3 +235,41 @@ CREATE TABLE IF NOT EXISTS work_role_entries (
 
 CREATE INDEX IF NOT EXISTS idx_work_role_name ON work_role_entries(role_name);
 
+
+-- 13. NEW PRISONER SURVEYS TABLE (New Prisoner Module)
+CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  utct_no TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  case_type TEXT,
+  total_cases INTEGER DEFAULT 0,
+  case_duration TEXT,
+  total_advocates_hired INTEGER DEFAULT 0,
+  times_in_jail INTEGER DEFAULT 0,
+  advocate_name_number TEXT,
+  advocates_details TEXT DEFAULT '[]',
+  known_unknown_advocate TEXT,
+  high_court_advocate TEXT,
+  advocate_payment_advance TEXT,
+  first_advocate_by_io TEXT,
+  know_case_process TEXT,
+  lawyer_collects_details_evidence TEXT,
+  know_fees_reasonable TEXT,
+  complete_fees_total_initially TEXT,
+  work_transparency_tracking TEXT,
+  know_legal_step_correct TEXT,
+  case_prolonged_expensive TEXT,
+  pairvi_knowledge_reason TEXT,
+  court_docs_fees_timing TEXT,
+  know_trustworthy_platform TEXT,
+  priority_money_vs_release TEXT,
+  prisoner_psychologic_survey TEXT,
+  custom_answers TEXT DEFAULT '{}',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_new_prisoner_utct ON new_prisoner_surveys(utct_no);
+CREATE INDEX IF NOT EXISTS idx_new_prisoner_name ON new_prisoner_surveys(name);
+
+

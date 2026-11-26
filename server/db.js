@@ -163,6 +163,38 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS new_prisoner_surveys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      utct_no TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      case_type TEXT,
+      total_cases INTEGER,
+      case_duration TEXT,
+      total_advocates_hired INTEGER,
+      times_in_jail INTEGER,
+      advocate_name_number TEXT,
+      advocates_details TEXT DEFAULT '[]',
+      known_unknown_advocate TEXT,
+      high_court_advocate TEXT,
+      advocate_payment_advance TEXT,
+      first_advocate_by_io TEXT,
+      know_case_process TEXT,
+      lawyer_collects_details_evidence TEXT,
+      know_fees_reasonable TEXT,
+      complete_fees_total_initially TEXT,
+      work_transparency_tracking TEXT,
+      know_legal_step_correct TEXT,
+      case_prolonged_expensive TEXT,
+      pairvi_knowledge_reason TEXT,
+      court_docs_fees_timing TEXT,
+      know_trustworthy_platform TEXT,
+      priority_money_vs_release TEXT,
+      prisoner_psychologic_survey TEXT,
+      custom_answers TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Ensure custom_answers & advocates_details columns exist in prisoner_surveys

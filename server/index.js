@@ -1790,6 +1790,161 @@ app.delete('/api/work-roles/:id', (req, res) => {
   }
 });
 
+// ==========================================================
+// NEW PRISONER SURVEY MODULE ENDPOINTS (/api/new-survey / /api/new-prisoner)
+// ==========================================================
+
+// Check UT/CT uniqueness
+app.get(['/api/new-survey/check-utct', '/api/new-prisoner/check-utct'], (req, res) => {
+  try {
+    const utctNo = (req.query.no || req.query.utctNo || '').trim();
+    const existing = db.prepare('SELECT id, utct_no, name FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))').get(utctNo);
+    res.json({
+      exists: !!existing,
+      message: existing ? `UT/CT No. "${utctNo}" already exists in New Prisoner records!` : 'Available',
+      survey: existing || null
+    });
+  } catch (err) {
+    res.status(500).json({ exists: false, error: err.message });
+  }
+});
+
+// List New Prisoner Surveys
+app.get(['/api/new-survey/list', '/api/new-prisoner/list'], (req, res) => {
+  try {
+    const { q } = req.query;
+    let rows;
+    if (q) {
+      const p = `%${q}%`;
+      rows = db.prepare('SELECT * FROM new_prisoner_surveys WHERE utct_no LIKE ? OR name LIKE ? OR case_type LIKE ? ORDER BY id DESC').all(p, p, p);
+    } else {
+      rows = db.prepare('SELECT * FROM new_prisoner_surveys ORDER BY id DESC').all();
+    }
+    const formatted = rows.map(formatSurvey);
+    res.json({ success: true, count: formatted.length, data: formatted });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get single New Prisoner Survey
+app.get(['/api/new-survey/:id', '/api/new-prisoner/:id'], (req, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ success: false, message: 'Survey record not found' });
+    res.json({ success: true, data: formatSurvey(row) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Add New Prisoner Survey
+app.post(['/api/new-survey/add', '/api/new-prisoner/add'], (req, res) => {
+  try {
+    const d = req.body;
+    const existing = db.prepare('SELECT id FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))').get(d.utct_no);
+    if (existing) {
+      return res.status(400).json({ success: false, message: `UT/CT No. "${d.utct_no}" already exists in New Prisoner records!` });
+    }
+
+    const customJson = extractCustomAnswers(d);
+    const advDetailsJson = typeof d.advocates_details === 'string' ? d.advocates_details : JSON.stringify(d.advocates_details || []);
+
+    const stmt = db.prepare(`
+      INSERT INTO new_prisoner_surveys (
+        utct_no, name, case_type, total_cases, case_duration,
+        total_advocates_hired, times_in_jail, advocate_name_number,
+        advocates_details,
+        known_unknown_advocate, high_court_advocate, advocate_payment_advance,
+        first_advocate_by_io, know_case_process, lawyer_collects_details_evidence,
+        know_fees_reasonable, complete_fees_total_initially,
+        work_transparency_tracking, know_legal_step_correct,
+        case_prolonged_expensive, pairvi_knowledge_reason,
+        court_docs_fees_timing, know_trustworthy_platform,
+        priority_money_vs_release, prisoner_psychologic_survey,
+        custom_answers
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const info = stmt.run(
+      d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+      Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+      Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
+      d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
+      d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
+      d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
+      d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
+      d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
+      d.prisoner_psychologic_survey || '', customJson
+    );
+
+    const created = db.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').get(info.lastInsertRowid);
+    res.json({ success: true, message: 'New Prisoner record saved successfully', data: formatSurvey(created) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Update New Prisoner Survey
+app.put(['/api/new-survey/:id', '/api/new-prisoner/:id'], (req, res) => {
+  try {
+    const id = req.params.id;
+    const d = req.body;
+    const existing = db.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Survey record not found' });
+
+    let existingCustom = {};
+    if (existing.custom_answers) {
+      try { existingCustom = JSON.parse(existing.custom_answers); } catch (e) {}
+    }
+    const customJson = extractCustomAnswers(d, existingCustom);
+    const advDetailsJson = typeof d.advocates_details === 'string' ? d.advocates_details : JSON.stringify(d.advocates_details || []);
+
+    db.prepare(`
+      UPDATE new_prisoner_surveys SET
+        utct_no = ?, name = ?, case_type = ?, total_cases = ?, case_duration = ?,
+        total_advocates_hired = ?, times_in_jail = ?, advocate_name_number = ?,
+        advocates_details = ?,
+        known_unknown_advocate = ?, high_court_advocate = ?, advocate_payment_advance = ?,
+        first_advocate_by_io = ?, know_case_process = ?, lawyer_collects_details_evidence = ?,
+        know_fees_reasonable = ?, complete_fees_total_initially = ?,
+        work_transparency_tracking = ?, know_legal_step_correct = ?,
+        case_prolonged_expensive = ?, pairvi_knowledge_reason = ?,
+        court_docs_fees_timing = ?, know_trustworthy_platform = ?,
+        priority_money_vs_release = ?, prisoner_psychologic_survey = ?,
+        custom_answers = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      d.utct_no, d.name, Array.isArray(d.case_type) ? d.case_type.join(', ') : (d.case_type || ''),
+      Number(d.total_cases) || 0, d.case_duration || '', Number(d.total_advocates_hired) || 0,
+      Number(d.times_in_jail) || 0, d.advocate_name_number || '', advDetailsJson,
+      d.known_unknown_advocate || '', d.high_court_advocate || '', d.advocate_payment_advance || '',
+      d.first_advocate_by_io || '', d.know_case_process || '', d.lawyer_collects_details_evidence || '',
+      d.know_fees_reasonable || '', d.complete_fees_total_initially || '', d.work_transparency_tracking || '',
+      d.know_legal_step_correct || '', d.case_prolonged_expensive || '', d.pairvi_knowledge_reason || '',
+      d.court_docs_fees_timing || '', d.know_trustworthy_platform || '', d.priority_money_vs_release || '',
+      d.prisoner_psychologic_survey || '', customJson,
+      id
+    );
+
+    const updated = db.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').get(id);
+    res.json({ success: true, message: 'Survey updated successfully', data: formatSurvey(updated) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete New Prisoner Survey
+app.delete(['/api/new-survey/:id', '/api/new-prisoner/:id'], (req, res) => {
+  try {
+    db.prepare('DELETE FROM new_prisoner_surveys WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Survey record deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(`   SURVEY PORTAL SERVER RUNNING ON PORT ${PORT} `);
