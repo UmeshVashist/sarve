@@ -161,7 +161,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
 
   const fetchQuestions = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/questions?_t=${Date.now()}`, {
+      const res = await fetch(`${API_BASE_URL}/api/new-questions?_t=${Date.now()}`, {
         cache: 'no-store'
       });
       const data = await res.json();
@@ -625,6 +625,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
         isOpen={isQuestionsOpen}
         onClose={() => setIsQuestionsOpen(false)}
         questions={questions}
+        apiEndpoint="/api/new-questions"
         onUpdateQuestions={handleQuestionsChange}
         onQuestionsUpdated={fetchQuestions}
       />

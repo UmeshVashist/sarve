@@ -21,7 +21,8 @@ export default function ManageQuestionsModal({
   onClose,
   questions = [],
   onUpdateQuestions,
-  onQuestionsUpdated
+  onQuestionsUpdated,
+  apiEndpoint = '/api/questions'
 }) {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'add' | 'edit'
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -160,7 +161,7 @@ export default function ManageQuestionsModal({
 
     // Sync to server in background
     try {
-      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+      await fetch(`${API_BASE_URL}${apiEndpoint}/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -200,7 +201,7 @@ export default function ManageQuestionsModal({
     applyQuestionsUpdate(reordered, `Question moved to #${targetIndex + 1}!`);
 
     try {
-      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+      await fetch(`${API_BASE_URL}${apiEndpoint}/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -275,7 +276,7 @@ export default function ManageQuestionsModal({
 
         // Persist has_remark in Cloudflare D1 store
         try {
-          fetch(`${API_BASE_URL}/api/questions/30`, {
+          fetch(`${API_BASE_URL}${apiEndpoint}/30`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -301,13 +302,13 @@ export default function ManageQuestionsModal({
           has_remark: formData.has_remark ? 1 : 0
         };
 
-        await fetch(`${API_BASE_URL}/api/questions/${editingQuestion.id}`, {
+        await fetch(`${API_BASE_URL}${apiEndpoint}/${editingQuestion.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(serverPayload)
         });
 
-        await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+        await fetch(`${API_BASE_URL}${apiEndpoint}/reorder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -339,7 +340,7 @@ export default function ManageQuestionsModal({
           has_remark: formData.has_remark ? 1 : 0
         };
 
-        const res = await fetch(`${API_BASE_URL}/api/questions`, {
+        const res = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(serverPayload)
@@ -375,7 +376,7 @@ export default function ManageQuestionsModal({
 
         // Persist has_remark in Cloudflare D1 store
         try {
-          fetch(`${API_BASE_URL}/api/questions/30`, {
+          fetch(`${API_BASE_URL}${apiEndpoint}/30`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -390,7 +391,7 @@ export default function ManageQuestionsModal({
         setActiveTab('list');
         setEditingQuestion(null);
 
-        await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+        await fetch(`${API_BASE_URL}${apiEndpoint}/reorder`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -432,8 +433,8 @@ export default function ManageQuestionsModal({
     applyQuestionsUpdate(reordered, 'Question deleted successfully!');
 
     try {
-      await fetch(`${API_BASE_URL}/api/questions/${q.id}`, { method: 'DELETE' });
-      await fetch(`${API_BASE_URL}/api/questions/reorder`, {
+      await fetch(`${API_BASE_URL}${apiEndpoint}/${q.id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE_URL}${apiEndpoint}/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -458,7 +459,7 @@ export default function ManageQuestionsModal({
     applyQuestionsUpdate(SURVEY_QUESTIONS, 'Questions reset to default 24 successfully!');
 
     try {
-      await fetch(`${API_BASE_URL}/api/questions/reset`, { method: 'POST' });
+      await fetch(`${API_BASE_URL}${apiEndpoint}/reset`, { method: 'POST' });
       if (onQuestionsUpdated) onQuestionsUpdated();
     } catch (err) {
       console.warn('API reset sync warning:', err);

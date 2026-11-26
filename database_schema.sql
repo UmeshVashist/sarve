@@ -273,3 +273,27 @@ CREATE INDEX IF NOT EXISTS idx_new_prisoner_utct ON new_prisoner_surveys(utct_no
 CREATE INDEX IF NOT EXISTS idx_new_prisoner_name ON new_prisoner_surveys(name);
 
 
+-- 14. NEW PRISONER QUESTIONS TABLE (Independent questions for New Prisoner module)
+CREATE TABLE IF NOT EXISTS new_prisoner_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_num INTEGER NOT NULL,
+  key TEXT UNIQUE NOT NULL,
+  label TEXT NOT NULL,
+  placeholder TEXT,
+  type TEXT DEFAULT 'text',
+  options TEXT,
+  required INTEGER DEFAULT 0,
+  note TEXT,
+  has_remark INTEGER DEFAULT 0,
+  is_custom INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_new_questions_order ON new_prisoner_questions(order_num);
+
+INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions;
+
+
+

@@ -296,6 +296,37 @@ async function ensureD1Database(db) {
       );
     `).run();
 
+    // 16. New Prisoner Questions Table (Separate questions for New Prisoner module)
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS new_prisoner_questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_num INTEGER NOT NULL,
+        key TEXT UNIQUE NOT NULL,
+        label TEXT NOT NULL,
+        placeholder TEXT,
+        type TEXT DEFAULT 'text',
+        options TEXT,
+        required INTEGER DEFAULT 0,
+        note TEXT,
+        has_remark INTEGER DEFAULT 0,
+        is_custom INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    const newQCount = (await db.prepare('SELECT COUNT(*) as c FROM new_prisoner_questions').first())?.c || 0;
+    if (newQCount === 0) {
+      try {
+        await db.prepare(`
+          INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+          SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
+        `).run();
+      } catch (seedErr) {
+        console.warn('Seeding new_prisoner_questions failed:', seedErr);
+      }
+    }
+
     // 8. Ensure prisoner_surveys columns: advocates_details and custom_answers
     try {
       await db.prepare("ALTER TABLE prisoner_surveys ADD COLUMN advocates_details TEXT DEFAULT '[]'").run();
@@ -411,6 +442,37 @@ async function ensureD1Database(db) {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `).run();
+
+    // 16. New Prisoner Questions Table (Separate questions for New Prisoner module)
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS new_prisoner_questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_num INTEGER NOT NULL,
+        key TEXT UNIQUE NOT NULL,
+        label TEXT NOT NULL,
+        placeholder TEXT,
+        type TEXT DEFAULT 'text',
+        options TEXT,
+        required INTEGER DEFAULT 0,
+        note TEXT,
+        has_remark INTEGER DEFAULT 0,
+        is_custom INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
+    const newQCount = (await db.prepare('SELECT COUNT(*) as c FROM new_prisoner_questions').first())?.c || 0;
+    if (newQCount === 0) {
+      try {
+        await db.prepare(`
+          INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+          SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
+        `).run();
+      } catch (seedErr) {
+        console.warn('Seeding new_prisoner_questions failed:', seedErr);
+      }
+    }
 
     isD1Initialized = true;
   } catch (err) {
@@ -1970,6 +2032,165 @@ export default {
         const id = path.split('/')[3];
         await env.DB.prepare('DELETE FROM new_prisoner_surveys WHERE id = ?').bind(id).run();
         return new Response(JSON.stringify({ success: true, message: 'Deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================================
+      // NEW PRISONER QUESTIONS ENDPOINTS (/api/new-prisoner-questions / /api/new-questions)
+      // ==========================================================
+      if ((path === '/api/new-prisoner-questions' || path === '/api/new-questions') && method === 'GET') {
+        try {
+          const list = await env.DB.prepare('SELECT * FROM new_prisoner_questions ORDER BY order_num ASC, id ASC').all();
+          const data = (list.results || []).map((q) => {
+            let options = null;
+            if (q.options) {
+              try { options = JSON.parse(q.options); } catch (e) { options = q.options.split(','); }
+            }
+            return {
+              ...q,
+              required: Boolean(q.required),
+              is_custom: Boolean(q.is_custom),
+              has_remark: Boolean(q.has_remark),
+              options
+            };
+          });
+          return new Response(JSON.stringify({ success: true, data }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+          });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, message: e.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      if ((path === '/api/new-prisoner-questions' || path === '/api/new-questions') && method === 'POST') {
+        const body = await request.json();
+        if (!body.label || !body.label.trim()) {
+          return new Response(JSON.stringify({ success: false, message: 'Question label is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        const maxOrder = (await env.DB.prepare('SELECT MAX(order_num) as m FROM new_prisoner_questions').first())?.m || 0;
+        const orderNum = (body.order_num !== undefined && !isNaN(body.order_num)) ? Number(body.order_num) : (maxOrder + 1);
+        const key = body.key || `custom_${Date.now()}`;
+        let optionsStr = null;
+        if (body.options) {
+          optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : JSON.stringify(String(body.options).split(',').map((s) => s.trim()).filter(Boolean));
+        }
+
+        const hasRemark = body.has_remark ? 1 : 0;
+        await env.DB.prepare(`
+          INSERT INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).bind(orderNum, key, body.label.trim(), body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '', hasRemark).run();
+
+        const created = await env.DB.prepare('SELECT * FROM new_prisoner_questions WHERE key = ?').bind(key).first();
+        let options = null;
+        if (created?.options) {
+          try { options = JSON.parse(created.options); } catch (e) { options = created.options.split(','); }
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Question added successfully',
+          data: {
+            ...created,
+            required: Boolean(created?.required),
+            is_custom: true,
+            has_remark: Boolean(created?.has_remark),
+            options
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if ((path.startsWith('/api/new-prisoner-questions/') || path.startsWith('/api/new-questions/')) && method === 'PUT') {
+        const id = path.split('/')[3];
+        const body = await request.json();
+        const existing = await env.DB.prepare('SELECT * FROM new_prisoner_questions WHERE id = ?').bind(id).first();
+        if (!existing) {
+          return new Response(JSON.stringify({ success: false, message: 'Question not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        let optionsStr = existing.options;
+        if (body.options !== undefined) {
+          optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : JSON.stringify(String(body.options).split(',').map((s) => s.trim()).filter(Boolean));
+        }
+
+        const orderNum = (body.order_num !== undefined && !isNaN(body.order_num)) ? Number(body.order_num) : existing.order_num;
+        const label = body.label !== undefined ? body.label.trim() : existing.label;
+        const placeholder = body.placeholder !== undefined ? body.placeholder : existing.placeholder;
+        const type = body.type !== undefined ? body.type : existing.type;
+        const required = body.required !== undefined ? (body.required ? 1 : 0) : existing.required;
+        const note = body.note !== undefined ? body.note : existing.note;
+        const hasRemark = body.has_remark !== undefined ? (body.has_remark ? 1 : 0) : existing.has_remark;
+
+        await env.DB.prepare(`
+          UPDATE new_prisoner_questions SET
+            order_num = ?, label = ?, placeholder = ?, type = ?, options = ?,
+            required = ?, note = ?, has_remark = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(orderNum, label, placeholder, type, optionsStr, required, note, hasRemark, id).run();
+
+        const updated = await env.DB.prepare('SELECT * FROM new_prisoner_questions WHERE id = ?').bind(id).first();
+        let options = null;
+        if (updated?.options) {
+          try { options = JSON.parse(updated.options); } catch (e) { options = updated.options.split(','); }
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Question updated successfully',
+          data: {
+            ...updated,
+            required: Boolean(updated?.required),
+            is_custom: Boolean(updated?.is_custom),
+            has_remark: Boolean(updated?.has_remark),
+            options
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if ((path.startsWith('/api/new-prisoner-questions/') || path.startsWith('/api/new-questions/')) && method === 'DELETE') {
+        const id = path.split('/')[3];
+        await env.DB.prepare('DELETE FROM new_prisoner_questions WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Question deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if ((path === '/api/new-prisoner-questions/reorder' || path === '/api/new-questions/reorder') && method === 'POST') {
+        const { items } = await request.json();
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (item.id && item.order_num !== undefined) {
+              const cleanLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+              const formattedLabel = `${item.order_num}) ${cleanLabel}`;
+              await env.DB.prepare(
+                'UPDATE new_prisoner_questions SET order_num = ?, label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+              ).bind(Number(item.order_num), formattedLabel, item.id).run();
+            }
+          }
+        }
+        return new Response(JSON.stringify({ success: true, message: 'Questions reordered successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if ((path === '/api/new-prisoner-questions/reset' || path === '/api/new-questions/reset') && method === 'POST') {
+        await env.DB.prepare('DELETE FROM new_prisoner_questions').run();
+        await env.DB.prepare(`
+          INSERT INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+          SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
+        `).run();
+        return new Response(JSON.stringify({ success: true, message: 'New Prisoner questions reset to default' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

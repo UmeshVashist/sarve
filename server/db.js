@@ -195,7 +195,34 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS new_prisoner_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_num INTEGER NOT NULL,
+      key TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      placeholder TEXT,
+      type TEXT DEFAULT 'text',
+      options TEXT,
+      required INTEGER DEFAULT 0,
+      note TEXT,
+      has_remark INTEGER DEFAULT 0,
+      is_custom INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  // Seed new_prisoner_questions from questions if empty
+  try {
+    const nqCount = db.prepare('SELECT COUNT(*) as c FROM new_prisoner_questions').get()?.c || 0;
+    if (nqCount === 0) {
+      db.prepare(`
+        INSERT OR IGNORE INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+        SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
+      `).run();
+    }
+  } catch (e) {}
 
   // Ensure custom_answers & advocates_details columns exist in prisoner_surveys
   try {

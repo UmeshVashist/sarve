@@ -1945,6 +1945,171 @@ app.delete(['/api/new-survey/:id', '/api/new-prisoner/:id'], (req, res) => {
   }
 });
 
+// ==========================================================
+// NEW PRISONER QUESTIONS ENDPOINTS (/api/new-prisoner-questions / /api/new-questions)
+// ==========================================================
+
+// Get all New Prisoner questions
+app.get(['/api/new-prisoner-questions', '/api/new-questions'], (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM new_prisoner_questions ORDER BY order_num ASC, id ASC').all();
+    const data = rows.map((q) => {
+      let options = null;
+      if (q.options) {
+        try { options = JSON.parse(q.options); } catch (e) { options = q.options.split(','); }
+      }
+      return {
+        ...q,
+        required: Boolean(q.required),
+        is_custom: Boolean(q.is_custom),
+        has_remark: Boolean(q.has_remark),
+        options
+      };
+    });
+    res.json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Add new question to New Prisoner
+app.post(['/api/new-prisoner-questions', '/api/new-questions'], (req, res) => {
+  try {
+    const body = req.body;
+    if (!body.label || !body.label.trim()) {
+      return res.status(400).json({ success: false, message: 'Question label is required' });
+    }
+    const maxOrder = db.prepare('SELECT MAX(order_num) as m FROM new_prisoner_questions').get()?.m || 0;
+    const orderNum = (body.order_num !== undefined && !isNaN(body.order_num)) ? Number(body.order_num) : (maxOrder + 1);
+    const key = body.key || `custom_${Date.now()}`;
+    let optionsStr = null;
+    if (body.options) {
+      optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : JSON.stringify(String(body.options).split(',').map((s) => s.trim()).filter(Boolean));
+    }
+    const hasRemark = body.has_remark ? 1 : 0;
+
+    const info = db.prepare(`
+      INSERT INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, is_custom, has_remark)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(orderNum, key, body.label.trim(), body.placeholder || '', body.type || 'text', optionsStr, body.required ? 1 : 0, body.note || '', hasRemark);
+
+    const created = db.prepare('SELECT * FROM new_prisoner_questions WHERE id = ?').get(info.lastInsertRowid);
+    let options = null;
+    if (created?.options) {
+      try { options = JSON.parse(created.options); } catch (e) { options = created.options.split(','); }
+    }
+    res.json({
+      success: true,
+      message: 'Question added successfully',
+      data: {
+        ...created,
+        required: Boolean(created?.required),
+        is_custom: true,
+        has_remark: Boolean(created?.has_remark),
+        options
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Update New Prisoner question
+app.put(['/api/new-prisoner-questions/:id', '/api/new-questions/:id'], (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body;
+    const existing = db.prepare('SELECT * FROM new_prisoner_questions WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Question not found' });
+
+    let optionsStr = existing.options;
+    if (body.options !== undefined) {
+      optionsStr = Array.isArray(body.options) ? JSON.stringify(body.options) : JSON.stringify(String(body.options).split(',').map((s) => s.trim()).filter(Boolean));
+    }
+
+    const orderNum = (body.order_num !== undefined && !isNaN(body.order_num)) ? Number(body.order_num) : existing.order_num;
+    const label = body.label !== undefined ? body.label.trim() : existing.label;
+    const placeholder = body.placeholder !== undefined ? body.placeholder : existing.placeholder;
+    const type = body.type !== undefined ? body.type : existing.type;
+    const required = body.required !== undefined ? (body.required ? 1 : 0) : existing.required;
+    const note = body.note !== undefined ? body.note : existing.note;
+    const hasRemark = body.has_remark !== undefined ? (body.has_remark ? 1 : 0) : existing.has_remark;
+
+    db.prepare(`
+      UPDATE new_prisoner_questions SET
+        order_num = ?, label = ?, placeholder = ?, type = ?, options = ?,
+        required = ?, note = ?, has_remark = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(orderNum, label, placeholder, type, optionsStr, required, note, hasRemark, id);
+
+    const updated = db.prepare('SELECT * FROM new_prisoner_questions WHERE id = ?').get(id);
+    let options = null;
+    if (updated?.options) {
+      try { options = JSON.parse(updated.options); } catch (e) { options = updated.options.split(','); }
+    }
+    res.json({
+      success: true,
+      message: 'Question updated successfully',
+      data: {
+        ...updated,
+        required: Boolean(updated?.required),
+        is_custom: Boolean(updated?.is_custom),
+        has_remark: Boolean(updated?.has_remark),
+        options
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete New Prisoner question
+app.delete(['/api/new-prisoner-questions/:id', '/api/new-questions/:id'], (req, res) => {
+  try {
+    db.prepare('DELETE FROM new_prisoner_questions WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Question deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Reorder New Prisoner questions
+app.post(['/api/new-prisoner-questions/reorder', '/api/new-questions/reorder'], (req, res) => {
+  try {
+    const { items } = req.body;
+    if (Array.isArray(items)) {
+      const updateStmt = db.prepare('UPDATE new_prisoner_questions SET order_num = ?, label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+      const transaction = db.transaction((rows) => {
+        for (const item of rows) {
+          if (item.id && item.order_num !== undefined) {
+            const cleanLabel = (item.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
+            const formattedLabel = `${item.order_num}) ${cleanLabel}`;
+            updateStmt.run(Number(item.order_num), formattedLabel, item.id);
+          }
+        }
+      });
+      transaction(items);
+    }
+    res.json({ success: true, message: 'Questions reordered successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Reset New Prisoner questions to defaults from questions
+app.post(['/api/new-prisoner-questions/reset', '/api/new-questions/reset'], (req, res) => {
+  try {
+    db.prepare('DELETE FROM new_prisoner_questions').run();
+    db.prepare(`
+      INSERT INTO new_prisoner_questions (order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom)
+      SELECT order_num, key, label, placeholder, type, options, required, note, has_remark, is_custom FROM questions
+    `).run();
+    res.json({ success: true, message: 'New Prisoner questions reset to default' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(`   SURVEY PORTAL SERVER RUNNING ON PORT ${PORT} `);
