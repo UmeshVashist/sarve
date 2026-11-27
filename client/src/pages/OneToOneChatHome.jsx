@@ -4,7 +4,7 @@ import {
   MessageSquare, Users, UserPlus, Plus, Search, Send,
   Trash2, Edit3, AtSign, CheckCheck, ArrowLeft, X,
   Shield, Check, RefreshCw, Sparkles, Smile, UserCheck,
-  Settings, Hash, ChevronRight
+  Settings, Hash, ChevronRight, MoreVertical
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -91,6 +91,10 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isGroupMembersModalOpen, setIsGroupMembersModalOpen] = useState(false);
 
+  // 3-Dots Dropdown Menu State
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
   // Group Form State
   const [groupForm, setGroupForm] = useState({
     name: '',
@@ -115,6 +119,24 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
   const lastMsgIdRef = useRef(0);
   const pollingTimerRef = useRef(null);
 
+  // Click outside and Esc key listener for 3-dots dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
   // Show Toast
   const showToast = (msg) => {
     setToast(msg);
@@ -134,7 +156,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
     }
   };
 
-  // 2. Fetch All Groups
+  // 2. Fetch All Groups (without forcing auto-selection so user can close chat)
   const fetchGroups = async (q = groupSearch) => {
     try {
       const url = new URL(`${API_BASE_URL}/api/chat/groups`);
@@ -145,10 +167,6 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
       const data = await res.json();
       if (data.success && Array.isArray(data.groups)) {
         setGroups(data.groups);
-        // Default select first group if none selected
-        if (!activeGroupId && data.groups.length > 0) {
-          setActiveGroupId(data.groups[0].id);
-        }
       }
     } catch (err) {
       console.error('Error fetching groups:', err);
@@ -258,6 +276,16 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
     if (!activeGroup || !Array.isArray(activeGroup.members)) return [];
     return activeGroup.members;
   }, [activeGroup]);
+
+  // Keep currentSender in sync with activeGroupMembers (only members belonging to this group)
+  useEffect(() => {
+    if (activeGroupMembers && activeGroupMembers.length > 0) {
+      const isMemberInGroup = activeGroupMembers.some(m => m.name === currentSender);
+      if (!isMemberInGroup) {
+        setCurrentSender(activeGroupMembers[0].name);
+      }
+    }
+  }, [activeGroupId, activeGroupMembers]);
 
   // Send Message
   const handleSendMessage = async (e) => {
@@ -852,7 +880,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                 return (
                   <div
                     key={grp.id}
-                    onClick={() => setActiveGroupId(grp.id)}
+                    onClick={() => setActiveGroupId(prev => prev === grp.id ? null : grp.id)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1015,67 +1043,178 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                   </div>
                 </div>
 
-                {/* Group Action Buttons */}
+                {/* Group Action Buttons: Close Chat + 3-Dots Vertical Options Menu */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Add / Remove Members button */}
+                  {/* Close Chat Button */}
                   <button
-                    onClick={() => openGroupMembersModal(activeGroup)}
+                    onClick={() => setActiveGroupId(null)}
                     style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: '5px',
-                      backgroundColor: '#F8FAFC',
-                      color: '#2563EB',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      backgroundColor: '#F1F5F9',
                       border: '1px solid #CBD5E1',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
+                      color: '#64748B',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
                     }}
-                    title="Add or remove members from this group"
+                    title="Close Chat (Unselect Group)"
                   >
-                    <UserPlus size={15} /> Add/Remove Members
+                    <X size={18} />
                   </button>
 
-                  {/* Edit Group Info button */}
-                  <button
-                    onClick={() => openEditGroupModal(activeGroup)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      backgroundColor: '#F8FAFC',
-                      color: '#475569',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '6px',
-                      padding: '6px 10px',
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                    title="Edit group details"
-                  >
-                    <Edit3 size={15} /> Edit Group
-                  </button>
+                  {/* 3-Dots Vertical Menu (MoreVertical) */}
+                  <div style={{ position: 'relative' }} ref={menuRef}>
+                    <button
+                      onClick={() => setIsMenuOpen(prev => !prev)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        backgroundColor: isMenuOpen ? '#E2E8F0' : '#F1F5F9',
+                        border: '1px solid #CBD5E1',
+                        color: '#334155',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Group Options (3 dots)"
+                    >
+                      <MoreVertical size={19} />
+                    </button>
 
-                  {/* Delete Group */}
-                  <button
-                    onClick={() => handleDeleteGroup(activeGroup.id, activeGroup.name)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      padding: '6px 10px',
-                      backgroundColor: '#FEF2F2',
-                      color: '#DC2626',
-                      border: '1px solid #FECACA',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                    title="Delete group"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                    {/* 3-Dots Dropdown Menu */}
+                    {isMenuOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '44px',
+                        right: '0',
+                        width: '220px',
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '10px',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                        border: '1px solid #E2E8F0',
+                        padding: '6px 0',
+                        zIndex: 100,
+                        animation: 'fadeIn 0.15s ease'
+                      }}>
+                        {/* 1. Add / Remove Members */}
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            openGroupMembersModal(activeGroup);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            background: 'transparent',
+                            textAlign: 'left',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#1E293B',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <UserPlus size={16} color="#2563EB" />
+                          <span>Add / Remove Members</span>
+                        </button>
+
+                        {/* 2. Edit Group */}
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            openEditGroupModal(activeGroup);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            background: 'transparent',
+                            textAlign: 'left',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#1E293B',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <Edit3 size={16} color="#475569" />
+                          <span>Edit Group</span>
+                        </button>
+
+                        {/* 3. Close Chat */}
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            setActiveGroupId(null);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            background: 'transparent',
+                            textAlign: 'left',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#475569',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <X size={16} color="#64748B" />
+                          <span>Close Chat</span>
+                        </button>
+
+                        <div style={{ height: '1px', backgroundColor: '#F1F5F9', margin: '4px 0' }} />
+
+                        {/* 4. Delete Group */}
+                        <button
+                          onClick={() => {
+                            setIsMenuOpen(false);
+                            handleDeleteGroup(activeGroup.id, activeGroup.name);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 16px',
+                            border: 'none',
+                            background: 'transparent',
+                            textAlign: 'left',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#DC2626',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEF2F2'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                          <Trash2 size={16} color="#DC2626" />
+                          <span>Delete Group</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1334,11 +1473,15 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                         cursor: 'pointer'
                       }}
                     >
-                      {members.map(m => (
-                        <option key={m.id} value={m.name}>
-                          {m.name}
-                        </option>
-                      ))}
+                      {activeGroupMembers && activeGroupMembers.length > 0 ? (
+                        activeGroupMembers.map(m => (
+                          <option key={m.id} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={currentSender}>{currentSender}</option>
+                      )}
                     </select>
                   </div>
 

@@ -535,36 +535,48 @@ async function ensureChatTables(db) {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS chat_system_meta (
+          key TEXT PRIMARY KEY,
+          val TEXT
+        );
+      `),
       db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_msg_group ON chat_messages(group_id, id);"),
       db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_group_m_gid ON chat_group_members(group_id);"),
       db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_group_m_mid ON chat_group_members(member_id);")
     ]);
 
-    // Check if seed members exist
-    const memberCount = (await db.prepare('SELECT COUNT(*) as c FROM chat_members').first())?.c || 0;
-    if (memberCount === 0) {
-      await db.batch([
-        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('meet (Admin)', '#7C3AED')"),
-        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Adv. Rajesh Sharma', '#2563EB')"),
-        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Sunita Legal Aid', '#059669')"),
-        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Amit Parivi Incharge', '#D97706')"),
-        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Kavita Clerk', '#DC2626')")
-      ]);
+    // Check if initial sample data was already seeded once in lifetime
+    const metaCheck = await db.prepare("SELECT val FROM chat_system_meta WHERE key = 'seeded'").first();
+    if (!metaCheck) {
+      // Mark as seeded permanently so user deletions are never reverted
+      await db.prepare("INSERT OR REPLACE INTO chat_system_meta (key, val) VALUES ('seeded', '1')").run();
 
-      // Seed a default group
-      const grpRes = await db.prepare("INSERT INTO chat_groups (name, description, logo_url, created_by) VALUES ('Legal Survey Coordination', 'Official Jail Legal Aid & Advocate Coordination Group', '⚖️', 'meet')").run();
-      const newGid = grpRes?.meta?.last_row_id || 1;
-      
-      const allM = await db.prepare('SELECT id FROM chat_members').all();
-      const memberStmts = (allM.results || []).map(m => 
-        db.prepare("INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)").bind(newGid, m.id)
-      );
-      if (memberStmts.length > 0) {
-        await db.batch(memberStmts);
+      const memberCount = (await db.prepare('SELECT COUNT(*) as c FROM chat_members').first())?.c || 0;
+      if (memberCount === 0) {
+        await db.batch([
+          db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('meet (Admin)', '#7C3AED')"),
+          db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Adv. Rajesh Sharma', '#2563EB')"),
+          db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Sunita Legal Aid', '#059669')"),
+          db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Amit Parivi Incharge', '#D97706')"),
+          db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Kavita Clerk', '#DC2626')")
+        ]);
+
+        // Seed a default group
+        const grpRes = await db.prepare("INSERT INTO chat_groups (name, description, logo_url, created_by) VALUES ('Legal Survey Coordination', 'Official Jail Legal Aid & Advocate Coordination Group', '⚖️', 'meet')").run();
+        const newGid = grpRes?.meta?.last_row_id || 1;
+        
+        const allM = await db.prepare('SELECT id FROM chat_members').all();
+        const memberStmts = (allM.results || []).map(m => 
+          db.prepare("INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)").bind(newGid, m.id)
+        );
+        if (memberStmts.length > 0) {
+          await db.batch(memberStmts);
+        }
+
+        // Initial welcome message
+        await db.prepare("INSERT INTO chat_messages (group_id, sender_name, message, mentions) VALUES (?, 'meet (Admin)', 'Welcome to the 1 to 1 Group Chat app! You can add/edit members, create custom groups, and type @ to mention any group member.', '[]')").bind(newGid).run();
       }
-
-      // Initial welcome message
-      await db.prepare("INSERT INTO chat_messages (group_id, sender_name, message, mentions) VALUES (?, 'meet (Admin)', 'Welcome to the 1 to 1 Group Chat app! You can add/edit members, create custom groups, and type @ to mention any group member.', '[]')").bind(newGid).run();
     }
   } catch (err) {
     console.warn('ensureChatTables notice:', err);
@@ -2912,7 +2924,6 @@ export default {
 
       // 2. Members: Add new member (Only Name required)
       if (path === '/api/chat/members' && method === 'POST') {
-        await ensureChatTables(env.DB);
         const { name, avatar_color } = await request.json();
         const cleanName = String(name || '').trim();
         if (!cleanName) {
@@ -2994,7 +3005,6 @@ export default {
 
       // 5. Groups: List all groups with member list and last message
       if (path === '/api/chat/groups' && method === 'GET') {
-        await ensureChatTables(env.DB);
         const q = (url.searchParams.get('q') || '').trim();
         let query = 'SELECT * FROM chat_groups WHERE 1=1';
         const params = [];
@@ -3039,7 +3049,6 @@ export default {
 
       // 6. Groups: Create new group (Logo, Name, Description, Multiple Members)
       if (path === '/api/chat/groups' && method === 'POST') {
-        await ensureChatTables(env.DB);
         const { name, description, logo_url, member_ids } = await request.json();
         const cleanName = String(name || '').trim();
         if (!cleanName) {
