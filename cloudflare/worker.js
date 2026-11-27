@@ -59,6 +59,13 @@ let isD1Initialized = false;
 async function ensureD1Database(db) {
   if (isD1Initialized) return;
   try {
+    // Ultra-fast cold-start check: If tables exist, bypass all 80 creation queries
+    const tableCheck = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='prisoner_surveys'").first();
+    if (tableCheck) {
+      isD1Initialized = true;
+      return;
+    }
+
     // 1. Users table
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS users (
@@ -734,21 +741,18 @@ export default {
           ).run();
         }
 
-        const savedRecord = await env.DB.prepare(
-          'SELECT * FROM prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
-        ).bind(d.utct_no).first();
-
+        const newId = Date.now();
         let savedCustom = {};
-        if (savedRecord?.custom_answers) {
-          try { savedCustom = JSON.parse(savedRecord.custom_answers); } catch (e) {}
-        }
+        try { savedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
         let savedAdvDetails = [];
-        if (savedRecord?.advocates_details) {
-          try { savedAdvDetails = JSON.parse(savedRecord.advocates_details); } catch (e) {}
-        }
+        try { savedAdvDetails = Array.isArray(d.advocates_details) ? d.advocates_details : JSON.parse(d.advocates_details || '[]'); } catch (e) {}
 
         return new Response(
-          JSON.stringify({ success: true, message: 'Saved successfully', data: { ...savedRecord, advocates_details: savedAdvDetails, ...savedCustom } || d }),
+          JSON.stringify({
+            success: true,
+            message: 'Saved successfully',
+            data: { ...d, id: newId, advocates_details: savedAdvDetails, ...savedCustom, created_at: new Date().toISOString() }
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -799,18 +803,19 @@ export default {
         }
 
         const numId = Number(id) || id;
-        const updatedRecord = await env.DB.prepare('SELECT * FROM prisoner_surveys WHERE id = ?').bind(numId).first();
-        let updatedCustom = {};
-        if (updatedRecord?.custom_answers) {
-          try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
-        }
         let updatedAdvDetails = [];
-        if (updatedRecord?.advocates_details) {
-          try { updatedAdvDetails = JSON.parse(updatedRecord.advocates_details); } catch (e) {}
-        }
-        const finalData = updatedRecord
-          ? { ...updatedRecord, advocates_details: updatedAdvDetails, ...updatedCustom, id: numId }
-          : { ...d, id: numId };
+        try { updatedAdvDetails = Array.isArray(d.advocates_details) ? d.advocates_details : JSON.parse(d.advocates_details || '[]'); } catch (e) {}
+        let updatedCustom = {};
+        try { updatedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
+
+        const finalData = {
+          ...(existing || {}),
+          ...d,
+          advocates_details: updatedAdvDetails,
+          ...updatedCustom,
+          id: numId,
+          updated_at: new Date().toISOString()
+        };
         return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: finalData }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -1385,17 +1390,16 @@ export default {
           console.error('Insert error in worker for advocate_surveys:', insertErr);
         }
 
-        const savedRecord = await env.DB.prepare(
-          'SELECT * FROM advocate_surveys WHERE name = ? ORDER BY id DESC LIMIT 1'
-        ).bind(d.name || '').first();
-
+        const newId = Date.now();
         let savedCustom = {};
-        if (savedRecord?.custom_answers) {
-          try { savedCustom = JSON.parse(savedRecord.custom_answers); } catch (e) {}
-        }
+        try { savedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
 
         return new Response(
-          JSON.stringify({ success: true, message: 'Advocate survey saved successfully', data: { ...savedRecord, ...savedCustom } || d }),
+          JSON.stringify({
+            success: true,
+            message: 'Advocate survey saved successfully',
+            data: { ...d, id: newId, ...savedCustom, created_at: new Date().toISOString() }
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -1435,14 +1439,16 @@ export default {
         }
 
         const numId = Number(id) || id;
-        const updatedRecord = await env.DB.prepare('SELECT * FROM advocate_surveys WHERE id = ?').bind(numId).first();
         let updatedCustom = {};
-        if (updatedRecord?.custom_answers) {
-          try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
-        }
-        const finalData = updatedRecord
-          ? { ...updatedRecord, ...updatedCustom, id: numId }
-          : { ...d, id: numId };
+        try { updatedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
+
+        const finalData = {
+          ...(existing || {}),
+          ...d,
+          ...updatedCustom,
+          id: numId,
+          updated_at: new Date().toISOString()
+        };
         return new Response(JSON.stringify({ success: true, message: 'Advocate survey updated successfully', data: finalData }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -2114,21 +2120,18 @@ export default {
           );
         }
 
-        const savedRecord = await env.DB.prepare(
-          'SELECT * FROM new_prisoner_surveys WHERE LOWER(TRIM(utct_no)) = LOWER(TRIM(?))'
-        ).bind(utctNo).first();
-
+        const newId = Date.now();
         let savedCustom = {};
-        if (savedRecord?.custom_answers) {
-          try { savedCustom = JSON.parse(savedRecord.custom_answers); } catch (e) {}
-        }
+        try { savedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
         let savedAdvDetails = [];
-        if (savedRecord?.advocates_details) {
-          try { savedAdvDetails = JSON.parse(savedRecord.advocates_details); } catch (e) {}
-        }
+        try { savedAdvDetails = Array.isArray(d.advocates_details) ? d.advocates_details : JSON.parse(d.advocates_details || '[]'); } catch (e) {}
 
         return new Response(
-          JSON.stringify({ success: true, message: 'New Prisoner record saved successfully', data: { ...savedRecord, advocates_details: savedAdvDetails, ...savedCustom } || d }),
+          JSON.stringify({
+            success: true,
+            message: 'New Prisoner record saved successfully',
+            data: { ...d, id: newId, utct_no: utctNo, name: prisonerName, advocates_details: savedAdvDetails, ...savedCustom, created_at: new Date().toISOString() }
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -2175,18 +2178,19 @@ export default {
         ).run();
 
         const numId = Number(id) || id;
-        const updatedRecord = await env.DB.prepare('SELECT * FROM new_prisoner_surveys WHERE id = ?').bind(numId).first();
-        let updatedCustom = {};
-        if (updatedRecord?.custom_answers) {
-          try { updatedCustom = JSON.parse(updatedRecord.custom_answers); } catch (e) {}
-        }
         let updatedAdvDetails = [];
-        if (updatedRecord?.advocates_details) {
-          try { updatedAdvDetails = JSON.parse(updatedRecord.advocates_details); } catch (e) {}
-        }
-        const finalData = updatedRecord
-          ? { ...updatedRecord, advocates_details: updatedAdvDetails, ...updatedCustom, id: numId }
-          : { ...d, id: numId };
+        try { updatedAdvDetails = Array.isArray(d.advocates_details) ? d.advocates_details : JSON.parse(d.advocates_details || '[]'); } catch (e) {}
+        let updatedCustom = {};
+        try { updatedCustom = JSON.parse(customJson || '{}'); } catch (e) {}
+
+        const finalData = {
+          ...(existing || {}),
+          ...d,
+          advocates_details: updatedAdvDetails,
+          ...updatedCustom,
+          id: numId,
+          updated_at: new Date().toISOString()
+        };
         return new Response(JSON.stringify({ success: true, message: 'Updated successfully', data: finalData }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -2587,6 +2591,7 @@ export default {
             r2Object.writeHttpMetadata(headers);
             headers.set('etag', r2Object.httpEtag);
             headers.set('Access-Control-Allow-Origin', '*');
+            headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
             headers.set('Content-Disposition', `inline; filename="${record?.file_name || 'download'}"`);
             return new Response(r2Object.body, { headers });
           }

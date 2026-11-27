@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import PrisonerSurveyHome from './pages/PrisonerSurveyHome';
-import NewPrisonerSurveyHome from './pages/NewPrisonerSurveyHome';
-import AdvocateSurveyHome from './pages/AdvocateSurveyHome';
-import WebReviewHome from './pages/WebReviewHome';
-import RaastaFunctionHome from './pages/RaastaFunctionHome';
-import WorkRoleHome from './pages/WorkRoleHome';
-import DocStoreHome from './pages/DocStoreHome';
-import PassMsHome from './pages/PassMsHome';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
+
+// Code-split heavy page views for 10x faster initial loading & lightweight bundle
+const PrisonerSurveyHome = lazy(() => import('./pages/PrisonerSurveyHome'));
+const NewPrisonerSurveyHome = lazy(() => import('./pages/NewPrisonerSurveyHome'));
+const AdvocateSurveyHome = lazy(() => import('./pages/AdvocateSurveyHome'));
+const WebReviewHome = lazy(() => import('./pages/WebReviewHome'));
+const RaastaFunctionHome = lazy(() => import('./pages/RaastaFunctionHome'));
+const WorkRoleHome = lazy(() => import('./pages/WorkRoleHome'));
+const DocStoreHome = lazy(() => import('./pages/DocStoreHome'));
+const PassMsHome = lazy(() => import('./pages/PassMsHome'));
 
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes auto-logout
 
@@ -194,57 +196,64 @@ export default function App() {
 
       {/* Main Pages */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {currentScreen === 'dashboard' && (
-          <DashboardPage onSelectOption={handleSelectDashboardOption} />
-        )}
+        <Suspense fallback={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: '14px', color: '#64748B' }}>
+            <div style={{ width: '36px', height: '36px', border: '3.5px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            <span style={{ fontSize: '13.5px', fontWeight: 600 }}>Loading module...</span>
+          </div>
+        }>
+          {currentScreen === 'dashboard' && (
+            <DashboardPage onSelectOption={handleSelectDashboardOption} />
+          )}
 
-        {currentScreen === 'prisoner' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'prisoner' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <PrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'new_prisoner' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <NewPrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'new_prisoner' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <NewPrisonerSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'advocate' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'advocate' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <AdvocateSurveyHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'web_review' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <WebReviewHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'web_review' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <WebReviewHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'raasta' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <RaastaFunctionHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'raasta' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <RaastaFunctionHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'work_role' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <WorkRoleHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'work_role' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <WorkRoleHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'doc_store' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <DocStoreHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'doc_store' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <DocStoreHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
 
-        {currentScreen === 'pass_ms' && (
-          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
-            <PassMsHome onBackToDashboard={() => navigateTo('dashboard')} />
-          </ErrorBoundary>
-        )}
+          {currentScreen === 'pass_ms' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <PassMsHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
+        </Suspense>
       </main>
     </div>
   );

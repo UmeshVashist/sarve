@@ -412,13 +412,19 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     return { success: true };
   };
 
+  const searchTimeoutRef = useRef(null);
+
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
-    fetchSurveys(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchSurveys(val);
+    }, 250);
   };
 
   const handleClearSearch = () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     setSearchQuery('');
     fetchSurveys('');
   };
