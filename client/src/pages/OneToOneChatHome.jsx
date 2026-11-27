@@ -4,7 +4,7 @@ import {
   MessageSquare, Users, UserPlus, Plus, Search, Send,
   Trash2, Edit3, AtSign, CheckCheck, ArrowLeft, X,
   Shield, Check, RefreshCw, Sparkles, Smile, UserCheck,
-  Settings, Hash, ChevronRight, MoreVertical
+  Settings, Hash, ChevronRight, MoreVertical, CornerUpLeft
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -78,6 +78,9 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
 
   // Current Sender
   const [currentSender, setCurrentSender] = useState('meet (Admin)');
+
+  // Reply state (Quoted reply like WhatsApp)
+  const [replyingTo, setReplyingTo] = useState(null); // { id, sender_name, message }
 
   // New Message Input & @ Mention states
   const [inputText, setInputText] = useState('');
@@ -303,11 +306,18 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
       });
     }
 
+    const replyPayload = replyingTo ? {
+      id: replyingTo.id,
+      sender_name: replyingTo.sender_name,
+      message: replyingTo.message
+    } : null;
+
     const payload = {
       group_id: activeGroupId,
       sender_name: currentSender,
       message: clean,
-      mentions: foundMentions
+      mentions: foundMentions,
+      reply_to: replyPayload ? JSON.stringify(replyPayload) : null
     };
 
     // Optimistic message display
@@ -318,11 +328,13 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
       sender_name: currentSender,
       message: clean,
       mentions: JSON.stringify(foundMentions),
+      reply_to: replyPayload ? JSON.stringify(replyPayload) : null,
       created_at: new Date().toISOString()
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
     setInputText('');
+    setReplyingTo(null);
     setMentionQuery(null);
     setTimeout(scrollToBottom, 50);
 
@@ -372,13 +384,26 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
     setMentionQuery(null);
   };
 
-  // Mention suggestions matching current query
+  // Start Reply to a message
+  const handleStartReply = (msg) => {
+    setReplyingTo({
+      id: msg.id,
+      sender_name: msg.sender_name,
+      message: msg.message
+    });
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
+  // Mention suggestions matching current query (strictly excludes the current sender)
   const mentionSuggestions = useMemo(() => {
     if (mentionQuery === null) return [];
     return activeGroupMembers.filter(m =>
+      m.name.toLowerCase() !== currentSender.toLowerCase() &&
       m.name.toLowerCase().includes(mentionQuery)
     );
-  }, [mentionQuery, activeGroupMembers]);
+  }, [mentionQuery, activeGroupMembers, currentSender]);
 
   // Insert selected mention
   const insertMention = (memberName) => {
@@ -617,30 +642,75 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
     }
   };
 
-  // Helper to render message text with highlighted @mentions
+  // Helper to render message text with highlighted @mentions (strictly matches real member names only)
   const renderMessageContent = (text) => {
     if (!text) return '';
-    // Match @ followed by words
-    const parts = text.split(/(@[\w\s().-]+)/g);
+
+    // Collect all known member names (activeGroupMembers + all members)
+    const allKnownNames = Array.from(new Set([
+      ...activeGroupMembers.map(m => m.name.trim()),
+      ...members.map(m => m.name.trim())
+    ])).filter(Boolean);
+
+    if (allKnownNames.length === 0) {
+      // Fallback: match @word up to whitespace only
+      const parts = text.split(/(@[^\s@,;:!?]+)/g);
+      return parts.map((part, idx) => {
+        if (part.startsWith('@')) {
+          return (
+            <span
+              key={idx}
+              style={{
+                color: '#1D4ED8',
+                backgroundColor: '#DBEAFE',
+                padding: '1px 6px',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '13px',
+                display: 'inline-block',
+                margin: '0 2px'
+              }}
+            >
+              {part}
+            </span>
+          );
+        }
+        return <span key={idx}>{part}</span>;
+      });
+    }
+
+    // Sort names by length descending so longer multi-word names match first (e.g. "Amit Parivi Incharge" before "Amit")
+    allKnownNames.sort((a, b) => b.length - a.length);
+
+    // Escape regex chars
+    const escapedNames = allKnownNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    // Match @Name followed by a boundary, whitespace or punctuation
+    const regex = new RegExp(`(@(?:${escapedNames.join('|')}))(?=[\\s,;:!?]|$)`, 'gi');
+
+    const parts = text.split(regex);
     return parts.map((part, idx) => {
       if (part.startsWith('@')) {
-        return (
-          <span
-            key={idx}
-            style={{
-              color: '#1D4ED8',
-              backgroundColor: '#DBEAFE',
-              padding: '1px 6px',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '13px',
-              display: 'inline-block',
-              margin: '0 2px'
-            }}
-          >
-            {part}
-          </span>
-        );
+        const cleanName = part.slice(1).trim().toLowerCase();
+        const isKnown = allKnownNames.some(n => n.toLowerCase() === cleanName);
+        if (isKnown) {
+          return (
+            <span
+              key={idx}
+              style={{
+                color: '#1D4ED8',
+                backgroundColor: '#DBEAFE',
+                padding: '1px 6px',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '13px',
+                display: 'inline-block',
+                margin: '0 2px'
+              }}
+            >
+              {part}
+            </span>
+          );
+        }
       }
       return <span key={idx}>{part}</span>;
     });
@@ -1298,73 +1368,131 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                           </div>
                         ) : (
                           /* Chat Message Bubble */
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: isOutgoing ? 'flex-end' : 'flex-start',
-                              position: 'relative'
-                            }}
-                            className="chat-message-row"
-                          >
-                            <div style={{
-                              maxWidth: '68%',
-                              backgroundColor: isOutgoing ? '#DCF8C6' : '#FFFFFF', // WhatsApp green for sent, white for received
-                              borderRadius: isOutgoing ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                              padding: '8px 12px 6px 12px',
-                              boxShadow: '0 1px 2px rgba(11,20,26,0.12)',
-                              position: 'relative',
-                              wordBreak: 'break-word'
-                            }}>
-                              {/* Sender Name with their member color (Only on incoming or if different sender) */}
-                              {!isOutgoing && (
+                          (() => {
+                            let parsedReply = null;
+                            if (msg.reply_to) {
+                              try {
+                                parsedReply = typeof msg.reply_to === 'string' ? JSON.parse(msg.reply_to) : msg.reply_to;
+                              } catch (e) {
+                                parsedReply = null;
+                              }
+                            }
+
+                            return (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: isOutgoing ? 'flex-end' : 'flex-start',
+                                  position: 'relative'
+                                }}
+                                className="chat-message-row"
+                              >
                                 <div style={{
-                                  fontSize: '12.5px',
-                                  fontWeight: 800,
-                                  color: senderColor,
-                                  marginBottom: '3px'
+                                  maxWidth: '68%',
+                                  backgroundColor: isOutgoing ? '#DCF8C6' : '#FFFFFF', // WhatsApp green for sent, white for received
+                                  borderRadius: isOutgoing ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                                  padding: '8px 12px 6px 12px',
+                                  boxShadow: '0 1px 2px rgba(11,20,26,0.12)',
+                                  position: 'relative',
+                                  wordBreak: 'break-word'
                                 }}>
-                                  {msg.sender_name}
+                                  {/* Sender Name with their member color (Only on incoming or if different sender) */}
+                                  {!isOutgoing && (
+                                    <div style={{
+                                      fontSize: '12.5px',
+                                      fontWeight: 800,
+                                      color: senderColor,
+                                      marginBottom: '3px'
+                                    }}>
+                                      {msg.sender_name}
+                                    </div>
+                                  )}
+
+                                  {/* Quoted Reply Preview (if this message is a reply) */}
+                                  {parsedReply && (
+                                    <div
+                                      style={{
+                                        backgroundColor: isOutgoing ? 'rgba(0, 0, 0, 0.05)' : '#F1F5F9',
+                                        borderLeft: '3.5px solid #2563EB',
+                                        borderRadius: '6px',
+                                        padding: '4px 8px',
+                                        marginBottom: '6px',
+                                        fontSize: '12px'
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 800, color: '#2563EB', fontSize: '11px', marginBottom: '1px' }}>
+                                        {parsedReply.sender_name}
+                                      </div>
+                                      <div style={{
+                                        color: '#475569',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        fontSize: '12px'
+                                      }}>
+                                        {parsedReply.message}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Message Text with Highlighted Mentions */}
+                                  <div style={{ fontSize: '13.5px', color: '#111B21', lineHeight: '1.45' }}>
+                                    {renderMessageContent(msg.message)}
+                                  </div>
+
+                                  {/* Footer: Timestamp, reply action, double tick & delete */}
+                                  <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end',
+                                    gap: '6px',
+                                    marginTop: '4px'
+                                  }}>
+                                    <span style={{ fontSize: '10.5px', color: '#667781', fontWeight: 500 }}>
+                                      {formatWhatsAppTime(msg.created_at)}
+                                    </span>
+                                    {isOutgoing && (
+                                      <CheckCheck size={14} color="#53BDEB" />
+                                    )}
+
+                                    {/* Reply button */}
+                                    <button
+                                      onClick={() => handleStartReply(msg)}
+                                      style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        padding: '0 2px',
+                                        color: '#64748B',
+                                        opacity: 0.7,
+                                        display: 'inline-flex',
+                                        alignItems: 'center'
+                                      }}
+                                      title="Reply to this message"
+                                    >
+                                      <CornerUpLeft size={13} />
+                                    </button>
+                                    
+                                    {/* Delete message button on hover */}
+                                    <button
+                                      onClick={() => handleDeleteMessage(msg.id)}
+                                      style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        padding: '0 2px',
+                                        color: '#94A3B8',
+                                        opacity: 0.6
+                                      }}
+                                      title="Delete message"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
-
-                              {/* Message Text with Highlighted Mentions */}
-                              <div style={{ fontSize: '13.5px', color: '#111B21', lineHeight: '1.45' }}>
-                                {renderMessageContent(msg.message)}
                               </div>
-
-                              {/* Footer: Timestamp and double tick */}
-                              <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                gap: '4px',
-                                marginTop: '4px'
-                              }}>
-                                <span style={{ fontSize: '10.5px', color: '#667781', fontWeight: 500 }}>
-                                  {formatWhatsAppTime(msg.created_at)}
-                                </span>
-                                {isOutgoing && (
-                                  <CheckCheck size={14} color="#53BDEB" />
-                                )}
-                                
-                                {/* Delete message button on hover */}
-                                <button
-                                  onClick={() => handleDeleteMessage(msg.id)}
-                                  style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    padding: '0 0 0 6px',
-                                    color: '#94A3B8',
-                                    opacity: 0.6
-                                  }}
-                                  title="Delete message"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
+                            );
+                          })()
                         )}
                       </React.Fragment>
                     );
@@ -1443,6 +1571,52 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Quoted Reply Banner (WhatsApp style) */}
+                {replyingTo && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#FFFFFF',
+                    borderLeft: '4px solid #2563EB',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                  }}>
+                    <div style={{ minWidth: 0, flex: 1, marginRight: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#2563EB' }}>
+                        <CornerUpLeft size={13} />
+                        <span>Replying to {replyingTo.sender_name}</span>
+                      </div>
+                      <div style={{
+                        fontSize: '12px',
+                        color: '#64748B',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        marginTop: '2px'
+                      }}>
+                        {replyingTo.message}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: '#94A3B8',
+                        padding: '4px'
+                      }}
+                      title="Cancel reply"
+                    >
+                      <X size={15} />
+                    </button>
                   </div>
                 )}
 

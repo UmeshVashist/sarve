@@ -268,6 +268,7 @@ function initDB() {
       sender_id INTEGER DEFAULT 0,
       message TEXT NOT NULL,
       mentions TEXT DEFAULT '[]',
+      reply_to TEXT DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -282,6 +283,14 @@ function initDB() {
   `);
 
   // Seed chat members & default group ONLY once in lifetime
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(chat_messages)").all();
+    const hasReplyTo = tableInfo.some((col) => col.name === 'reply_to');
+    if (!hasReplyTo) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN reply_to TEXT DEFAULT NULL");
+    }
+  } catch (e) {}
+
   try {
     const metaCheck = db.prepare("SELECT val FROM chat_system_meta WHERE key = 'seeded'").get();
     if (!metaCheck) {

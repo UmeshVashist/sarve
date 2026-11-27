@@ -249,7 +249,7 @@ export default function PassMsHome({ onBackToDashboard }) {
           <button
             ref={addDataBtnRef}
             className="btn-add-data"
-            style={{ background: '#7C3AED', borderColor: '#6D28D9' }}
+            style={{ background: '#7C3AED', borderColor: '#6D28D9', color: 'white' }}
             onClick={() => {
               setEditingEntry(null);
               setIsModalOpen(true);
@@ -257,7 +257,7 @@ export default function PassMsHome({ onBackToDashboard }) {
             title="Save new password entry"
           >
             <Plus size={18} />
-            <span>+ Add Password</span>
+            <span>Add Password</span>
           </button>
 
           {/* Export Excel Button */}

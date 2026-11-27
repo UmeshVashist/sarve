@@ -447,7 +447,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
             title="Upload single or multiple files to Cloudflare R2"
           >
             <UploadCloud size={18} />
-            <span>+ Upload Files</span>
+            <span>Upload Files</span>
           </button>
 
           {/* Upload Folder */}
@@ -459,7 +459,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
             title="Upload entire folder directory structure"
           >
             <FolderPlus size={18} />
-            <span>📁 Upload Folder</span>
+            <span>Upload Folder</span>
           </button>
 
           {/* Create New Folder */}
@@ -472,7 +472,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
             title="Create a new directory"
           >
             <Plus size={17} />
-            <span>+ New Folder</span>
+            <span>New Folder</span>
           </button>
         </div>
 
@@ -732,75 +732,75 @@ export default function DocStoreHome({ onBackToDashboard }) {
                 {/* 2. Files List */}
                 {files.map((file, idx) => (
                   <tr key={file.id || file.file_key} style={{ background: '#FFFFFF', borderBottom: '1px solid #F1F5F9' }}>
-                  <td style={{ color: '#94A3B8', fontWeight: 600 }}>{idx + 1}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span className="doc-type-icon">{getFileIcon(file.file_name)}</span>
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>
-                          {file.file_name}
+                    <td style={{ color: '#94A3B8', fontWeight: 600 }}>{idx + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="doc-type-icon">{getFileIcon(file.file_name)}</span>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#0F172A', wordBreak: 'break-word' }}>
+                            {file.file_name}
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#64748B' }}>
+                            Key: {file.file_key}
+                          </span>
                         </div>
-                        <span style={{ fontSize: '11px', color: '#64748B' }}>
-                          Key: {file.file_key}
-                        </span>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="doc-folder-pill">
-                      <Folder size={12} />
-                      {file.folder_path || '/'}
-                    </span>
-                  </td>
-                  <td style={{ fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-                    {formatBytes(file.file_size)}
-                  </td>
-                  <td>
-                    <span className="doc-ext-badge">
-                      {(file.file_name.split('.').pop() || 'FILE').toUpperCase()}
-                    </span>
-                  </td>
-                  <td style={{ color: '#64748B', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                    {file.created_at ? new Date(file.created_at).toLocaleDateString() : 'Today'}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      {/* Preview in new tab */}
-                      <a
-                        href={`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-doc-action"
-                        title="Preview / Open in new tab"
-                      >
-                        <Eye size={15} />
-                      </a>
+                    </td>
+                    <td>
+                      <span className="doc-folder-pill">
+                        <Folder size={12} />
+                        {file.folder_path || '/'}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
+                      {formatBytes(file.file_size)}
+                    </td>
+                    <td>
+                      <span className="doc-ext-badge">
+                        {(file.file_name.split('.').pop() || 'FILE').toUpperCase()}
+                      </span>
+                    </td>
+                    <td style={{ color: '#64748B', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                      {file.created_at ? new Date(file.created_at).toLocaleDateString() : 'Today'}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Preview in new tab */}
+                        <a
+                          href={`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-doc-action"
+                          title="Preview / Open in new tab"
+                        >
+                          <Eye size={15} />
+                        </a>
 
-                      {/* Download File */}
-                      <a
-                        href={`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`}
-                        download={file.file_name}
-                        className="btn-doc-action"
-                        title="Download file"
-                      >
-                        <Download size={15} />
-                      </a>
+                        {/* Download File */}
+                        <a
+                          href={`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`}
+                          download={file.file_name}
+                          className="btn-doc-action"
+                          title="Download file"
+                        >
+                          <Download size={15} />
+                        </a>
 
-                      {/* Delete File */}
-                      <button
-                        className="btn-doc-action delete"
-                        onClick={() => handleDeleteFile(file)}
-                        title="Delete from Cloudflare R2"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        {/* Delete File */}
+                        <button
+                          className="btn-doc-action delete"
+                          onClick={() => handleDeleteFile(file)}
+                          title="Delete from Cloudflare R2"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

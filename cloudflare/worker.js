@@ -532,6 +532,7 @@ async function ensureChatTables(db) {
           sender_id INTEGER DEFAULT 0,
           message TEXT NOT NULL,
           mentions TEXT DEFAULT '[]',
+          reply_to TEXT DEFAULT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `),
@@ -547,6 +548,10 @@ async function ensureChatTables(db) {
     ]);
 
     // Check if initial sample data was already seeded once in lifetime
+    try {
+      await db.prepare("ALTER TABLE chat_messages ADD COLUMN reply_to TEXT DEFAULT NULL").run();
+    } catch (e) {}
+
     const metaCheck = await db.prepare("SELECT val FROM chat_system_meta WHERE key = 'seeded'").first();
     if (!metaCheck) {
       // Mark as seeded permanently so user deletions are never reverted
@@ -3201,7 +3206,7 @@ export default {
 
       // 12. Messages: Send message
       if (path === '/api/chat/messages' && method === 'POST') {
-        const { group_id, sender_name, message, mentions } = await request.json();
+        const { group_id, sender_name, message, mentions, reply_to } = await request.json();
         const cleanMsg = String(message || '').trim();
         if (!group_id || !cleanMsg) {
           return new Response(JSON.stringify({ success: false, message: 'group_id and message are required' }), {
@@ -3212,11 +3217,12 @@ export default {
 
         const sender = String(sender_name || 'meet').trim();
         const mentionsJson = Array.isArray(mentions) ? JSON.stringify(mentions) : (typeof mentions === 'string' ? mentions : '[]');
+        const replyStr = reply_to ? (typeof reply_to === 'string' ? reply_to : JSON.stringify(reply_to)) : null;
 
         const ins = await env.DB.prepare(`
-          INSERT INTO chat_messages (group_id, sender_name, message, mentions)
-          VALUES (?, ?, ?, ?)
-        `).bind(group_id, sender, cleanMsg, mentionsJson).run();
+          INSERT INTO chat_messages (group_id, sender_name, message, mentions, reply_to)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(group_id, sender, cleanMsg, mentionsJson, replyStr).run();
 
         const newId = ins?.meta?.last_row_id || Date.now();
 
@@ -3229,6 +3235,7 @@ export default {
           sender_name: sender,
           message: cleanMsg,
           mentions: mentionsJson,
+          reply_to: replyStr,
           created_at: new Date().toISOString()
         };
 

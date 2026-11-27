@@ -2689,7 +2689,7 @@ app.get('/api/chat/messages', (req, res) => {
 // 12. Messages: Send message
 app.post('/api/chat/messages', (req, res) => {
   try {
-    const { group_id, sender_name, message, mentions } = req.body;
+    const { group_id, sender_name, message, mentions, reply_to } = req.body;
     const cleanMsg = String(message || '').trim();
     if (!group_id || !cleanMsg) {
       return res.status(400).json({ success: false, message: 'group_id and message are required' });
@@ -2697,11 +2697,12 @@ app.post('/api/chat/messages', (req, res) => {
 
     const sender = String(sender_name || 'meet').trim();
     const mentionsJson = Array.isArray(mentions) ? JSON.stringify(mentions) : (typeof mentions === 'string' ? mentions : '[]');
+    const replyStr = reply_to ? (typeof reply_to === 'string' ? reply_to : JSON.stringify(reply_to)) : null;
 
     const info = db.prepare(`
-      INSERT INTO chat_messages (group_id, sender_name, message, mentions)
-      VALUES (?, ?, ?, ?)
-    `).run(group_id, sender, cleanMsg, mentionsJson);
+      INSERT INTO chat_messages (group_id, sender_name, message, mentions, reply_to)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(group_id, sender, cleanMsg, mentionsJson, replyStr);
 
     db.prepare('UPDATE chat_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(group_id);
 
@@ -2711,6 +2712,7 @@ app.post('/api/chat/messages', (req, res) => {
       sender_name: sender,
       message: cleanMsg,
       mentions: mentionsJson,
+      reply_to: replyStr,
       created_at: new Date().toISOString()
     };
 
