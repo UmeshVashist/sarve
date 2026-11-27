@@ -138,22 +138,19 @@ export default function App() {
   }, [user, handleLogout]);
 
   const handleSelectDashboardOption = (optionId) => {
-    if (optionId === 'prisoner') {
-      navigateTo('prisoner');
-    } else if (optionId === 'new_prisoner') {
-      navigateTo('new_prisoner');
-    } else if (optionId === 'advocate') {
-      navigateTo('advocate');
-    } else if (optionId === 'web_review') {
-      navigateTo('web_review');
-    } else if (optionId === 'raasta') {
-      navigateTo('raasta');
-    } else if (optionId === 'work_role') {
-      navigateTo('work_role');
-    } else if (optionId === 'doc_store') {
-      navigateTo('doc_store');
-    } else if (optionId === 'pass_ms') {
-      navigateTo('pass_ms');
+    const validScreens = [
+      'prisoner',
+      'new_prisoner',
+      'advocate',
+      'web_review',
+      'raasta',
+      'work_role',
+      'doc_store',
+      'pass_ms',
+      'one_to_one'
+    ];
+    if (validScreens.includes(optionId)) {
+      navigateTo(optionId);
     } else {
       navigateTo('dashboard');
     }
