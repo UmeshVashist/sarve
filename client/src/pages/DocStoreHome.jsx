@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Folder, FolderPlus, UploadCloud, File, FileText, Image as ImageIcon,
-  FileSpreadsheet, Trash2, Download, ExternalLink, HardDrive,
+  FileSpreadsheet, Trash2, Download, HardDrive,
   Search, ArrowLeft, RefreshCw, ChevronRight, CheckCircle2,
-  AlertCircle, X, Plus, FolderOpen, Database, Eye
+  AlertCircle, X, Plus, FolderOpen, Database, Eye, ArrowUpLeft
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -21,22 +21,22 @@ function formatBytes(bytes, decimals = 2) {
 function getFileIcon(fileName) {
   const ext = (fileName || '').split('.').pop().toLowerCase();
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
-    return <ImageIcon size={20} color="#0284C7" />;
+    return <ImageIcon size={19} color="#0284C7" />;
   }
   if (['xls', 'xlsx', 'csv'].includes(ext)) {
-    return <FileSpreadsheet size={20} color="#16A34A" />;
+    return <FileSpreadsheet size={19} color="#16A34A" />;
   }
   if (['pdf', 'doc', 'docx', 'txt', 'rtf'].includes(ext)) {
-    return <FileText size={20} color="#EA580C" />;
+    return <FileText size={19} color="#EA580C" />;
   }
-  return <File size={20} color="#64748B" />;
+  return <File size={19} color="#64748B" />;
 }
 
 export default function DocStoreHome({ onBackToDashboard }) {
   const [currentFolder, setCurrentFolder] = useState('/');
   const [subfolders, setSubfolders] = useState([]);
   const [files, setFiles] = useState([]);
-  const [stats, setStats] = useState({ total_files: 0, total_size_bytes: 0, total_folders: 1, r2_active: false });
+  const [stats, setStats] = useState({ total_files: 0, total_size_bytes: 0, total_folders: 1, r2_active: true });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -52,16 +52,33 @@ export default function DocStoreHome({ onBackToDashboard }) {
   const folderInputRef = useRef(null);
   const newFolderInputRef = useRef(null);
 
-  // Load files and folders
+  // Load files and folders from Cloudflare Database / R2
   const fetchDocStore = async (folder = currentFolder, query = searchQuery) => {
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
       const params = new URLSearchParams();
       params.append('folder', folder);
       if (query.trim()) params.append('q', query.trim());
       params.append('_t', Date.now());
 
-      const res = await fetch(`${API_BASE_URL}/api/docs/list?${params.toString()}`);
+      const res = await fetch(`${API_BASE_URL}/api/docs/list?${params.toString()}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.status === 404) {
+        setStatusBanner({
+          type: 'error',
+          message: 'Worker R2 API endpoint not active yet. Please deploy the updated worker.js in Cloudflare Dashboard.'
+        });
+        setFiles([]);
+        setSubfolders([]);
+        return;
+      }
+
       const data = await res.json();
       if (data.success) {
         setFiles(data.files || []);
@@ -69,9 +86,16 @@ export default function DocStoreHome({ onBackToDashboard }) {
         if (data.stats) {
           setStats(data.stats);
         }
+      } else {
+        setFiles([]);
+        setSubfolders([]);
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       console.warn('Doc Store fetch error:', err);
+      // Fail gracefully without locking UI
+      setFiles([]);
+      setSubfolders([]);
     } finally {
       setLoading(false);
     }
@@ -81,7 +105,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
     fetchDocStore(currentFolder, searchQuery);
   }, [currentFolder]);
 
-  // Handle Search Submission / Typing
+  // Handle Search Input
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
@@ -95,13 +119,13 @@ export default function DocStoreHome({ onBackToDashboard }) {
     fetchDocStore(currentFolder, searchQuery);
   };
 
-  // Upload Files handler
+  // Upload Files (Single / Multi)
   const handleFileUpload = async (e) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgressMsg(`Uploading ${selectedFiles.length} file(s) to Cloudflare R2...`);
+    setUploadProgressMsg(`Uploading ${selectedFiles.length} file(s) directly to Cloudflare R2...`);
 
     const formData = new FormData();
     formData.append('folder_path', currentFolder);
@@ -116,7 +140,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        setStatusBanner({ type: 'success', message: data.message || 'Files uploaded to R2 successfully!' });
+        setStatusBanner({ type: 'success', message: data.message || 'Files uploaded to Cloudflare R2 successfully!' });
         fetchDocStore(currentFolder, searchQuery);
       } else {
         setStatusBanner({ type: 'error', message: data.message || 'Upload failed' });
@@ -127,17 +151,17 @@ export default function DocStoreHome({ onBackToDashboard }) {
       setIsUploading(false);
       setUploadProgressMsg('');
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setTimeout(() => setStatusBanner(null), 5000);
+      setTimeout(() => setStatusBanner(null), 6000);
     }
   };
 
-  // Upload Directory / Folder handler
+  // Upload Folder (Directory batch upload)
   const handleFolderUpload = async (e) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgressMsg(`Uploading folder (${selectedFiles.length} files) to Cloudflare R2...`);
+    setUploadProgressMsg(`Uploading folder directory (${selectedFiles.length} files) to Cloudflare R2...`);
 
     const formData = new FormData();
     formData.append('folder_path', currentFolder);
@@ -146,7 +170,6 @@ export default function DocStoreHome({ onBackToDashboard }) {
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       formData.append('files', file);
-      // Browser provides webkitRelativePath for directory uploads
       relativePaths.push(file.webkitRelativePath || file.name);
     }
     formData.append('relative_paths', JSON.stringify(relativePaths));
@@ -158,7 +181,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        setStatusBanner({ type: 'success', message: data.message || 'Folder uploaded to R2 successfully!' });
+        setStatusBanner({ type: 'success', message: data.message || 'Folder uploaded to Cloudflare R2 successfully!' });
         fetchDocStore(currentFolder, searchQuery);
       } else {
         setStatusBanner({ type: 'error', message: data.message || 'Folder upload failed' });
@@ -169,11 +192,11 @@ export default function DocStoreHome({ onBackToDashboard }) {
       setIsUploading(false);
       setUploadProgressMsg('');
       if (folderInputRef.current) folderInputRef.current.value = '';
-      setTimeout(() => setStatusBanner(null), 5000);
+      setTimeout(() => setStatusBanner(null), 6000);
     }
   };
 
-  // Create Folder
+  // Create New Subfolder
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     const cleanName = newFolderName.trim();
@@ -204,9 +227,9 @@ export default function DocStoreHome({ onBackToDashboard }) {
     }
   };
 
-  // Delete File
+  // Delete File from R2 & Database
   const handleDeleteFile = async (file) => {
-    if (!window.confirm(`Are you sure you want to delete "${file.file_name}" from Cloudflare R2?`)) return;
+    if (!window.confirm(`Are you sure you want to permanently delete "${file.file_name}" from Cloudflare R2?`)) return;
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`, {
@@ -214,7 +237,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        setStatusBanner({ type: 'success', message: `"${file.file_name}" deleted from Doc Store.` });
+        setStatusBanner({ type: 'success', message: `"${file.file_name}" deleted from Cloudflare R2.` });
         fetchDocStore(currentFolder, searchQuery);
       } else {
         setStatusBanner({ type: 'error', message: data.message || 'Failed to delete file' });
@@ -226,121 +249,139 @@ export default function DocStoreHome({ onBackToDashboard }) {
     }
   };
 
-  // Breadcrumbs builder
-  const renderBreadcrumbs = () => {
-    const parts = currentFolder.split('/').filter(Boolean);
-    return (
-      <div className="doc-breadcrumbs">
-        <button
-          className={`breadcrumb-item ${parts.length === 0 ? 'active' : ''}`}
-          onClick={() => setCurrentFolder('/')}
-          title="Root directory"
-        >
-          <FolderOpen size={16} />
-          <span>Doc Store (Root)</span>
-        </button>
+  // Delete Entire Folder from R2 & Database
+  const handleDeleteFolder = async (folderPath) => {
+    const folderDisplay = folderPath.replace(currentFolder, '').replace(/\/$/, '') || folderPath;
+    if (!window.confirm(`Are you sure you want to permanently delete folder "${folderDisplay}" and ALL its files from Cloudflare R2?`)) return;
 
-        {parts.map((part, idx) => {
-          const pathUpToThis = '/' + parts.slice(0, idx + 1).join('/') + '/';
-          const isLast = idx === parts.length - 1;
-          return (
-            <React.Fragment key={pathUpToThis}>
-              <ChevronRight size={14} className="breadcrumb-separator" />
-              <button
-                className={`breadcrumb-item ${isLast ? 'active' : ''}`}
-                onClick={() => setCurrentFolder(pathUpToThis)}
-                title={pathUpToThis}
-              >
-                <span>{part}</span>
-              </button>
-            </React.Fragment>
-          );
-        })}
-      </div>
-    );
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/docs/folder`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_path: folderPath })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatusBanner({ type: 'success', message: data.message });
+        fetchDocStore(currentFolder, searchQuery);
+      } else {
+        setStatusBanner({ type: 'error', message: data.message || 'Failed to delete folder' });
+      }
+    } catch (err) {
+      setStatusBanner({ type: 'error', message: 'Delete folder error: ' + err.message });
+    } finally {
+      setTimeout(() => setStatusBanner(null), 5000);
+    }
   };
 
+  // Download Entire Folder (downloads all files inside sequentially)
+  const handleDownloadFolder = async (folderPath) => {
+    try {
+      setStatusBanner({ type: 'success', message: `Fetching files in "${folderPath}" for download...` });
+      const res = await fetch(`${API_BASE_URL}/api/docs/folder/files?folder_path=${encodeURIComponent(folderPath)}&_t=${Date.now()}`);
+      const data = await res.json();
+
+      if (!data.success || !Array.isArray(data.files) || data.files.length === 0) {
+        alert('No files found inside this folder to download.');
+        return;
+      }
+
+      setStatusBanner({ type: 'success', message: `Downloading ${data.files.length} file(s) from "${folderPath}"...` });
+
+      // Trigger sequential download of each file
+      for (let i = 0; i < data.files.length; i++) {
+        const f = data.files[i];
+        const link = document.createElement('a');
+        link.href = `${API_BASE_URL}/api/docs/file/${encodeURIComponent(f.file_key)}`;
+        link.download = f.file_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await new Promise(r => setTimeout(r, 600)); // Short pause between downloads
+      }
+    } catch (err) {
+      setStatusBanner({ type: 'error', message: 'Folder download error: ' + err.message });
+    }
+  };
+
+  // Navigate to Parent Directory
+  const handleGoUp = () => {
+    if (currentFolder === '/') return;
+    const parts = currentFolder.split('/').filter(Boolean);
+    parts.pop();
+    const parentPath = parts.length === 0 ? '/' : '/' + parts.join('/') + '/';
+    setCurrentFolder(parentPath);
+  };
+
+  const folderParts = currentFolder.split('/').filter(Boolean);
+
   return (
-    <div className="module-page-container animate-fade-in">
-      {/* Top Action Bar */}
-      <div className="module-top-bar" style={{ flexWrap: 'wrap', gap: '12px' }}>
-        <button className="btn-back-dashboard" onClick={onBackToDashboard}>
+    <div className="survey-page-container animate-fade-in">
+      {/* 1. Top Navigation Bar (Identical to Web Review / Work Role) */}
+      <div className="page-top-nav">
+        <button className="btn-back-nav" onClick={onBackToDashboard}>
           <ArrowLeft size={16} />
           <span>Back to All Categories</span>
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          {/* Hidden Inputs */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            multiple
-            onChange={handleFileUpload}
-            style={{ display: 'none' }}
-          />
-          <input
-            type="file"
-            ref={folderInputRef}
-            webkitdirectory="true"
-            directory="true"
-            multiple
-            onChange={handleFolderUpload}
-            style={{ display: 'none' }}
-          />
-
-          {/* Upload Files Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            className="btn-module-action btn-doc-upload"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            title="Upload one or multiple files into current folder"
-          >
-            <UploadCloud size={16} />
-            <span>+ Upload Files</span>
-          </button>
-
-          {/* Upload Folder Button */}
-          <button
-            className="btn-module-action btn-doc-folder-upload"
-            onClick={() => folderInputRef.current?.click()}
-            disabled={isUploading}
-            title="Upload entire folder directory structure into Cloudflare R2"
-          >
-            <FolderPlus size={16} />
-            <span>📁 Upload Folder</span>
-          </button>
-
-          {/* New Folder Button */}
-          <button
-            className="btn-module-manage btn-doc-new-folder"
-            onClick={() => {
-              setIsNewFolderModalOpen(true);
-              setTimeout(() => newFolderInputRef.current?.focus(), 100);
-            }}
-            title="Create a new subfolder in current directory"
-          >
-            <Plus size={16} />
-            <span>New Folder</span>
-          </button>
-
-          {/* Refresh Button */}
-          <button
-            className="btn-refresh-data"
+            className="btn-back-nav"
             onClick={() => fetchDocStore(currentFolder, searchQuery)}
-            title="Refresh Doc Store files and folders"
+            title="Refresh Data from Cloudflare R2"
           >
-            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* Uploading progress notification */}
-      {isUploading && (
-        <div className="doc-upload-banner animate-fade-in">
-          <RefreshCw size={18} className="spin" />
-          <span>{uploadProgressMsg}</span>
+      {/* 2. KPI Quick Stats Banner (Horizontal 4-card grid) */}
+      <div className="stats-banner" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+        <div className="stat-card">
+          <div className="stat-icon green">
+            <FileText size={22} />
+          </div>
+          <div>
+            <div className="stat-value">{stats.total_files || 0}</div>
+            <div className="stat-label">Total Files Stored</div>
+          </div>
         </div>
-      )}
+
+        <div className="stat-card">
+          <div className="stat-icon blue">
+            <Folder size={22} />
+          </div>
+          <div>
+            <div className="stat-value">{stats.total_folders || 1}</div>
+            <div className="stat-label">Directories / Folders</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon purple">
+            <HardDrive size={22} />
+          </div>
+          <div>
+            <div className="stat-value">{formatBytes(stats.total_size_bytes)}</div>
+            <div className="stat-label">R2 Storage Consumed</div>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon orange">
+            <Database size={22} />
+          </div>
+          <div>
+            <div className="stat-value" style={{ fontSize: '15px', color: '#059669', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="status-dot-pulse"></span>
+              Live R2 Storage
+            </div>
+            <div className="stat-label">Bucket: survey-doc-store</div>
+          </div>
+        </div>
+      </div>
 
       {/* Notification Banner */}
       {statusBanner && (
@@ -353,59 +394,77 @@ export default function DocStoreHome({ onBackToDashboard }) {
         </div>
       )}
 
-      {/* Metrics / Stats Row */}
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#ECFDF5', color: '#059669' }}>
-            <FileText size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-value">{stats.total_files || 0}</span>
-            <span className="stat-label">Total Files Stored</span>
-          </div>
+      {/* Uploading Status Banner */}
+      {isUploading && (
+        <div className="doc-upload-banner animate-fade-in">
+          <RefreshCw size={18} className="animate-spin" />
+          <span>{uploadProgressMsg}</span>
+        </div>
+      )}
+
+      {/* 3. Actions and Search Bar (Matching other modules) */}
+      <div className="survey-action-bar">
+        {/* Hidden File & Folder Inputs */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          multiple
+          onChange={handleFileUpload}
+          style={{ display: 'none' }}
+        />
+        <input
+          type="file"
+          ref={folderInputRef}
+          webkitdirectory="true"
+          directory="true"
+          multiple
+          onChange={handleFolderUpload}
+          style={{ display: 'none' }}
+        />
+
+        {/* Buttons Group */}
+        <div className="action-buttons-group">
+          {/* Upload Files */}
+          <button
+            className="btn-add-data"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            title="Upload single or multiple files to Cloudflare R2"
+          >
+            <UploadCloud size={18} />
+            <span>+ Upload Files</span>
+          </button>
+
+          {/* Upload Folder */}
+          <button
+            className="btn-download-excel"
+            onClick={() => folderInputRef.current?.click()}
+            disabled={isUploading}
+            style={{ background: '#0284C7', borderColor: '#0369A1' }}
+            title="Upload entire folder directory structure"
+          >
+            <FolderPlus size={18} />
+            <span>📁 Upload Folder</span>
+          </button>
+
+          {/* Create New Folder */}
+          <button
+            className="btn-case-types"
+            onClick={() => {
+              setIsNewFolderModalOpen(true);
+              setTimeout(() => newFolderInputRef.current?.focus(), 100);
+            }}
+            title="Create a new directory"
+          >
+            <Plus size={17} />
+            <span>+ New Folder</span>
+          </button>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#EFF6FF', color: '#2563EB' }}>
-            <Folder size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-value">{stats.total_folders || 1}</span>
-            <span className="stat-label">Directories / Folders</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#FAF5FF', color: '#9333EA' }}>
-            <HardDrive size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-value">{formatBytes(stats.total_size_bytes)}</span>
-            <span className="stat-label">R2 Storage Consumed</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: '#FEF3C7', color: '#D97706' }}>
-            <Database size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-value" style={{ fontSize: '15px', color: '#059669', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span className="status-dot-pulse"></span>
-              R2 Object Storage
-            </span>
-            <span className="stat-label">Bucket: survey-doc-store</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter / Search Bar & Current Directory Navigation */}
-      <div className="doc-nav-container">
-        {renderBreadcrumbs()}
-
-        <form onSubmit={handleSearchSubmit} className="doc-search-form">
-          <div className="search-input-wrapper" style={{ width: '100%', maxWidth: '320px' }}>
-            <Search size={16} className="search-icon" />
+        {/* Search Container */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: '1 1 320px', justifyContent: 'flex-end' }}>
+          <form onSubmit={handleSearchSubmit} className="search-container" style={{ margin: 0, minWidth: '220px', flex: '1 1 240px' }}>
+            <Search size={18} className="search-icon" />
             <input
               type="text"
               className="search-input"
@@ -425,16 +484,80 @@ export default function DocStoreHome({ onBackToDashboard }) {
                 <X size={14} />
               </button>
             )}
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
 
-      {/* Subfolders Grid */}
+      {/* 4. Breadcrumb Navigation Bar */}
+      <div className="doc-nav-container" style={{ margin: '14px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+        <div className="doc-breadcrumbs">
+          <button
+            className={`breadcrumb-item ${folderParts.length === 0 ? 'active' : ''}`}
+            onClick={() => setCurrentFolder('/')}
+            title="Root Directory"
+          >
+            <FolderOpen size={15} />
+            <span>Doc Store (Root)</span>
+          </button>
+
+          {folderParts.map((part, idx) => {
+            const pathUpToThis = '/' + folderParts.slice(0, idx + 1).join('/') + '/';
+            const isLast = idx === folderParts.length - 1;
+            return (
+              <React.Fragment key={pathUpToThis}>
+                <ChevronRight size={14} className="breadcrumb-separator" />
+                <button
+                  className={`breadcrumb-item ${isLast ? 'active' : ''}`}
+                  onClick={() => setCurrentFolder(pathUpToThis)}
+                  title={pathUpToThis}
+                >
+                  <span>{part}</span>
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Current Folder Action Buttons */}
+        {currentFolder !== '/' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="btn-folder-action"
+              onClick={handleGoUp}
+              title="Go up to parent folder"
+            >
+              <ArrowUpLeft size={14} />
+              <span>Up One Level</span>
+            </button>
+            <button
+              className="btn-folder-action"
+              onClick={() => handleDownloadFolder(currentFolder)}
+              title="Download all files in current folder"
+            >
+              <Download size={14} />
+              <span>Download Folder</span>
+            </button>
+            <button
+              className="btn-folder-action delete"
+              onClick={() => {
+                handleDeleteFolder(currentFolder);
+                handleGoUp();
+              }}
+              title="Delete current folder"
+            >
+              <Trash2 size={14} />
+              <span>Delete Folder</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Subfolders Section */}
       {subfolders.length > 0 && !searchQuery && (
-        <div className="doc-folders-section">
+        <div className="doc-folders-section" style={{ marginBottom: '18px' }}>
           <div className="doc-section-title">
-            <Folder size={16} />
-            <span>Folders ({subfolders.length})</span>
+            <Folder size={17} color="#0D9488" />
+            <span>Folders & Directories ({subfolders.length})</span>
           </div>
           <div className="doc-folders-grid">
             {subfolders.map((folderPath) => {
@@ -447,13 +570,30 @@ export default function DocStoreHome({ onBackToDashboard }) {
                   title={`Open folder: ${folderPath}`}
                 >
                   <div className="folder-card-icon">
-                    <Folder size={26} color="#0D9488" />
+                    <Folder size={24} color="#0D9488" />
                   </div>
                   <div className="folder-card-text">
                     <span className="folder-name">{displayName}</span>
                     <span className="folder-meta">Subdirectory</span>
                   </div>
-                  <ChevronRight size={16} className="folder-card-arrow" />
+
+                  {/* Actions for folder: Download & Delete */}
+                  <div className="folder-card-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="btn-folder-mini-action"
+                      onClick={() => handleDownloadFolder(folderPath)}
+                      title={`Download all files in "${displayName}"`}
+                    >
+                      <Download size={13} />
+                    </button>
+                    <button
+                      className="btn-folder-mini-action delete"
+                      onClick={() => handleDeleteFolder(folderPath)}
+                      title={`Delete folder "${displayName}"`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -461,13 +601,13 @@ export default function DocStoreHome({ onBackToDashboard }) {
         </div>
       )}
 
-      {/* Files Table / Empty State */}
-      <div className="table-wrapper" style={{ marginTop: '16px' }}>
+      {/* 6. Files Table */}
+      <div className="table-wrapper">
         {loading ? (
           <div className="table-empty-state">
-            <RefreshCw size={36} className="spin empty-icon" />
+            <RefreshCw size={36} className="animate-spin empty-icon" />
             <p className="empty-title">Loading Doc Store...</p>
-            <p className="empty-desc">Fetching files and folders from Cloudflare R2 object storage.</p>
+            <p className="empty-desc">Connecting to Cloudflare R2 object storage...</p>
           </div>
         ) : files.length === 0 && subfolders.length === 0 ? (
           <div className="table-empty-state">
@@ -493,12 +633,12 @@ export default function DocStoreHome({ onBackToDashboard }) {
           <table className="survey-table">
             <thead>
               <tr>
-                <th style={{ width: '50px' }}>#</th>
+                <th style={{ width: '45px' }}>#</th>
                 <th>File Name</th>
-                <th>Folder Directory</th>
+                <th>Directory Path</th>
                 <th>Size</th>
                 <th>Type</th>
-                <th>Uploaded At</th>
+                <th>Uploaded Date</th>
                 <th style={{ textAlign: 'center', width: '130px' }}>Actions</th>
               </tr>
             </thead>
@@ -549,7 +689,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
                         <Eye size={15} />
                       </a>
 
-                      {/* Download */}
+                      {/* Download File */}
                       <a
                         href={`${API_BASE_URL}/api/docs/file/${encodeURIComponent(file.file_key)}`}
                         download={file.file_name}
@@ -559,11 +699,11 @@ export default function DocStoreHome({ onBackToDashboard }) {
                         <Download size={15} />
                       </a>
 
-                      {/* Delete */}
+                      {/* Delete File */}
                       <button
                         className="btn-doc-action delete"
                         onClick={() => handleDeleteFile(file)}
-                        title="Delete from R2"
+                        title="Delete from Cloudflare R2"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -576,10 +716,10 @@ export default function DocStoreHome({ onBackToDashboard }) {
         )}
       </div>
 
-      {/* New Folder Modal */}
+      {/* 7. New Folder Modal Dialog */}
       {isNewFolderModalOpen && (
         <div className="modal-overlay animate-fade-in" onClick={() => setIsNewFolderModalOpen(false)}>
-          <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+          <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ background: '#CCFBF1', color: '#0D9488', padding: '8px', borderRadius: '10px' }}>
@@ -587,7 +727,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
                 </div>
                 <div>
                   <h3 className="modal-title">Create New Folder</h3>
-                  <p className="modal-subtitle">In: {currentFolder}</p>
+                  <p className="modal-subtitle">Directory: {currentFolder}</p>
                 </div>
               </div>
               <button className="btn-close-modal" onClick={() => setIsNewFolderModalOpen(false)}>
@@ -605,7 +745,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
                   type="text"
                   className="form-control"
                   style={{ paddingLeft: '14px' }}
-                  placeholder="e.g. Prisoner Cases, Invoices, Proofs"
+                  placeholder="e.g. Case Documents, Affidavits, Invoices"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   required

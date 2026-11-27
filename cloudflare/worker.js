@@ -2545,6 +2545,56 @@ export default {
         });
       }
 
+      // Delete entire folder and all its contents
+      if (path === '/api/docs/folder' && method === 'DELETE') {
+        const { folder_path } = await request.json();
+        const cleanFolder = folder_path ? (folder_path.endsWith('/') ? folder_path : `${folder_path}/`) : '';
+        if (!cleanFolder || cleanFolder === '/') {
+          return new Response(JSON.stringify({ success: false, message: 'Cannot delete root folder' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Find all files in this folder or any subfolders
+        const filesInFolder = await env.DB.prepare(
+          'SELECT file_key FROM doc_store_files WHERE folder_path = ? OR folder_path LIKE ?'
+        ).bind(cleanFolder, `${cleanFolder}%`).all();
+
+        if (env.DOCS_BUCKET) {
+          for (const f of filesInFolder.results || []) {
+            try { await env.DOCS_BUCKET.delete(f.file_key); } catch (e) {}
+          }
+        }
+
+        await env.DB.prepare(
+          'DELETE FROM doc_store_files WHERE folder_path = ? OR folder_path LIKE ?'
+        ).bind(cleanFolder, `${cleanFolder}%`).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Folder "${cleanFolder}" and all its files deleted successfully from Doc Store`
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get all files inside a folder (for folder batch download)
+      if (path === '/api/docs/folder/files' && method === 'GET') {
+        const folder_path = url.searchParams.get('folder_path') || '';
+        const cleanFolder = folder_path ? (folder_path.endsWith('/') ? folder_path : `${folder_path}/`) : '';
+        const filesInFolder = await env.DB.prepare(
+          "SELECT * FROM doc_store_files WHERE (folder_path = ? OR folder_path LIKE ?) AND file_name != '.keep'"
+        ).bind(cleanFolder, `${cleanFolder}%`).all();
+
+        return new Response(JSON.stringify({
+          success: true,
+          files: filesInFolder.results || []
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       // Create empty folder
       if (path === '/api/docs/folder/create' && method === 'POST') {
         const { folder_name, parent_folder } = await request.json();

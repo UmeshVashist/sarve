@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const XLSX = require('xlsx');
@@ -2275,6 +2276,33 @@ app.delete('/api/docs/file/:key(*)', (req, res) => {
     const fileKey = req.params.key;
     db.prepare('DELETE FROM doc_store_files WHERE file_key = ? OR id = ?').run(fileKey, fileKey);
     res.json({ success: true, message: 'File deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete folder and all its contents
+app.delete('/api/docs/folder', (req, res) => {
+  try {
+    const { folder_path } = req.body;
+    const cleanFolder = folder_path ? (folder_path.endsWith('/') ? folder_path : `${folder_path}/`) : '';
+    if (!cleanFolder || cleanFolder === '/') {
+      return res.status(400).json({ success: false, message: 'Cannot delete root folder' });
+    }
+    db.prepare('DELETE FROM doc_store_files WHERE folder_path = ? OR folder_path LIKE ?').run(cleanFolder, `${cleanFolder}%`);
+    res.json({ success: true, message: `Folder "${cleanFolder}" and all contents deleted successfully` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get all files in a folder for download
+app.get('/api/docs/folder/files', (req, res) => {
+  try {
+    const folder_path = req.query.folder_path || '';
+    const cleanFolder = folder_path ? (folder_path.endsWith('/') ? folder_path : `${folder_path}/`) : '';
+    const files = db.prepare("SELECT * FROM doc_store_files WHERE (folder_path = ? OR folder_path LIKE ?) AND file_name != '.keep'").all(cleanFolder, `${cleanFolder}%`);
+    res.json({ success: true, files });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
