@@ -49,6 +49,12 @@ export default function DashboardPage({ onSelectOption }) {
       title: 'Pass MS',
       tag: 'Password Vault',
       isPrimary: true
+    },
+    {
+      id: 'one_to_one',
+      title: '1 to 1',
+      tag: 'Group Chat App',
+      isPrimary: true
     }
   ];
 
@@ -61,8 +67,8 @@ export default function DashboardPage({ onSelectOption }) {
         </p>
       </div>
 
-      {/* 8 Big Peach/Coral Option Cards */}
-      <div className="cards-grid-4 cards-grid-5 cards-grid-6 cards-grid-7 cards-grid-8">
+      {/* 9 Big Peach/Coral Option Cards */}
+      <div className="cards-grid-4 cards-grid-5 cards-grid-6 cards-grid-7 cards-grid-8 cards-grid-9">
         {options.map((opt) => (
           <button
             key={opt.id}

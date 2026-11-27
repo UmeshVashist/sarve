@@ -235,7 +235,70 @@ function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS chat_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      avatar_color TEXT DEFAULT '#2563EB',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      logo_url TEXT DEFAULT '💬',
+      created_by TEXT DEFAULT 'meet',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_group_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER NOT NULL,
+      member_id INTEGER NOT NULL,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(group_id, member_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER NOT NULL,
+      sender_name TEXT NOT NULL,
+      sender_id INTEGER DEFAULT 0,
+      message TEXT NOT NULL,
+      mentions TEXT DEFAULT '[]',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_msg_group ON chat_messages(group_id, id);
+    CREATE INDEX IF NOT EXISTS idx_chat_group_m_gid ON chat_group_members(group_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_group_m_mid ON chat_group_members(member_id);
   `);
+
+  // Seed chat members & default group if empty
+  try {
+    const memberCount = db.prepare('SELECT COUNT(*) as c FROM chat_members').get()?.c || 0;
+    if (memberCount === 0) {
+      db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('meet (Admin)', '#7C3AED')").run();
+      db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Adv. Rajesh Sharma', '#2563EB')").run();
+      db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Sunita Legal Aid', '#059669')").run();
+      db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Amit Parivi Incharge', '#D97706')").run();
+      db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Kavita Clerk', '#DC2626')").run();
+
+      const grpRes = db.prepare("INSERT INTO chat_groups (name, description, logo_url, created_by) VALUES ('Legal Survey Coordination', 'Official Jail Legal Aid & Advocate Coordination Group', '⚖️', 'meet')").run();
+      const newGid = grpRes.lastInsertRowid || 1;
+
+      const allM = db.prepare('SELECT id FROM chat_members').all();
+      for (const m of allM) {
+        db.prepare("INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)").run(newGid, m.id);
+      }
+
+      db.prepare("INSERT INTO chat_messages (group_id, sender_name, message, mentions) VALUES (?, 'meet (Admin)', 'Welcome to the 1 to 1 Group Chat app! You can add/edit members, create custom groups, and type @ to mention any group member.', '[]')").run(newGid);
+    }
+  } catch (e) {
+    console.error('Chat tables seed error:', e.message);
+  }
 
   // Seed new_prisoner_questions from questions if empty
   try {

@@ -62,6 +62,10 @@ async function ensureD1Database(db) {
     // Ultra-fast cold-start check: If tables exist, bypass all 80 creation queries
     const tableCheck = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='prisoner_surveys'").first();
     if (tableCheck) {
+      const chatTableCheck = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='chat_groups'").first();
+      if (!chatTableCheck) {
+        await ensureChatTables(db);
+      }
       isD1Initialized = true;
       return;
     }
@@ -480,9 +484,90 @@ async function ensureD1Database(db) {
       );
     `).run();
 
+    // 19. 1 to 1 Chat Tables
+    await ensureChatTables(db);
+
     isD1Initialized = true;
   } catch (err) {
     console.error('ensureD1Database error:', err);
+  }
+}
+
+async function ensureChatTables(db) {
+  try {
+    await db.batch([
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS chat_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT UNIQUE NOT NULL,
+          avatar_color TEXT DEFAULT '#2563EB',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS chat_groups (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT DEFAULT '',
+          logo_url TEXT DEFAULT '💬',
+          created_by TEXT DEFAULT 'meet',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS chat_group_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id INTEGER NOT NULL,
+          member_id INTEGER NOT NULL,
+          added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(group_id, member_id)
+        );
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          group_id INTEGER NOT NULL,
+          sender_name TEXT NOT NULL,
+          sender_id INTEGER DEFAULT 0,
+          message TEXT NOT NULL,
+          mentions TEXT DEFAULT '[]',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_msg_group ON chat_messages(group_id, id);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_group_m_gid ON chat_group_members(group_id);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_chat_group_m_mid ON chat_group_members(member_id);")
+    ]);
+
+    // Check if seed members exist
+    const memberCount = (await db.prepare('SELECT COUNT(*) as c FROM chat_members').first())?.c || 0;
+    if (memberCount === 0) {
+      await db.batch([
+        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('meet (Admin)', '#7C3AED')"),
+        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Adv. Rajesh Sharma', '#2563EB')"),
+        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Sunita Legal Aid', '#059669')"),
+        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Amit Parivi Incharge', '#D97706')"),
+        db.prepare("INSERT OR IGNORE INTO chat_members (name, avatar_color) VALUES ('Kavita Clerk', '#DC2626')")
+      ]);
+
+      // Seed a default group
+      const grpRes = await db.prepare("INSERT INTO chat_groups (name, description, logo_url, created_by) VALUES ('Legal Survey Coordination', 'Official Jail Legal Aid & Advocate Coordination Group', '⚖️', 'meet')").run();
+      const newGid = grpRes?.meta?.last_row_id || 1;
+      
+      const allM = await db.prepare('SELECT id FROM chat_members').all();
+      const memberStmts = (allM.results || []).map(m => 
+        db.prepare("INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)").bind(newGid, m.id)
+      );
+      if (memberStmts.length > 0) {
+        await db.batch(memberStmts);
+      }
+
+      // Initial welcome message
+      await db.prepare("INSERT INTO chat_messages (group_id, sender_name, message, mentions) VALUES (?, 'meet (Admin)', 'Welcome to the 1 to 1 Group Chat app! You can add/edit members, create custom groups, and type @ to mention any group member.', '[]')").bind(newGid).run();
+    }
+  } catch (err) {
+    console.warn('ensureChatTables notice:', err);
   }
 }
 
@@ -2794,6 +2879,360 @@ export default {
           success: true,
           message: 'Password entry deleted successfully'
         }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================================
+      // 1 TO 1 MODULE (Real-Time Group Chat App like WhatsApp)
+      // ==========================================================
+
+      // 1. Members: List all members
+      if (path === '/api/chat/members' && method === 'GET') {
+        await ensureChatTables(env.DB);
+        const q = (url.searchParams.get('q') || '').trim();
+        let query = `
+          SELECT cm.id, cm.name, cm.avatar_color, cm.created_at,
+                 COUNT(cgm.group_id) as groups_count
+          FROM chat_members cm
+          LEFT JOIN chat_group_members cgm ON cm.id = cgm.member_id
+        `;
+        const params = [];
+        if (q) {
+          query += ' WHERE cm.name LIKE ?';
+          params.push(`%${q}%`);
+        }
+        query += ' GROUP BY cm.id ORDER BY cm.name ASC';
+        const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+        const res = await stmt.all();
+        return new Response(JSON.stringify({ success: true, members: res.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 2. Members: Add new member (Only Name required)
+      if (path === '/api/chat/members' && method === 'POST') {
+        await ensureChatTables(env.DB);
+        const { name, avatar_color } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Member name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const existing = await env.DB.prepare('SELECT id FROM chat_members WHERE LOWER(name) = LOWER(?)').bind(cleanName).first();
+        if (existing) {
+          return new Response(JSON.stringify({ success: false, message: `Member "${cleanName}" already exists!` }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const colors = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2', '#4F46E5', '#EA580C', '#0D9488'];
+        const assignedColor = avatar_color || colors[Math.floor(Math.random() * colors.length)];
+
+        const ins = await env.DB.prepare('INSERT INTO chat_members (name, avatar_color) VALUES (?, ?)').bind(cleanName, assignedColor).run();
+        const newId = ins?.meta?.last_row_id || Date.now();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Member added successfully',
+          member: { id: newId, name: cleanName, avatar_color: assignedColor, groups_count: 0 }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 3. Members: Update member name / avatar
+      if (path.startsWith('/api/chat/members/') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const { name, avatar_color } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Member name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const existing = await env.DB.prepare('SELECT id FROM chat_members WHERE LOWER(name) = LOWER(?) AND id != ?').bind(cleanName, id).first();
+        if (existing) {
+          return new Response(JSON.stringify({ success: false, message: `Another member with name "${cleanName}" already exists!` }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (avatar_color) {
+          await env.DB.prepare('UPDATE chat_members SET name = ?, avatar_color = ? WHERE id = ?').bind(cleanName, avatar_color, id).run();
+        } else {
+          await env.DB.prepare('UPDATE chat_members SET name = ? WHERE id = ?').bind(cleanName, id).run();
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Member updated successfully',
+          member: { id: Number(id), name: cleanName }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 4. Members: Delete member
+      if (path.startsWith('/api/chat/members/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM chat_members WHERE id = ?').bind(id),
+          env.DB.prepare('DELETE FROM chat_group_members WHERE member_id = ?').bind(id)
+        ]);
+        return new Response(JSON.stringify({ success: true, message: 'Member deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 5. Groups: List all groups with member list and last message
+      if (path === '/api/chat/groups' && method === 'GET') {
+        await ensureChatTables(env.DB);
+        const q = (url.searchParams.get('q') || '').trim();
+        let query = 'SELECT * FROM chat_groups WHERE 1=1';
+        const params = [];
+        if (q) {
+          query += ' AND (name LIKE ? OR description LIKE ?)';
+          params.push(`%${q}%`, `%${q}%`);
+        }
+        query += ' ORDER BY updated_at DESC, id DESC';
+        const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+        const groupsRes = await stmt.all();
+        const groups = groupsRes.results || [];
+
+        const enriched = [];
+        for (const g of groups) {
+          const membersRes = await env.DB.prepare(`
+            SELECT cm.id, cm.name, cm.avatar_color
+            FROM chat_group_members cgm
+            JOIN chat_members cm ON cgm.member_id = cm.id
+            WHERE cgm.group_id = ?
+            ORDER BY cm.name ASC
+          `).bind(g.id).all();
+
+          const lastMsg = await env.DB.prepare(`
+            SELECT message, sender_name, created_at
+            FROM chat_messages
+            WHERE group_id = ?
+            ORDER BY id DESC LIMIT 1
+          `).bind(g.id).first();
+
+          enriched.push({
+            ...g,
+            members: membersRes.results || [],
+            member_count: (membersRes.results || []).length,
+            last_message: lastMsg || null
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, groups: enriched }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 6. Groups: Create new group (Logo, Name, Description, Multiple Members)
+      if (path === '/api/chat/groups' && method === 'POST') {
+        await ensureChatTables(env.DB);
+        const { name, description, logo_url, member_ids } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Group name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const ins = await env.DB.prepare(`
+          INSERT INTO chat_groups (name, description, logo_url, created_by)
+          VALUES (?, ?, ?, 'meet')
+        `).bind(cleanName, String(description || '').trim(), String(logo_url || '💬').trim()).run();
+        
+        const newGid = ins?.meta?.last_row_id || Date.now();
+
+        // Add multiple members in one go
+        if (Array.isArray(member_ids) && member_ids.length > 0) {
+          const memberStmts = member_ids.map(mid =>
+            env.DB.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)').bind(newGid, mid)
+          );
+          await env.DB.batch(memberStmts);
+        }
+
+        // Welcome message
+        await env.DB.prepare(`
+          INSERT INTO chat_messages (group_id, sender_name, message, mentions)
+          VALUES (?, 'System', 'Group created. Start your conversation!', '[]')
+        `).bind(newGid).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Group created successfully',
+          group_id: newGid
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 7. Groups: Update group (Name, Description, Logo, Members)
+      if (path.startsWith('/api/chat/groups/') && !path.includes('/members') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const { name, description, logo_url, member_ids } = await request.json();
+        const cleanName = String(name || '').trim();
+        if (!cleanName) {
+          return new Response(JSON.stringify({ success: false, message: 'Group name is required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await env.DB.prepare(`
+          UPDATE chat_groups
+          SET name = ?, description = ?, logo_url = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(cleanName, String(description || '').trim(), String(logo_url || '💬').trim(), id).run();
+
+        if (Array.isArray(member_ids)) {
+          await env.DB.prepare('DELETE FROM chat_group_members WHERE group_id = ?').bind(id).run();
+          if (member_ids.length > 0) {
+            const stmts = member_ids.map(mid =>
+              env.DB.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)').bind(id, mid)
+            );
+            await env.DB.batch(stmts);
+          }
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Group updated successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 8. Groups: Delete group and messages
+      if (path.startsWith('/api/chat/groups/') && !path.includes('/members') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM chat_groups WHERE id = ?').bind(id),
+          env.DB.prepare('DELETE FROM chat_group_members WHERE group_id = ?').bind(id),
+          env.DB.prepare('DELETE FROM chat_messages WHERE group_id = ?').bind(id)
+        ]);
+        return new Response(JSON.stringify({ success: true, message: 'Group deleted successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 9. Group Members: Get members of specific group
+      if (path.startsWith('/api/chat/groups/') && path.endsWith('/members') && method === 'GET') {
+        const id = path.split('/')[4];
+        const membersRes = await env.DB.prepare(`
+          SELECT cm.id, cm.name, cm.avatar_color
+          FROM chat_group_members cgm
+          JOIN chat_members cm ON cgm.member_id = cm.id
+          WHERE cgm.group_id = ?
+          ORDER BY cm.name ASC
+        `).bind(id).all();
+
+        return new Response(JSON.stringify({ success: true, members: membersRes.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 10. Group Members: Add / Remove members from group anytime
+      if (path.startsWith('/api/chat/groups/') && path.endsWith('/members') && method === 'POST') {
+        const id = path.split('/')[4];
+        const { member_ids } = await request.json();
+        if (!Array.isArray(member_ids)) {
+          return new Response(JSON.stringify({ success: false, message: 'member_ids array required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await env.DB.prepare('DELETE FROM chat_group_members WHERE group_id = ?').bind(id).run();
+        if (member_ids.length > 0) {
+          const stmts = member_ids.map(mid =>
+            env.DB.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)').bind(id, mid)
+          );
+          await env.DB.batch(stmts);
+        }
+
+        return new Response(JSON.stringify({ success: true, message: 'Group members updated successfully' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 11. Messages: Real-Time messages fetch (Supports delta polling via ?since=)
+      if (path === '/api/chat/messages' && method === 'GET') {
+        const groupId = url.searchParams.get('group_id');
+        const since = url.searchParams.get('since');
+        if (!groupId) {
+          return new Response(JSON.stringify({ success: false, message: 'group_id required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        let q = 'SELECT * FROM chat_messages WHERE group_id = ?';
+        const params = [groupId];
+        if (since && Number(since)) {
+          q += ' AND id > ?';
+          params.push(Number(since));
+        }
+        q += ' ORDER BY id ASC LIMIT 300';
+
+        const res = await env.DB.prepare(q).bind(...params).all();
+        return new Response(JSON.stringify({ success: true, messages: res.results || [] }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 12. Messages: Send message
+      if (path === '/api/chat/messages' && method === 'POST') {
+        const { group_id, sender_name, message, mentions } = await request.json();
+        const cleanMsg = String(message || '').trim();
+        if (!group_id || !cleanMsg) {
+          return new Response(JSON.stringify({ success: false, message: 'group_id and message are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const sender = String(sender_name || 'meet').trim();
+        const mentionsJson = Array.isArray(mentions) ? JSON.stringify(mentions) : (typeof mentions === 'string' ? mentions : '[]');
+
+        const ins = await env.DB.prepare(`
+          INSERT INTO chat_messages (group_id, sender_name, message, mentions)
+          VALUES (?, ?, ?, ?)
+        `).bind(group_id, sender, cleanMsg, mentionsJson).run();
+
+        const newId = ins?.meta?.last_row_id || Date.now();
+
+        // Update group last active timestamp
+        await env.DB.prepare('UPDATE chat_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(group_id).run();
+
+        const msgObj = {
+          id: newId,
+          group_id: Number(group_id),
+          sender_name: sender,
+          message: cleanMsg,
+          mentions: mentionsJson,
+          created_at: new Date().toISOString()
+        };
+
+        return new Response(JSON.stringify({ success: true, message: msgObj }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 13. Messages: Delete message
+      if (path.startsWith('/api/chat/messages/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.prepare('DELETE FROM chat_messages WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({ success: true, message: 'Message deleted' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }

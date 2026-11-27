@@ -2433,6 +2433,303 @@ app.delete('/api/pass-ms/entries/:id', (req, res) => {
   }
 });
 
+// ==========================================================
+// 1 TO 1 GROUP CHAT APP ENDPOINTS
+// ==========================================================
+
+// 1. Members: List all members with group_count
+app.get('/api/chat/members', (req, res) => {
+  try {
+    const members = db.prepare(`
+      SELECT cm.id, cm.name, cm.avatar_color, cm.created_at,
+             COUNT(cgm.group_id) as group_count
+      FROM chat_members cm
+      LEFT JOIN chat_group_members cgm ON cm.id = cgm.member_id
+      GROUP BY cm.id
+      ORDER BY cm.name ASC
+    `).all();
+    res.json({ success: true, members });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 2. Members: Add member
+app.post('/api/chat/members', (req, res) => {
+  try {
+    const { name, avatar_color } = req.body;
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Member name is required' });
+    }
+    const existing = db.prepare('SELECT id FROM chat_members WHERE LOWER(name) = LOWER(?)').get(cleanName);
+    if (existing) {
+      return res.status(400).json({ success: false, message: `Member "${cleanName}" already exists!` });
+    }
+    const colors = ['#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2', '#4F46E5', '#EA580C', '#0D9488'];
+    const assignedColor = avatar_color || colors[Math.floor(Math.random() * colors.length)];
+    const info = db.prepare('INSERT INTO chat_members (name, avatar_color) VALUES (?, ?)').run(cleanName, assignedColor);
+    res.json({
+      success: true,
+      message: 'Member added successfully',
+      member: { id: info.lastInsertRowid, name: cleanName, avatar_color: assignedColor }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 3. Members: Update member
+app.put('/api/chat/members/:id', (req, res) => {
+  try {
+    const { name, avatar_color } = req.body;
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Member name is required' });
+    }
+    db.prepare('UPDATE chat_members SET name = ?, avatar_color = ? WHERE id = ?').run(
+      cleanName, avatar_color || '#2563EB', req.params.id
+    );
+    res.json({ success: true, message: 'Member updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 4. Members: Delete member
+app.delete('/api/chat/members/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    db.prepare('DELETE FROM chat_group_members WHERE member_id = ?').run(id);
+    db.prepare('DELETE FROM chat_members WHERE id = ?').run(id);
+    res.json({ success: true, message: 'Member deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 5. Groups: List groups with populated members & last message
+app.get('/api/chat/groups', (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    let query = 'SELECT * FROM chat_groups WHERE 1=1';
+    const params = [];
+    if (q) {
+      query += ' AND (name LIKE ? OR description LIKE ?)';
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    query += ' ORDER BY updated_at DESC, id DESC';
+    const groups = db.prepare(query).all(...params);
+
+    const enriched = groups.map(g => {
+      const members = db.prepare(`
+        SELECT cm.id, cm.name, cm.avatar_color
+        FROM chat_group_members cgm
+        JOIN chat_members cm ON cgm.member_id = cm.id
+        WHERE cgm.group_id = ?
+        ORDER BY cm.name ASC
+      `).all(g.id);
+
+      const lastMsg = db.prepare(`
+        SELECT message, sender_name, created_at
+        FROM chat_messages
+        WHERE group_id = ?
+        ORDER BY id DESC LIMIT 1
+      `).get(g.id);
+
+      return {
+        ...g,
+        members: members || [],
+        member_count: (members || []).length,
+        last_message: lastMsg || null
+      };
+    });
+
+    res.json({ success: true, groups: enriched });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 6. Groups: Create group with multi-member support
+app.post('/api/chat/groups', (req, res) => {
+  try {
+    const { name, description, logo_url, member_ids } = req.body;
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Group name is required' });
+    }
+    const info = db.prepare(`
+      INSERT INTO chat_groups (name, description, logo_url, created_by)
+      VALUES (?, ?, ?, 'meet')
+    `).run(cleanName, String(description || '').trim(), String(logo_url || '💬').trim());
+
+    const newGid = info.lastInsertRowid;
+
+    if (Array.isArray(member_ids) && member_ids.length > 0) {
+      const insStmt = db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)');
+      for (const mid of member_ids) {
+        insStmt.run(newGid, mid);
+      }
+    }
+
+    db.prepare(`
+      INSERT INTO chat_messages (group_id, sender_name, message, mentions)
+      VALUES (?, 'System', 'Group created. Start your conversation!', '[]')
+    `).run(newGid);
+
+    res.json({ success: true, message: 'Group created successfully', group_id: newGid });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 7. Groups: Update group (Name, Description, Logo, Members)
+app.put('/api/chat/groups/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const { name, description, logo_url, member_ids } = req.body;
+    const cleanName = String(name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Group name is required' });
+    }
+
+    db.prepare(`
+      UPDATE chat_groups
+      SET name = ?, description = ?, logo_url = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(cleanName, String(description || '').trim(), String(logo_url || '💬').trim(), id);
+
+    if (Array.isArray(member_ids)) {
+      db.prepare('DELETE FROM chat_group_members WHERE group_id = ?').run(id);
+      const insStmt = db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)');
+      for (const mid of member_ids) {
+        insStmt.run(id, mid);
+      }
+    }
+
+    res.json({ success: true, message: 'Group updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 8. Groups: Delete group
+app.delete('/api/chat/groups/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    db.prepare('DELETE FROM chat_messages WHERE group_id = ?').run(id);
+    db.prepare('DELETE FROM chat_group_members WHERE group_id = ?').run(id);
+    db.prepare('DELETE FROM chat_groups WHERE id = ?').run(id);
+    res.json({ success: true, message: 'Group deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 9. Group Members: Get members of group
+app.get('/api/chat/groups/:id/members', (req, res) => {
+  try {
+    const members = db.prepare(`
+      SELECT cm.id, cm.name, cm.avatar_color
+      FROM chat_group_members cgm
+      JOIN chat_members cm ON cgm.member_id = cm.id
+      WHERE cgm.group_id = ?
+      ORDER BY cm.name ASC
+    `).all(req.params.id);
+    res.json({ success: true, members });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 10. Group Members: Update members of group (Add/Remove)
+app.post('/api/chat/groups/:id/members', (req, res) => {
+  try {
+    const id = req.params.id;
+    const { member_ids } = req.body;
+    if (!Array.isArray(member_ids)) {
+      return res.status(400).json({ success: false, message: 'member_ids array required' });
+    }
+    db.prepare('DELETE FROM chat_group_members WHERE group_id = ?').run(id);
+    const insStmt = db.prepare('INSERT OR IGNORE INTO chat_group_members (group_id, member_id) VALUES (?, ?)');
+    for (const mid of member_ids) {
+      insStmt.run(id, mid);
+    }
+    res.json({ success: true, message: 'Group members updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 11. Messages: Get messages for group (with real-time delta polling support via ?since=)
+app.get('/api/chat/messages', (req, res) => {
+  try {
+    const groupId = req.query.group_id;
+    const since = req.query.since;
+    if (!groupId) {
+      return res.status(400).json({ success: false, message: 'group_id required' });
+    }
+
+    let q = 'SELECT * FROM chat_messages WHERE group_id = ?';
+    const params = [groupId];
+    if (since && Number(since)) {
+      q += ' AND id > ?';
+      params.push(Number(since));
+    }
+    q += ' ORDER BY id ASC LIMIT 300';
+
+    const messages = db.prepare(q).all(...params);
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 12. Messages: Send message
+app.post('/api/chat/messages', (req, res) => {
+  try {
+    const { group_id, sender_name, message, mentions } = req.body;
+    const cleanMsg = String(message || '').trim();
+    if (!group_id || !cleanMsg) {
+      return res.status(400).json({ success: false, message: 'group_id and message are required' });
+    }
+
+    const sender = String(sender_name || 'meet').trim();
+    const mentionsJson = Array.isArray(mentions) ? JSON.stringify(mentions) : (typeof mentions === 'string' ? mentions : '[]');
+
+    const info = db.prepare(`
+      INSERT INTO chat_messages (group_id, sender_name, message, mentions)
+      VALUES (?, ?, ?, ?)
+    `).run(group_id, sender, cleanMsg, mentionsJson);
+
+    db.prepare('UPDATE chat_groups SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(group_id);
+
+    const msgObj = {
+      id: info.lastInsertRowid,
+      group_id: Number(group_id),
+      sender_name: sender,
+      message: cleanMsg,
+      mentions: mentionsJson,
+      created_at: new Date().toISOString()
+    };
+
+    res.json({ success: true, message: msgObj });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 13. Messages: Delete message
+app.delete('/api/chat/messages/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM chat_messages WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`===============================================`);
   console.log(`   SURVEY PORTAL SERVER RUNNING ON PORT ${PORT} `);

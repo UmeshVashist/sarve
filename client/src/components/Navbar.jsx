@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase, FolderArchive, Key } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase, FolderArchive, Key, MessageSquare } from 'lucide-react';
 
 export default function Navbar({ user, currentScreen = 'dashboard', onLogout, onHomeClick }) {
   const getModuleConfig = () => {
@@ -83,6 +83,16 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
           color: '#7C3AED',
           border: '#DDD6FE',
           icon: Key
+        };
+      case 'one_to_one':
+        return {
+          title: '1 to 1 Chat Module',
+          badgeText: '1 to 1',
+          subtitle: 'Real-Time WhatsApp Style Group Chat System',
+          bg: '#DCFCE7',
+          color: '#15803D',
+          border: '#86EFAC',
+          icon: MessageSquare
         };
       default:
         return {

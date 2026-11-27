@@ -14,6 +14,7 @@ const RaastaFunctionHome = lazy(() => import('./pages/RaastaFunctionHome'));
 const WorkRoleHome = lazy(() => import('./pages/WorkRoleHome'));
 const DocStoreHome = lazy(() => import('./pages/DocStoreHome'));
 const PassMsHome = lazy(() => import('./pages/PassMsHome'));
+const OneToOneChatHome = lazy(() => import('./pages/OneToOneChatHome'));
 
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes auto-logout
 
@@ -251,6 +252,12 @@ export default function App() {
           {currentScreen === 'pass_ms' && (
             <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
               <PassMsHome onBackToDashboard={() => navigateTo('dashboard')} />
+            </ErrorBoundary>
+          )}
+
+          {currentScreen === 'one_to_one' && (
+            <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+              <OneToOneChatHome onBackToDashboard={() => navigateTo('dashboard')} />
             </ErrorBoundary>
           )}
         </Suspense>

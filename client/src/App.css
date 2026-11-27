@@ -322,7 +322,8 @@
 
 .cards-grid-6,
 .cards-grid-7,
-.cards-grid-8 {
+.cards-grid-8,
+.cards-grid-9 {
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   max-width: 1080px;
   gap: 20px 26px;
