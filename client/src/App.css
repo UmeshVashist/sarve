@@ -649,6 +649,30 @@ textarea:focus-visible,
   border-color: #2563EB !important;
 }
 
+/* Chat input focus normalization: eliminate sharp rectangular inner focus outlines */
+.chat-seamless-input:focus,
+.chat-seamless-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.chat-search-container {
+  transition: all 0.2s ease;
+}
+.chat-search-container:focus-within {
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+}
+
+.chat-input-pill-container {
+  transition: all 0.2s ease;
+}
+.chat-input-pill-container:focus-within {
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25) !important;
+}
+
 /* Search Bar */
 .search-container {
   position: relative;

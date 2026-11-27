@@ -4,7 +4,8 @@ import {
   MessageSquare, Users, UserPlus, Plus, Search, Send,
   Trash2, Edit3, AtSign, CheckCheck, ArrowLeft, X,
   Shield, Check, RefreshCw, Sparkles, Smile, UserCheck,
-  Settings, Hash, ChevronRight, MoreVertical, CornerUpLeft
+  Settings, Hash, ChevronRight, MoreVertical, CornerUpLeft,
+  ChevronUp, ChevronDown, User
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -98,6 +99,10 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
+  // Upward Sender Selector Menu State
+  const [isSenderMenuOpen, setIsSenderMenuOpen] = useState(false);
+  const senderMenuRef = useRef(null);
+
   // Group Form State
   const [groupForm, setGroupForm] = useState({
     name: '',
@@ -122,15 +127,21 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
   const lastMsgIdRef = useRef(0);
   const pollingTimerRef = useRef(null);
 
-  // Click outside and Esc key listener for 3-dots dropdown
+  // Click outside and Esc key listener for 3-dots and sender menus
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setIsMenuOpen(false);
       }
+      if (senderMenuRef.current && !senderMenuRef.current.contains(e.target)) {
+        setIsSenderMenuOpen(false);
+      }
     };
     const handleEsc = (e) => {
-      if (e.key === 'Escape') setIsMenuOpen(false);
+      if (e.key === 'Escape') {
+        setIsMenuOpen(false);
+        setIsSenderMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEsc);
@@ -287,6 +298,8 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
       if (!isMemberInGroup) {
         setCurrentSender(activeGroupMembers[0].name);
       }
+    } else {
+      setCurrentSender('');
     }
   }, [activeGroupId, activeGroupMembers]);
 
@@ -871,18 +884,22 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
         }}>
           {/* Search Bar in Sidebar */}
           <div style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
-            <div style={{
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: '#FFFFFF',
-              borderRadius: '8px',
-              border: '1px solid #E2E8F0',
-              padding: '0 10px'
-            }}>
+            <div
+              className="chat-search-container"
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                padding: '0 10px'
+              }}
+            >
               <Search size={16} color="#94A3B8" />
               <input
                 type="text"
+                className="chat-seamless-input"
                 placeholder="Search groups or chat..."
                 value={groupSearch}
                 onChange={(e) => {
@@ -1621,96 +1638,204 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                 )}
 
                 {/* Sender Selector + Text Input Form */}
-                <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  {/* Sender Pill Dropdown */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: '#FFFFFF',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '24px',
-                    padding: '4px 10px',
-                    flexShrink: 0
-                  }}>
-                    <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 700 }}>As:</span>
-                    <select
-                      value={currentSender}
-                      onChange={(e) => setCurrentSender(e.target.value)}
-                      style={{
-                        border: 'none',
-                        outline: 'none',
-                        background: 'transparent',
-                        fontSize: '12.5px',
-                        fontWeight: 700,
-                        color: getSenderColor(currentSender),
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {activeGroupMembers && activeGroupMembers.length > 0 ? (
-                        activeGroupMembers.map(m => (
-                          <option key={m.id} value={m.name}>
-                            {m.name}
-                          </option>
-                        ))
-                      ) : (
-                        <option value={currentSender}>{currentSender}</option>
-                      )}
-                    </select>
-                  </div>
+                {(() => {
+                  const hasGroupMembers = activeGroupMembers && activeGroupMembers.length > 0;
 
-                  {/* Text Input */}
-                  <div style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: '24px',
-                    border: '1px solid #CBD5E1',
-                    padding: '0 14px'
-                  }}>
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={`Type a message... Type @ to mention members`}
-                      value={inputText}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      style={{
-                        width: '100%',
-                        border: 'none',
-                        outline: 'none',
-                        padding: '11px 4px',
-                        fontSize: '13.5px',
-                        color: '#111B21',
-                        backgroundColor: 'transparent'
-                      }}
-                    />
-                  </div>
+                  return (
+                    <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {/* Custom Upward-Opening Sender Selector Pill */}
+                      <div style={{ position: 'relative' }} ref={senderMenuRef}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (hasGroupMembers) {
+                              setIsSenderMenuOpen(prev => !prev);
+                            } else {
+                              showToast('This group has 0 members! Please add members first using 3-dots menu.');
+                            }
+                          }}
+                          className="chat-seamless-input"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: hasGroupMembers ? '#FFFFFF' : '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            borderRadius: '24px',
+                            padding: '6px 12px',
+                            cursor: hasGroupMembers ? 'pointer' : 'not-allowed',
+                            fontSize: '12.5px',
+                            fontWeight: 700,
+                            color: hasGroupMembers ? (getSenderColor(currentSender) || '#0F172A') : '#94A3B8',
+                            outline: 'none',
+                            boxShadow: 'none',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title={hasGroupMembers ? "Click to change sender" : "No members in group"}
+                        >
+                          <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 700 }}>As:</span>
+                          {hasGroupMembers ? (
+                            <>
+                              <span style={{ maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {currentSender || activeGroupMembers[0]?.name}
+                              </span>
+                              {isSenderMenuOpen ? <ChevronUp size={14} color="#64748B" /> : <ChevronDown size={14} color="#64748B" />}
+                            </>
+                          ) : (
+                            <span style={{ color: '#EF4444', fontStyle: 'italic', fontSize: '11.5px' }}>0 Members</span>
+                          )}
+                        </button>
 
-                  {/* Send Button */}
-                  <button
-                    type="submit"
-                    disabled={!inputText.trim()}
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      borderRadius: '50%',
-                      backgroundColor: inputText.trim() ? '#16A34A' : '#94A3B8',
-                      color: '#FFFFFF',
-                      border: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: inputText.trim() ? 'pointer' : 'default',
-                      transition: 'background-color 0.15s ease',
-                      flexShrink: 0
-                    }}
-                    title="Send message (Enter)"
-                  >
-                    <Send size={18} />
-                  </button>
-                </form>
+                        {/* UPWARD-OPENING POPUP LIST (Opens Upwards!) */}
+                        {isSenderMenuOpen && hasGroupMembers && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: 'calc(100% + 8px)', // Opens UPWARDS!
+                            left: 0,
+                            width: '240px',
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: '12px',
+                            boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+                            border: '1px solid #CBD5E1',
+                            overflow: 'hidden',
+                            zIndex: 150,
+                            animation: 'fadeIn 0.15s ease'
+                          }}>
+                            <div style={{
+                              padding: '8px 12px',
+                              backgroundColor: '#F8FAFC',
+                              borderBottom: '1px solid #E2E8F0',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              color: '#64748B',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <User size={13} color="#2563EB" /> SEND MESSAGE AS:
+                            </div>
+                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                              {activeGroupMembers.map(m => {
+                                const isSelected = currentSender === m.name;
+                                return (
+                                  <div
+                                    key={m.id}
+                                    onClick={() => {
+                                      setCurrentSender(m.name);
+                                      setIsSenderMenuOpen(false);
+                                    }}
+                                    style={{
+                                      padding: '9px 12px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '10px',
+                                      cursor: 'pointer',
+                                      backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                                      borderBottom: '1px solid #F1F5F9',
+                                      transition: 'background-color 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      if (!isSelected) e.currentTarget.style.backgroundColor = '#F8FAFC';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      if (!isSelected) e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                    }}
+                                  >
+                                    <span style={{
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '50%',
+                                      backgroundColor: m.avatar_color || '#2563EB',
+                                      color: '#FFFFFF',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      flexShrink: 0
+                                    }}>
+                                      {m.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span style={{
+                                      fontSize: '13px',
+                                      fontWeight: isSelected ? 800 : 600,
+                                      color: isSelected ? '#1D4ED8' : '#0F172A',
+                                      flex: 1,
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis'
+                                    }}>
+                                      {m.name}
+                                    </span>
+                                    {isSelected && <Check size={14} color="#2563EB" />}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Text Input with Rounded Pill Focus Container */}
+                      <div
+                        className="chat-input-pill-container"
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          backgroundColor: '#FFFFFF',
+                          borderRadius: '24px',
+                          border: '1px solid #CBD5E1',
+                          padding: '0 14px'
+                        }}
+                      >
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          className="chat-seamless-input"
+                          placeholder={hasGroupMembers ? "Type a message... Type @ to mention members" : "Add members to this group first to start chatting..."}
+                          value={inputText}
+                          onChange={handleInputChange}
+                          onKeyDown={handleKeyDown}
+                          disabled={!hasGroupMembers}
+                          style={{
+                            width: '100%',
+                            border: 'none',
+                            outline: 'none',
+                            padding: '11px 4px',
+                            fontSize: '13.5px',
+                            color: '#111B21',
+                            backgroundColor: 'transparent',
+                            cursor: hasGroupMembers ? 'text' : 'not-allowed'
+                          }}
+                        />
+                      </div>
+
+                      {/* Send Button */}
+                      <button
+                        type="submit"
+                        disabled={!hasGroupMembers || !inputText.trim()}
+                        style={{
+                          width: '42px',
+                          height: '42px',
+                          borderRadius: '50%',
+                          backgroundColor: hasGroupMembers && inputText.trim() ? '#16A34A' : '#94A3B8',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: hasGroupMembers && inputText.trim() ? 'pointer' : 'not-allowed',
+                          transition: 'background-color 0.15s ease',
+                          flexShrink: 0
+                        }}
+                        title="Send message (Enter)"
+                      >
+                        <Send size={18} />
+                      </button>
+                    </form>
+                  );
+                })()}
               </div>
             </>
           ) : (

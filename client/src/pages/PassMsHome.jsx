@@ -249,7 +249,7 @@ export default function PassMsHome({ onBackToDashboard }) {
           <button
             ref={addDataBtnRef}
             className="btn-add-data"
-            style={{ background: '#7C3AED', borderColor: '#6D28D9', color: 'white' }}
+            style={{ background: '#7C3AED', borderColor: '#6D28D9' }}
             onClick={() => {
               setEditingEntry(null);
               setIsModalOpen(true);
