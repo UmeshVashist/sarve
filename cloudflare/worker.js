@@ -2393,6 +2393,24 @@ export default {
         const q = url.searchParams.get('q') || '';
         const cleanFolder = folder.startsWith('/') ? (folder.endsWith('/') ? folder : `${folder}/`) : `/${folder}/`;
 
+        // Auto-heal legacy records where file_name mistakenly had directory path
+        try {
+          const badFiles = await env.DB.prepare("SELECT id, file_name, folder_path FROM doc_store_files WHERE file_name LIKE '%/%'").all();
+          if (badFiles && badFiles.results && badFiles.results.length > 0) {
+            for (const bad of badFiles.results) {
+              const lastSlash = bad.file_name.lastIndexOf('/');
+              const subDir = bad.file_name.slice(0, lastSlash + 1);
+              const cleanName = bad.file_name.slice(lastSlash + 1);
+              const newFolder = bad.folder_path === '/' ? `/${subDir}` : `${bad.folder_path}${subDir}`;
+              const keepKey = `${newFolder.replace(/^\/|\/$/g, '')}/.keep`;
+              await env.DB.prepare("UPDATE doc_store_files SET file_name = ?, folder_path = ? WHERE id = ?").bind(cleanName, newFolder, bad.id).run();
+              await env.DB.prepare("INSERT OR IGNORE INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by) VALUES ('.keep', ?, ?, 0, 'application/x-directory', 'R2', 'meet')").bind(keepKey, newFolder).run();
+            }
+          }
+        } catch (healErr) {
+          console.warn('Auto-heal error:', healErr);
+        }
+
         let filesQuery = 'SELECT * FROM doc_store_files WHERE 1=1';
         const params = [];
 
@@ -2455,19 +2473,39 @@ export default {
           const cleanFolder = targetFolder.startsWith('/') ? (targetFolder.endsWith('/') ? targetFolder : `${targetFolder}/`) : `/${targetFolder}/`;
           
           const files = formData.getAll('files').concat(formData.getAll('file')).filter(Boolean);
+          const relPathsForm = formData.getAll('rel_paths');
+          let relPathsJson = [];
+          try {
+            const rawJson = formData.get('relative_paths');
+            if (rawJson) relPathsJson = JSON.parse(rawJson);
+          } catch (e) {}
 
-          for (const item of files) {
+          for (let i = 0; i < files.length; i++) {
+            const item = files[i];
             if (typeof item === 'object' && item.name) {
-              const fileName = item.name;
-              const relPath = (item.webkitRelativePath || formData.get(`rel_${fileName}`) || '').toString().trim();
+              const rawRel = (relPathsForm[i] || relPathsJson[i] || item.name || '').toString().trim();
+              
+              let cleanFileName = item.name;
+              let targetSubDir = '';
+
+              if (rawRel && rawRel.includes('/')) {
+                const lastSlash = rawRel.lastIndexOf('/');
+                targetSubDir = rawRel.slice(0, lastSlash + 1);
+                cleanFileName = rawRel.slice(lastSlash + 1);
+              } else if (cleanFileName.includes('/')) {
+                const lastSlash = cleanFileName.lastIndexOf('/');
+                targetSubDir = cleanFileName.slice(0, lastSlash + 1);
+                cleanFileName = cleanFileName.slice(lastSlash + 1);
+              }
+
               let finalFolder = cleanFolder;
-              if (relPath && relPath.includes('/')) {
-                const subDir = relPath.slice(0, relPath.lastIndexOf('/') + 1);
-                finalFolder = cleanFolder === '/' ? `/${subDir}` : `${cleanFolder}${subDir}`;
+              if (targetSubDir) {
+                const normSub = targetSubDir.replace(/^\/+/, '').replace(/\/+$/, '') + '/';
+                finalFolder = cleanFolder === '/' ? `/${normSub}` : `${cleanFolder}${normSub}`;
               }
 
               const safeFolderPrefix = finalFolder.replace(/^\/|\/$/g, '');
-              const fileKey = safeFolderPrefix ? `${safeFolderPrefix}/${Date.now()}_${fileName}` : `root/${Date.now()}_${fileName}`;
+              const fileKey = safeFolderPrefix ? `${safeFolderPrefix}/${Date.now()}_${cleanFileName}` : `root/${Date.now()}_${cleanFileName}`;
               const fileSize = item.size || 0;
               const fileType = item.type || 'application/octet-stream';
 
@@ -2486,9 +2524,18 @@ export default {
               await env.DB.prepare(`
                 INSERT INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
                 VALUES (?, ?, ?, ?, ?, ?, 'meet')
-              `).bind(fileName, fileKey, finalFolder, fileSize, fileType, env.DOCS_BUCKET ? 'R2' : 'Pending_R2').run();
+              `).bind(cleanFileName, fileKey, finalFolder, fileSize, fileType, env.DOCS_BUCKET ? 'R2' : 'Pending_R2').run();
 
-              uploadedList.push({ file_name: fileName, file_key: fileKey, folder_path: finalFolder, file_size: fileSize });
+              // 3. Ensure folder placeholder exists so folder structure is visible and navigable
+              if (finalFolder !== '/') {
+                const folderKeepKey = `${finalFolder.replace(/^\/|\/$/g, '')}/.keep`;
+                await env.DB.prepare(`
+                  INSERT OR IGNORE INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by)
+                  VALUES ('.keep', ?, ?, 0, 'application/x-directory', 'R2', 'meet')
+                `).bind(folderKeepKey, finalFolder).run();
+              }
+
+              uploadedList.push({ file_name: cleanFileName, file_key: fileKey, folder_path: finalFolder, file_size: fileSize });
             }
           }
         } else {

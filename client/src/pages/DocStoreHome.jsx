@@ -53,6 +53,17 @@ export default function DocStoreHome({ onBackToDashboard }) {
   const folderInputRef = useRef(null);
   const newFolderInputRef = useRef(null);
 
+  // Escape key handler for modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isNewFolderModalOpen) {
+        setIsNewFolderModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isNewFolderModalOpen]);
+
   // Load files and folders from Cloudflare Database / R2
   const fetchDocStore = async (folder = currentFolder, query = searchQuery) => {
     setLoading(true);
@@ -170,8 +181,11 @@ export default function DocStoreHome({ onBackToDashboard }) {
     const relativePaths = [];
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
-      formData.append('files', file);
-      relativePaths.push(file.webkitRelativePath || file.name);
+      const relPath = file.webkitRelativePath || file.name;
+      // 3rd arg ensures browser does not pass folder slash inside file.name
+      formData.append('files', file, file.name);
+      formData.append('rel_paths', relPath);
+      relativePaths.push(relPath);
     }
     formData.append('relative_paths', JSON.stringify(relativePaths));
 
@@ -645,6 +659,77 @@ export default function DocStoreHome({ onBackToDashboard }) {
                 </tr>
               </thead>
               <tbody>
+                {/* 1. Subfolder Rows in Table (Click to open folder) */}
+                {subfolders.map((folderPath) => {
+                  const displayName = folderPath.replace(currentFolder, '').replace(/\/$/, '');
+                  return (
+                    <tr
+                      key={folderPath}
+                      onClick={() => setCurrentFolder(folderPath)}
+                      style={{ background: '#F8FAFC', cursor: 'pointer', borderBottom: '1px solid #E2E8F0', transition: 'background 0.15s ease' }}
+                      className="folder-table-row"
+                      title={`Click to open folder: ${displayName}`}
+                    >
+                      <td style={{ textAlign: 'center' }}>
+                        <Folder size={17} color="#0D9488" />
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span className="doc-type-icon" style={{ background: '#CCFBF1', color: '#0D9488', borderRadius: '8px', padding: '6px', display: 'flex', alignItems: 'center' }}>
+                            <Folder size={18} />
+                          </span>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{displayName}</span>
+                              <span style={{ fontSize: '11px', background: '#CCFBF1', color: '#0D9488', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>Folder</span>
+                            </div>
+                            <span style={{ fontSize: '11.5px', color: '#0D9488', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                              <FolderOpen size={13} /> Click to open this folder
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="doc-folder-pill">
+                          <Folder size={12} />
+                          {folderPath}
+                        </span>
+                      </td>
+                      <td style={{ color: '#64748B', fontSize: '13px' }}>—</td>
+                      <td>
+                        <span className="doc-ext-badge" style={{ background: '#CCFBF1', color: '#0D9488' }}>FOLDER</span>
+                      </td>
+                      <td style={{ color: '#64748B', fontSize: '13px' }}>—</td>
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            className="btn-doc-action"
+                            onClick={() => setCurrentFolder(folderPath)}
+                            title={`Open folder: ${displayName}`}
+                          >
+                            <FolderOpen size={15} color="#0D9488" />
+                          </button>
+                          <button
+                            className="btn-doc-action"
+                            onClick={() => handleDownloadFolder(folderPath)}
+                            title={`Download all files in "${displayName}"`}
+                          >
+                            <Download size={15} />
+                          </button>
+                          <button
+                            className="btn-doc-action delete"
+                            onClick={() => handleDeleteFolder(folderPath)}
+                            title={`Delete folder "${displayName}"`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* 2. Files List */}
                 {files.map((file, idx) => (
                   <tr key={file.id || file.file_key} style={{ background: '#FFFFFF', borderBottom: '1px solid #F1F5F9' }}>
                   <td style={{ color: '#94A3B8', fontWeight: 600 }}>{idx + 1}</td>
@@ -721,8 +806,43 @@ export default function DocStoreHome({ onBackToDashboard }) {
 
       {/* 7. New Folder Modal Dialog */}
       {isNewFolderModalOpen && createPortal(
-        <div className="wizard-backdrop animate-fade-in" onClick={() => setIsNewFolderModalOpen(false)}>
-          <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+        <div
+          className="wizard-backdrop animate-fade-in"
+          onClick={() => setIsNewFolderModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 999999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            overflowY: 'auto'
+          }}
+        >
+          <div
+            className="modal-card animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              margin: 'auto',
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
+              position: 'relative',
+              zIndex: 1000000
+            }}
+          >
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ background: '#CCFBF1', color: '#0D9488', padding: '8px', borderRadius: '10px' }}>

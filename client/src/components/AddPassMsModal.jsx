@@ -81,8 +81,43 @@ export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry =
   };
 
   return createPortal(
-    <div className="wizard-backdrop animate-fade-in" onClick={onClose}>
-      <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+    <div
+      className="wizard-backdrop animate-fade-in"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 999999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        overflowY: 'auto'
+      }}
+    >
+      <div
+        className="modal-card animate-scale-up"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '480px',
+          width: '100%',
+          margin: 'auto',
+          background: '#FFFFFF',
+          borderRadius: '16px',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.45)',
+          position: 'relative',
+          zIndex: 1000000
+        }}
+      >
         {/* Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

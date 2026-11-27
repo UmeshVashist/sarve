@@ -2184,6 +2184,22 @@ app.get('/api/docs/list', (req, res) => {
     const q = req.query.q || '';
     const cleanFolder = folder.startsWith('/') ? (folder.endsWith('/') ? folder : `${folder}/`) : `/${folder}/`;
 
+    // Auto-heal legacy records where file_name mistakenly had directory path
+    try {
+      const badFiles = db.prepare("SELECT id, file_name, folder_path FROM doc_store_files WHERE file_name LIKE '%/%'").all();
+      for (const bad of badFiles) {
+        const lastSlash = bad.file_name.lastIndexOf('/');
+        const subDir = bad.file_name.slice(0, lastSlash + 1);
+        const cleanName = bad.file_name.slice(lastSlash + 1);
+        const newFolder = bad.folder_path === '/' ? `/${subDir}` : `${bad.folder_path}${subDir}`;
+        const keepKey = `${newFolder.replace(/^\/|\/$/g, '')}/.keep`;
+        db.prepare("UPDATE doc_store_files SET file_name = ?, folder_path = ? WHERE id = ?").run(cleanName, newFolder, bad.id);
+        db.prepare("INSERT OR IGNORE INTO doc_store_files (file_name, file_key, folder_path, file_size, content_type, storage_type, uploaded_by) VALUES ('.keep', ?, ?, 0, 'application/x-directory', 'R2', 'meet')").run(keepKey, newFolder);
+      }
+    } catch (healErr) {
+      console.warn('Auto-heal error:', healErr);
+    }
+
     let filesQuery = 'SELECT * FROM doc_store_files WHERE 1=1';
     const params = [];
 
