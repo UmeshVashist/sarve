@@ -108,7 +108,13 @@ export default function SurveyWizard({
   const isReviewMode = currentStep === totalQuestions;
   const currentQ = activeQuestions[currentStep];
 
-  const isQ3 = currentQ?.key === 'case_type';
+  const isCaseTypeQ =
+    currentQ?.key === 'case_type' ||
+    currentQ?.type === 'case_type' ||
+    (currentQ?.type === 'multi-select' && (!currentQ?.options || currentQ.options.length === 0)) ||
+    (currentQ?.type === 'choice_text' && (!currentQ?.options || currentQ.options.length === 0));
+
+  const isQ3 = isCaseTypeQ;
   const isQ8 = currentQ?.key === 'advocate_name_number';
   const isQ9 = currentQ?.key === 'known_unknown_advocate';
   const isQ11 = currentQ?.key === 'advocate_payment_advance';
@@ -935,7 +941,7 @@ export default function SurveyWizard({
       Object.keys(formData).forEach((k) => {
         if (!STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
           if (formData[k] !== undefined && formData[k] !== null && formData[k] !== '') {
-            customObj[k] = formData[k];
+            customObj[k] = Array.isArray(formData[k]) ? formData[k].join(', ') : formData[k];
           }
         }
       });

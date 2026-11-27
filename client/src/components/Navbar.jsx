@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase, FolderArchive } from 'lucide-react';
+import { LogOut, User, ShieldCheck, Scale, Users, LayoutDashboard, Globe, Compass, Briefcase, FolderArchive, Key } from 'lucide-react';
 
 export default function Navbar({ user, currentScreen = 'dashboard', onLogout, onHomeClick }) {
   const getModuleConfig = () => {
@@ -73,6 +73,16 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
           color: '#0D9488',
           border: '#99F6E4',
           icon: FolderArchive
+        };
+      case 'pass_ms':
+        return {
+          title: 'Pass MS Module',
+          badgeText: 'Pass MS',
+          subtitle: 'Credentials Vault & Secure Password Management',
+          bg: '#EDE9FE',
+          color: '#7C3AED',
+          border: '#DDD6FE',
+          icon: Key
         };
       default:
         return {

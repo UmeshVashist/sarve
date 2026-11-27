@@ -8,6 +8,7 @@ import WebReviewHome from './pages/WebReviewHome';
 import RaastaFunctionHome from './pages/RaastaFunctionHome';
 import WorkRoleHome from './pages/WorkRoleHome';
 import DocStoreHome from './pages/DocStoreHome';
+import PassMsHome from './pages/PassMsHome';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
@@ -148,6 +149,8 @@ export default function App() {
       navigateTo('work_role');
     } else if (optionId === 'doc_store') {
       navigateTo('doc_store');
+    } else if (optionId === 'pass_ms') {
+      navigateTo('pass_ms');
     } else {
       navigateTo('dashboard');
     }
@@ -234,6 +237,12 @@ export default function App() {
         {currentScreen === 'doc_store' && (
           <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
             <DocStoreHome onBackToDashboard={() => navigateTo('dashboard')} />
+          </ErrorBoundary>
+        )}
+
+        {currentScreen === 'pass_ms' && (
+          <ErrorBoundary onBackToDashboard={() => navigateTo('dashboard')}>
+            <PassMsHome onBackToDashboard={() => navigateTo('dashboard')} />
           </ErrorBoundary>
         )}
       </main>

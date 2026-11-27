@@ -11,7 +11,8 @@ import {
   Save,
   RotateCcw,
   Check,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { getQuestionLabel, SURVEY_QUESTIONS } from '../data/questions';
@@ -62,6 +63,12 @@ export default function ManageQuestionsModal({
   const showSuccess = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 3500);
+  };
+
+  const isPermanentQuestion = (q) => {
+    const num = Number(q.order_num) || 0;
+    const k = (q.key || '').toLowerCase();
+    return num === 1 || num === 2 || num === 3 || ['utct_no', 'name', 'case_type'].includes(k);
   };
 
   // Helper to sync changes locally immediately and then in background to server
@@ -415,6 +422,11 @@ export default function ManageQuestionsModal({
   };
 
   const handleDelete = async (q) => {
+    if (isPermanentQuestion(q)) {
+      alert('Question #1 (UT/CT No), #2 (Name), aur #3 (Case Type) permanent core questions hain aur delete nahi kiye ja sakte.');
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to delete Question #${q.order_num || ''}: "${getQuestionLabel(q)}"?`)) {
       return;
     }
@@ -640,15 +652,36 @@ export default function ManageQuestionsModal({
                           <Edit2 size={14} />
                           <span>Edit</span>
                         </button>
-                        <button
-                          type="button"
-                          className="btn-q-action delete"
-                          onClick={() => handleDelete(q)}
-                          title="Delete Question"
-                        >
-                          <Trash2 size={14} />
-                          <span>Delete</span>
-                        </button>
+                        {isPermanentQuestion(q) ? (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '5px 10px',
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              color: '#059669',
+                              background: '#ECFDF5',
+                              border: '1px solid #A7F3D0',
+                              borderRadius: '6px'
+                            }}
+                            title="Permanent Core Question (Cannot be deleted)"
+                          >
+                            <Lock size={12} />
+                            <span>Permanent</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-q-action delete"
+                            onClick={() => handleDelete(q)}
+                            title="Delete Question"
+                          >
+                            <Trash2 size={14} />
+                            <span>Delete</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -728,6 +761,7 @@ export default function ManageQuestionsModal({
                       <option value="yesno">Yes / No</option>
                       <option value="choice_text">Dropdown / Single Choice</option>
                       <option value="multi-select">Multi-select Checkbox</option>
+                      <option value="case_type">Manage Case Types (Multi-select from Case Types)</option>
                       <option value="textarea">Paragraph / Long Textarea</option>
                     </select>
                   </div>

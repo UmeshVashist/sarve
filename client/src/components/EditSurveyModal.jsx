@@ -683,6 +683,29 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                         </div>
                       )}
 
+                      {(q.type === 'case_type' || (q.type === 'multi-select' && (!q.options || q.options.length === 0))) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px', maxHeight: '180px', overflowY: 'auto', padding: '6px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          {caseTypes.map((t) => {
+                            const curList = Array.isArray(val) ? val : String(val || '').split(', ').filter(Boolean);
+                            const isSel = curList.includes(t.name);
+                            return (
+                              <button
+                                key={t.id || t.name}
+                                type="button"
+                                className={`btn-action-icon ${isSel ? 'view' : ''}`}
+                                style={{ width: 'auto', padding: '4px 10px', fontSize: '11.5px', fontWeight: 600 }}
+                                onClick={() => {
+                                  const nextList = isSel ? curList.filter((x) => x !== t.name) : [...curList, t.name];
+                                  handleChange(q.key, nextList.join(', '));
+                                }}
+                              >
+                                {isSel ? `✓ ${t.name}` : t.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       {Array.isArray(q.options) && q.options.length > 0 && q.type !== 'yesno' && q.type !== 'yesno_text' && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                           {q.options.map((opt) => (

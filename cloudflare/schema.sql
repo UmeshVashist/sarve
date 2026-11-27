@@ -314,5 +314,22 @@ CREATE INDEX IF NOT EXISTS idx_doc_folder ON doc_store_files(folder_path);
 CREATE INDEX IF NOT EXISTS idx_doc_name ON doc_store_files(file_name);
 
 
+-- 16. PASS MS TABLE (Password Management System)
+CREATE TABLE IF NOT EXISTS pass_ms_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  url TEXT,
+  username TEXT NOT NULL,
+  password TEXT NOT NULL,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pass_ms_title ON pass_ms_entries(title);
+CREATE INDEX IF NOT EXISTS idx_pass_ms_username ON pass_ms_entries(username);
+
+
+
 
 

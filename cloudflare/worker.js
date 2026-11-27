@@ -459,6 +459,20 @@ async function ensureD1Database(db) {
       );
     `).run();
 
+    // 18. Pass MS Table (Password Management System)
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS pass_ms_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        url TEXT,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `).run();
+
     isD1Initialized = true;
   } catch (err) {
     console.error('ensureD1Database error:', err);
@@ -924,6 +938,16 @@ export default {
       // 9c. Delete Question
       if (path.startsWith('/api/questions/') && method === 'DELETE') {
         const id = path.split('/')[3];
+        const qRecord = await env.DB.prepare('SELECT order_num, key FROM questions WHERE id = ?').bind(id).first();
+        if (qRecord && (Number(qRecord.order_num) <= 3 || ['utct_no', 'name', 'case_type'].includes(qRecord.key))) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'Question #1 (UT/CT No), #2 (Name), and #3 (Case Type) are permanent core questions and cannot be deleted.'
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
         await env.DB.prepare('DELETE FROM questions WHERE id = ?').bind(id).run();
         return new Response(JSON.stringify({ success: true, message: 'Question deleted successfully' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -2301,6 +2325,16 @@ export default {
 
       if ((path.startsWith('/api/new-prisoner-questions/') || path.startsWith('/api/new-questions/')) && method === 'DELETE') {
         const id = path.split('/')[3];
+        const qRecord = await env.DB.prepare('SELECT order_num, key FROM new_prisoner_questions WHERE id = ?').bind(id).first();
+        if (qRecord && (Number(qRecord.order_num) <= 3 || ['utct_no', 'name', 'case_type'].includes(qRecord.key))) {
+          return new Response(JSON.stringify({
+            success: false,
+            message: 'Question #1 (UT/CT No), #2 (Name), and #3 (Case Type) are permanent core questions and cannot be deleted.'
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
         await env.DB.prepare('DELETE FROM new_prisoner_questions WHERE id = ?').bind(id).run();
         return new Response(JSON.stringify({ success: true, message: 'Question deleted successfully' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -2618,6 +2652,95 @@ export default {
           success: true,
           message: `Folder "${cleanName}" created successfully`,
           folder_path: newFolderPath
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // ==========================================================
+      // PASS MS MODULE ENDPOINTS (Password Management System)
+      // ==========================================================
+
+      // List all Pass MS entries
+      if (path === '/api/pass-ms/list' && method === 'GET') {
+        const q = (url.searchParams.get('q') || '').trim();
+        let query = 'SELECT * FROM pass_ms_entries WHERE 1=1';
+        const params = [];
+        if (q) {
+          query += ' AND (title LIKE ? OR url LIKE ? OR username LIKE ?)';
+          const term = `%${q}%`;
+          params.push(term, term, term);
+        }
+        query += ' ORDER BY id DESC';
+
+        const stmt = params.length > 0 ? env.DB.prepare(query).bind(...params) : env.DB.prepare(query);
+        const result = await stmt.all();
+        return new Response(JSON.stringify({
+          success: true,
+          data: result.results || []
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+      }
+
+      // Add new Pass MS entry
+      if (path === '/api/pass-ms/entries' && method === 'POST') {
+        const body = await request.json();
+        const { title, url: siteUrl, username, password, notes } = body;
+        if (!title || !username || !password) {
+          return new Response(JSON.stringify({ success: false, message: 'Title, Username, and Password are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const res = await env.DB.prepare(`
+          INSERT INTO pass_ms_entries (title, url, username, password, notes)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(title.trim(), (siteUrl || '').trim(), username.trim(), password.trim(), (notes || '').trim()).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Password entry saved successfully',
+          id: res.meta?.last_row_id
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Update Pass MS entry
+      if (path.startsWith('/api/pass-ms/entries/') && method === 'PUT') {
+        const id = path.split('/')[4];
+        const body = await request.json();
+        const { title, url: siteUrl, username, password, notes } = body;
+        if (!title || !username || !password) {
+          return new Response(JSON.stringify({ success: false, message: 'Title, Username, and Password are required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        await env.DB.prepare(`
+          UPDATE pass_ms_entries
+          SET title = ?, url = ?, username = ?, password = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(title.trim(), (siteUrl || '').trim(), username.trim(), password.trim(), (notes || '').trim(), id).run();
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Password entry updated successfully'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Delete Pass MS entry
+      if (path.startsWith('/api/pass-ms/entries/') && method === 'DELETE') {
+        const id = path.split('/')[4];
+        await env.DB.prepare('DELETE FROM pass_ms_entries WHERE id = ?').bind(id).run();
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Password entry deleted successfully'
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });

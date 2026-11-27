@@ -865,6 +865,13 @@ app.put('/api/questions/:id', (req, res) => {
 app.delete('/api/questions/:id', (req, res) => {
   try {
     const id = req.params.id;
+    const qRecord = db.prepare('SELECT order_num, key FROM questions WHERE id = ?').get(id);
+    if (qRecord && (Number(qRecord.order_num) <= 3 || ['utct_no', 'name', 'case_type'].includes(qRecord.key))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Question #1 (UT/CT No), #2 (Name), and #3 (Case Type) are permanent core questions and cannot be deleted.'
+      });
+    }
     const result = db.prepare('DELETE FROM questions WHERE id = ?').run(id);
     if (result.changes === 0) {
       return res.status(404).json({ success: false, message: 'Question not found' });
@@ -2097,7 +2104,15 @@ app.put(['/api/new-prisoner-questions/:id', '/api/new-questions/:id'], (req, res
 // Delete New Prisoner question
 app.delete(['/api/new-prisoner-questions/:id', '/api/new-questions/:id'], (req, res) => {
   try {
-    db.prepare('DELETE FROM new_prisoner_questions WHERE id = ?').run(req.params.id);
+    const id = req.params.id;
+    const qRecord = db.prepare('SELECT order_num, key FROM new_prisoner_questions WHERE id = ?').get(id);
+    if (qRecord && (Number(qRecord.order_num) <= 3 || ['utct_no', 'name', 'case_type'].includes(qRecord.key))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Question #1 (UT/CT No), #2 (Name), and #3 (Case Type) are permanent core questions and cannot be deleted.'
+      });
+    }
+    db.prepare('DELETE FROM new_prisoner_questions WHERE id = ?').run(id);
     res.json({ success: true, message: 'Question deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -2329,6 +2344,74 @@ app.post('/api/docs/folder/create', (req, res) => {
       message: `Folder "${cleanName}" created successfully`,
       folder_path: newFolderPath
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================================
+// PASS MS ENDPOINTS (Password Management System)
+// ==========================================================
+
+// List Pass MS entries
+app.get('/api/pass-ms/list', (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    let query = 'SELECT * FROM pass_ms_entries WHERE 1=1';
+    const params = [];
+    if (q) {
+      query += ' AND (title LIKE ? OR url LIKE ? OR username LIKE ?)';
+      const term = `%${q}%`;
+      params.push(term, term, term);
+    }
+    query += ' ORDER BY id DESC';
+    const entries = db.prepare(query).all(...params);
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Add Pass MS entry
+app.post('/api/pass-ms/entries', (req, res) => {
+  try {
+    const { title, url: siteUrl, username, password, notes } = req.body;
+    if (!title || !username || !password) {
+      return res.status(400).json({ success: false, message: 'Title, Username, and Password are required' });
+    }
+    const info = db.prepare(`
+      INSERT INTO pass_ms_entries (title, url, username, password, notes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(title.trim(), (siteUrl || '').trim(), username.trim(), password.trim(), (notes || '').trim());
+    res.json({ success: true, message: 'Password entry saved successfully', id: info.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Update Pass MS entry
+app.put('/api/pass-ms/entries/:id', (req, res) => {
+  try {
+    const { title, url: siteUrl, username, password, notes } = req.body;
+    if (!title || !username || !password) {
+      return res.status(400).json({ success: false, message: 'Title, Username, and Password are required' });
+    }
+    db.prepare(`
+      UPDATE pass_ms_entries
+      SET title = ?, url = ?, username = ?, password = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(title.trim(), (siteUrl || '').trim(), username.trim(), password.trim(), (notes || '').trim(), req.params.id);
+    res.json({ success: true, message: 'Password entry updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Delete Pass MS entry
+app.delete('/api/pass-ms/entries/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM pass_ms_entries WHERE id = ?').run(req.params.id);
+    res.json({ success: true, message: 'Password entry deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
