@@ -299,7 +299,7 @@ export default function PassMsHome({ onBackToDashboard }) {
       </div>
 
       {/* 4. Data Table */}
-      <div className="table-wrapper" style={{ marginTop: '16px' }}>
+      <div className="table-wrapper" style={{ background: '#FFFFFF', borderRadius: '18px', border: '1px solid #E2E8F0', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', overflow: 'hidden', marginTop: '16px' }}>
         {loading ? (
           <div className="table-empty-state">
             <RefreshCw size={36} className="animate-spin empty-icon" />
@@ -330,24 +330,25 @@ export default function PassMsHome({ onBackToDashboard }) {
             </div>
           </div>
         ) : (
-          <table className="survey-table">
-            <thead>
-              <tr>
-                <th style={{ width: '45px' }}>#</th>
-                <th style={{ width: '180px' }}>Title</th>
-                <th>Website URL</th>
-                <th>Username / Email</th>
-                <th>Password</th>
-                <th>Date Added</th>
-                <th style={{ textAlign: 'center', width: '140px' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((item, idx) => {
-                const isRevealed = Boolean(revealedRows[item.id]);
-                return (
-                  <tr key={item.id}>
-                    <td style={{ color: '#94A3B8', fontWeight: 600 }}>{idx + 1}</td>
+          <div style={{ overflowX: 'auto', background: '#FFFFFF' }}>
+            <table className="survey-table" style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF' }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1.5px solid #E2E8F0' }}>
+                  <th style={{ width: '45px' }}>#</th>
+                  <th style={{ width: '180px' }}>Title</th>
+                  <th>Website URL</th>
+                  <th>Username / Email</th>
+                  <th>Password</th>
+                  <th>Date Added</th>
+                  <th style={{ textAlign: 'center', width: '140px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((item, idx) => {
+                  const isRevealed = Boolean(revealedRows[item.id]);
+                  return (
+                    <tr key={item.id} style={{ background: '#FFFFFF', borderBottom: '1px solid #F1F5F9' }}>
+                      <td style={{ color: '#94A3B8', fontWeight: 600 }}>{idx + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
@@ -485,6 +486,7 @@ export default function PassMsHome({ onBackToDashboard }) {
               })}
             </tbody>
           </table>
+        </div>
         )}
       </div>
 

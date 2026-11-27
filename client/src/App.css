@@ -762,6 +762,21 @@ textarea:focus-visible,
   border-collapse: collapse;
   text-align: left;
   font-size: 13.5px;
+  background-color: #FFFFFF;
+}
+
+.table-wrapper {
+  background: #FFFFFF !important;
+  border-radius: 18px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.table-wrapper table.survey-table,
+.table-wrapper .sarve-table {
+  background-color: #FFFFFF !important;
 }
 
 .sarve-table th,
@@ -787,11 +802,20 @@ textarea:focus-visible,
   border-bottom: 1px solid var(--sarve-gray-100);
   color: var(--sarve-dark);
   vertical-align: middle;
+  background-color: #FFFFFF;
+}
+
+.sarve-table tbody tr,
+.survey-table tbody tr {
+  background-color: #FFFFFF !important;
+  transition: background-color 0.15s ease;
 }
 
 .sarve-table tr:hover,
-.survey-table tr:hover {
-  background-color: #F8FAFC;
+.survey-table tr:hover,
+.sarve-table tbody tr:hover,
+.survey-table tbody tr:hover {
+  background-color: #F8FAFC !important;
 }
 
 .badge-utct {
