@@ -241,10 +241,23 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
           const existingIds = new Set(prev.map(m => m.id));
           const newUnique = data.messages.filter(m => !existingIds.has(m.id));
           if (newUnique.length === 0) return prev;
-          const merged = [...prev, ...newUnique];
-          lastMsgIdRef.current = merged[merged.length - 1].id;
+
+          let updated = [...prev];
+          newUnique.forEach(serverMsg => {
+            const optIdx = updated.findIndex(m => m.id > 1000000000000 && m.sender_name === serverMsg.sender_name && m.message === serverMsg.message);
+            if (optIdx !== -1) {
+              updated[optIdx] = {
+                ...serverMsg,
+                reply_to: serverMsg.reply_to || updated[optIdx].reply_to
+              };
+            } else {
+              updated.push(serverMsg);
+            }
+          });
+
+          lastMsgIdRef.current = updated[updated.length - 1].id;
           setTimeout(scrollToBottom, 50);
-          return merged;
+          return updated;
         });
 
         // Also refresh groups list to update last message preview in sidebar
@@ -360,8 +373,14 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
       const data = await res.json();
       if (data.success && data.message) {
         lastMsgIdRef.current = Math.max(lastMsgIdRef.current, data.message.id);
-        // Replace optimistic msg with confirmed server msg
-        setMessages(prev => prev.map(m => m.id === tempId ? data.message : m));
+        // Replace optimistic msg with confirmed server msg, strictly keeping reply_to
+        setMessages(prev => {
+          const withoutOptimistic = prev.filter(m => m.id !== tempId && m.id !== data.message.id);
+          return [...withoutOptimistic, {
+            ...data.message,
+            reply_to: data.message.reply_to || optimisticMsg.reply_to
+          }];
+        });
         fetchGroups(groupSearch);
       }
     } catch (err) {
@@ -1389,11 +1408,30 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                             let parsedReply = null;
                             if (msg.reply_to) {
                               try {
-                                parsedReply = typeof msg.reply_to === 'string' ? JSON.parse(msg.reply_to) : msg.reply_to;
+                                let rep = typeof msg.reply_to === 'string' ? JSON.parse(msg.reply_to) : msg.reply_to;
+                                if (typeof rep === 'string') {
+                                  rep = JSON.parse(rep);
+                                }
+                                if (rep && typeof rep === 'object') {
+                                  parsedReply = rep;
+                                }
                               } catch (e) {
                                 parsedReply = null;
                               }
+                              if (!parsedReply || (!parsedReply.sender_name && parsedReply.id)) {
+                                const targetId = parsedReply?.id || msg.reply_to;
+                                const orig = messages.find(m => String(m.id) === String(targetId));
+                                if (orig) {
+                                  parsedReply = {
+                                    id: orig.id,
+                                    sender_name: orig.sender_name,
+                                    message: orig.message
+                                  };
+                                }
+                              }
                             }
+
+                            const replySenderColor = parsedReply?.sender_name ? getSenderColor(parsedReply.sender_name) : '#2563EB';
 
                             return (
                               <div
@@ -1404,15 +1442,22 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                 }}
                                 className="chat-message-row"
                               >
-                                <div style={{
-                                  maxWidth: '68%',
-                                  backgroundColor: isOutgoing ? '#DCF8C6' : '#FFFFFF', // WhatsApp green for sent, white for received
-                                  borderRadius: isOutgoing ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                                  padding: '8px 12px 6px 12px',
-                                  boxShadow: '0 1px 2px rgba(11,20,26,0.12)',
-                                  position: 'relative',
-                                  wordBreak: 'break-word'
-                                }}>
+                                <div
+                                  id={`chat-msg-${msg.id}`}
+                                  onDoubleClick={() => handleStartReply(msg)}
+                                  style={{
+                                    maxWidth: '68%',
+                                    backgroundColor: isOutgoing ? '#DCF8C6' : '#FFFFFF', // WhatsApp green for sent, white for received
+                                    borderRadius: isOutgoing ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                                    padding: '8px 12px 6px 12px',
+                                    boxShadow: '0 1px 2px rgba(11,20,26,0.12)',
+                                    position: 'relative',
+                                    wordBreak: 'break-word',
+                                    cursor: 'default',
+                                    transition: 'box-shadow 0.25s ease, transform 0.2s ease'
+                                  }}
+                                  title="Double click to reply"
+                                >
                                   {/* Sender Name with their member color (Only on incoming or if different sender) */}
                                   {!isOutgoing && (
                                     <div style={{
@@ -1425,27 +1470,54 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                     </div>
                                   )}
 
-                                  {/* Quoted Reply Preview (if this message is a reply) */}
+                                  {/* Quoted Reply Preview (WhatsApp style with click-to-jump) */}
                                   {parsedReply && (
                                     <div
-                                      style={{
-                                        backgroundColor: isOutgoing ? 'rgba(0, 0, 0, 0.05)' : '#F1F5F9',
-                                        borderLeft: '3.5px solid #2563EB',
-                                        borderRadius: '6px',
-                                        padding: '4px 8px',
-                                        marginBottom: '6px',
-                                        fontSize: '12px'
+                                      onClick={() => {
+                                        if (parsedReply.id) {
+                                          const el = document.getElementById(`chat-msg-${parsedReply.id}`);
+                                          if (el) {
+                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            el.style.boxShadow = '0 0 0 3px #2563EB, 0 4px 14px rgba(37,99,235,0.25)';
+                                            el.style.transform = 'scale(1.02)';
+                                            setTimeout(() => {
+                                              el.style.boxShadow = '';
+                                              el.style.transform = '';
+                                            }, 1200);
+                                          }
+                                        }
                                       }}
+                                      style={{
+                                        backgroundColor: isOutgoing ? 'rgba(0, 0, 0, 0.08)' : '#F1F5F9',
+                                        borderLeft: `4px solid ${replySenderColor}`,
+                                        borderRadius: '6px',
+                                        padding: '5px 9px',
+                                        marginBottom: '6px',
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        userSelect: 'none'
+                                      }}
+                                      title="Click to jump to original message"
                                     >
-                                      <div style={{ fontWeight: 800, color: '#2563EB', fontSize: '11px', marginBottom: '1px' }}>
-                                        {parsedReply.sender_name}
+                                      <div style={{
+                                        fontWeight: 800,
+                                        color: replySenderColor,
+                                        fontSize: '11px',
+                                        marginBottom: '2px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                      }}>
+                                        <CornerUpLeft size={11} />
+                                        <span>{parsedReply.sender_name}</span>
                                       </div>
                                       <div style={{
                                         color: '#475569',
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
-                                        fontSize: '12px'
+                                        fontSize: '12px',
+                                        lineHeight: '1.3'
                                       }}>
                                         {parsedReply.message}
                                       </div>
@@ -1474,32 +1546,66 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
 
                                     {/* Reply button */}
                                     <button
-                                      onClick={() => handleStartReply(msg)}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartReply(msg);
+                                      }}
                                       style={{
                                         border: 'none',
                                         background: 'transparent',
                                         cursor: 'pointer',
-                                        padding: '0 2px',
-                                        color: '#64748B',
-                                        opacity: 0.7,
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
+                                        color: '#475569',
+                                        opacity: 0.8,
                                         display: 'inline-flex',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        transition: 'all 0.15s ease'
                                       }}
-                                      title="Reply to this message"
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)';
+                                        e.currentTarget.style.color = '#0F172A';
+                                        e.currentTarget.style.opacity = '1';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.color = '#475569';
+                                        e.currentTarget.style.opacity = '0.8';
+                                      }}
+                                      title="Reply to this message (or double-click message)"
                                     >
                                       <CornerUpLeft size={13} />
                                     </button>
                                     
                                     {/* Delete message button on hover */}
                                     <button
-                                      onClick={() => handleDeleteMessage(msg.id)}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteMessage(msg.id);
+                                      }}
                                       style={{
                                         border: 'none',
                                         background: 'transparent',
                                         cursor: 'pointer',
-                                        padding: '0 2px',
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
                                         color: '#94A3B8',
-                                        opacity: 0.6
+                                        opacity: 0.6,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                                        e.currentTarget.style.color = '#EF4444';
+                                        e.currentTarget.style.opacity = '1';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                        e.currentTarget.style.color = '#94A3B8';
+                                        e.currentTarget.style.opacity = '0.6';
                                       }}
                                       title="Delete message"
                                     >
