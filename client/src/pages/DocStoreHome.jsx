@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Folder, FolderPlus, UploadCloud, File, FileText, Image as ImageIcon,
   FileSpreadsheet, Trash2, Download, HardDrive,
@@ -719,8 +720,8 @@ export default function DocStoreHome({ onBackToDashboard }) {
       </div>
 
       {/* 7. New Folder Modal Dialog */}
-      {isNewFolderModalOpen && (
-        <div className="modal-overlay animate-fade-in" onClick={() => setIsNewFolderModalOpen(false)}>
+      {isNewFolderModalOpen && createPortal(
+        <div className="wizard-backdrop animate-fade-in" onClick={() => setIsNewFolderModalOpen(false)}>
           <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -732,7 +733,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
                   <p className="modal-subtitle">Directory: {currentFolder}</p>
                 </div>
               </div>
-              <button className="btn-close-modal" onClick={() => setIsNewFolderModalOpen(false)}>
+              <button className="wizard-close-btn" onClick={() => setIsNewFolderModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
@@ -773,7 +774,8 @@ export default function DocStoreHome({ onBackToDashboard }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

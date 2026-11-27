@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Key, Globe, User, Lock, Eye, EyeOff, Save, Check } from 'lucide-react';
 
 export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry = null }) {
@@ -37,6 +38,16 @@ export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry =
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
@@ -69,8 +80,8 @@ export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry =
     }
   };
 
-  return (
-    <div className="modal-overlay animate-fade-in" onClick={onClose}>
+  return createPortal(
+    <div className="wizard-backdrop animate-fade-in" onClick={onClose}>
       <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
         {/* Header */}
         <div className="modal-header">
@@ -83,7 +94,7 @@ export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry =
               <p className="modal-subtitle">Pass MS Secure Credentials Vault</p>
             </div>
           </div>
-          <button className="btn-close-modal" onClick={onClose} title="Close">
+          <button className="wizard-close-btn" onClick={onClose} title="Close">
             <X size={18} />
           </button>
         </div>
@@ -221,6 +232,7 @@ export default function AddPassMsModal({ isOpen, onClose, onSave, editingEntry =
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
