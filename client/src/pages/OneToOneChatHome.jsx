@@ -18,11 +18,25 @@ const AVATAR_COLORS = [
 // Available Group Emoji Logos
 const GROUP_LOGOS = ['💬', '⚖️', '👥', '📑', '🏢', '🏛️', '🛡️', '⚡', '📢', '🎯', '💼', '🚀'];
 
-// Helper: Format message time like WhatsApp
+// Robust Date Parser: Handles SQLite UTC timestamp ('YYYY-MM-DD HH:MM:SS') and ISO-8601 strings accurately
+function parseDateSafe(dateString) {
+  if (!dateString) return null;
+  let str = String(dateString).trim();
+  // If SQLite format: 'YYYY-MM-DD HH:MM:SS', replace space with 'T' and add 'Z' (UTC)
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) {
+    str = str.replace(' ', 'T') + 'Z';
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(str)) {
+    str = str + 'Z';
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Helper: Format message time like WhatsApp (Guarantees sent time stays fixed and never shifts)
 function formatWhatsAppTime(dateString) {
   if (!dateString) return '';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDateSafe(dateString);
+  if (!d) return '';
 
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
@@ -46,8 +60,8 @@ function formatWhatsAppTime(dateString) {
 // Helper: Format divider date pill
 function formatDividerDate(dateString) {
   if (!dateString) return '';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDateSafe(dateString);
+  if (!d) return '';
 
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return 'Today';
@@ -62,8 +76,9 @@ function formatDividerDate(dateString) {
 // Helper: Check if two dates belong to different days
 function isDifferentDay(d1Str, d2Str) {
   if (!d1Str || !d2Str) return true;
-  const d1 = new Date(d1Str);
-  const d2 = new Date(d2Str);
+  const d1 = parseDateSafe(d1Str);
+  const d2 = parseDateSafe(d2Str);
+  if (!d1 || !d2) return true;
   return d1.toDateString() !== d2.toDateString();
 }
 
@@ -425,6 +440,22 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
     });
     if (inputRef.current) {
       inputRef.current.focus();
+    }
+  };
+
+  // Jump to quoted message with smooth scroll and highlight
+  const handleJumpToMessage = (targetMsgId) => {
+    if (!targetMsgId) return;
+    const targetElement = document.getElementById(`chat-msg-${targetMsgId}`);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetElement.style.transition = 'box-shadow 0.3s ease, transform 0.25s ease';
+      targetElement.style.boxShadow = '0 0 0 4px #2563EB, 0 8px 24px rgba(37,99,235,0.35)';
+      targetElement.style.transform = 'scale(1.025)';
+      setTimeout(() => {
+        targetElement.style.boxShadow = '';
+        targetElement.style.transform = '';
+      }, 1500);
     }
   };
 
@@ -1458,34 +1489,31 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                   }}
                                   title="Double click to reply"
                                 >
-                                  {/* Sender Name with their member color (Only on incoming or if different sender) */}
-                                  {!isOutgoing && (
-                                    <div style={{
-                                      fontSize: '12.5px',
-                                      fontWeight: 800,
-                                      color: senderColor,
-                                      marginBottom: '3px'
-                                    }}>
-                                      {msg.sender_name}
-                                    </div>
-                                  )}
+                                  {/* Sender Name ("As" name) with member color on EVERY message */}
+                                  <div style={{
+                                    fontSize: '12px',
+                                    fontWeight: 800,
+                                    color: isOutgoing ? '#0F766E' : senderColor,
+                                    marginBottom: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '6px'
+                                  }}>
+                                    <span>{msg.sender_name}</span>
+                                    {isOutgoing && (
+                                      <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#047857', opacity: 0.85 }}>
+                                        (You)
+                                      </span>
+                                    )}
+                                  </div>
 
                                   {/* Quoted Reply Preview (WhatsApp style with click-to-jump) */}
                                   {parsedReply && (
                                     <div
-                                      onClick={() => {
-                                        if (parsedReply.id) {
-                                          const el = document.getElementById(`chat-msg-${parsedReply.id}`);
-                                          if (el) {
-                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                            el.style.boxShadow = '0 0 0 3px #2563EB, 0 4px 14px rgba(37,99,235,0.25)';
-                                            el.style.transform = 'scale(1.02)';
-                                            setTimeout(() => {
-                                              el.style.boxShadow = '';
-                                              el.style.transform = '';
-                                            }, 1200);
-                                          }
-                                        }
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleJumpToMessage(parsedReply.id);
                                       }}
                                       style={{
                                         backgroundColor: isOutgoing ? 'rgba(0, 0, 0, 0.08)' : '#F1F5F9',
@@ -1495,7 +1523,17 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                         marginBottom: '6px',
                                         fontSize: '12px',
                                         cursor: 'pointer',
-                                        userSelect: 'none'
+                                        userSelect: 'none',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.cursor = 'pointer';
+                                        e.currentTarget.style.backgroundColor = isOutgoing ? 'rgba(0, 0, 0, 0.14)' : '#E2E8F0';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = isOutgoing ? 'rgba(0, 0, 0, 0.08)' : '#F1F5F9';
+                                        e.currentTarget.style.transform = 'none';
                                       }}
                                       title="Click to jump to original message"
                                     >
@@ -1509,7 +1547,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                         gap: '4px'
                                       }}>
                                         <CornerUpLeft size={11} />
-                                        <span>{parsedReply.sender_name}</span>
+                                        <span>Replying to {parsedReply.sender_name}</span>
                                       </div>
                                       <div style={{
                                         color: '#475569',
