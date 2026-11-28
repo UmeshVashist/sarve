@@ -113,7 +113,9 @@ export default function ManageQuestionsModal({
     const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
 
     const normalizedType =
-      (q.type === 'choice_text' || q.type === 'multi-select' || q.type === 'yesno_or_choice')
+      (q.type === 'custom_multiselect' || q.type === 'multi-select')
+        ? 'custom_multiselect'
+        : (q.type === 'choice_text' || q.type === 'yesno_or_choice')
         ? 'custom_choice'
         : (q.type || 'text');
 
@@ -293,8 +295,8 @@ export default function ManageQuestionsModal({
               label: '__Remarks Map Store__',
               note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
             })
-          }).catch(() => {});
-        } catch (e) {}
+          }).catch(() => { });
+        } catch (e) { }
 
         applyQuestionsUpdate(reordered, `Question #${targetIndex + 1} updated successfully!`);
         setActiveTab('list');
@@ -393,8 +395,8 @@ export default function ManageQuestionsModal({
               label: '__Remarks Map Store__',
               note: JSON.stringify({ [customKey]: Boolean(formData.has_remark) })
             })
-          }).catch(() => {});
-        } catch (e) {}
+          }).catch(() => { });
+        } catch (e) { }
 
         applyQuestionsUpdate(reordered, `New Question added at #${targetIndex + 1}!`);
         setActiveTab('list');
@@ -626,11 +628,12 @@ export default function ManageQuestionsModal({
                         <div className="question-meta-row">
                           <span className="badge-qtype">
                             {q.type === 'court_type' ? 'Court Types' :
-                             q.type === 'case_type' ? 'Case Types' :
-                             (q.type === 'custom_choice' || q.type === 'choice_text') ? 'Custom Options' :
-                             q.type === 'yesno' ? 'Yes / No' :
-                             q.type === 'textarea' ? 'Paragraph' :
-                             q.type === 'number' ? 'Number' : 'Text'}
+                              q.type === 'case_type' ? 'Case Types' :
+                                q.type === 'custom_multiselect' ? 'Multi-select Dropdown' :
+                                  (q.type === 'custom_choice' || q.type === 'choice_text') ? 'Custom Options' :
+                                    q.type === 'yesno' ? 'Yes / No' :
+                                      q.type === 'textarea' ? 'Paragraph' :
+                                        q.type === 'number' ? 'Number' : 'Text'}
                           </span>
                           {q.required ? <span className="badge-required">Required</span> : null}
                           {Boolean(q.has_remark) ? (
@@ -699,24 +702,7 @@ export default function ManageQuestionsModal({
 
               {/* Footer Actions */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '20px', paddingTop: '14px', borderTop: '1px solid #E2E8F0' }}>
-                <button
-                  type="button"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#64748B',
-                    fontSize: '12.5px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={handleResetDefaults}
-                  title="Reset to default 24 questions"
-                >
-                  <RotateCcw size={14} />
-                  <span>Reset to Default 24 Questions</span>
-                </button>
+
 
                 <button
                   type="button"
@@ -771,6 +757,7 @@ export default function ManageQuestionsModal({
                       <option value="court_type">Manage Court Types (Single Choice from Court Types)</option>
                       <option value="case_type">Manage Case Types (Multi-select from Case Types)</option>
                       <option value="custom_choice">Custom Options / Single Choice (Options Add)</option>
+                      <option value="custom_multiselect">Dropdown / Multi-select (Custom Options Add)</option>
                       <option value="textarea">Paragraph / Long Textarea</option>
                     </select>
                   </div>
@@ -792,7 +779,7 @@ export default function ManageQuestionsModal({
                 </div>
 
                 {/* Options if custom options or choice */}
-                {(formData.type === 'custom_choice' || formData.type === 'choice_text' || formData.type === 'multi-select' || formData.type === 'yesno_or_choice') && (
+                {(formData.type === 'custom_choice' || formData.type === 'custom_multiselect' || formData.type === 'choice_text' || formData.type === 'multi-select' || formData.type === 'yesno_or_choice') && (
                   <div className="form-group" style={{ marginTop: '14px' }}>
                     <label className="form-label">
                       Selectable Options (comma separated) <span style={{ color: '#EF4444' }}>*</span>

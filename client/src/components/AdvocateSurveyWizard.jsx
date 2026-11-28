@@ -15,6 +15,30 @@ import {
 import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, ADVOCATE_STANDARD_KEYS, DEFAULT_ADVOCATE_TYPES } from '../data/advocateQuestions';
 import { API_BASE_URL } from '../config';
 
+const matchOptionByChar = (optionsList, keyChar) => {
+  if (!keyChar || typeof keyChar !== 'string' || !Array.isArray(optionsList) || optionsList.length === 0) return null;
+  const k = keyChar.trim().toLowerCase();
+  if (!k) return null;
+
+  for (const item of optionsList) {
+    const str = typeof item === 'object' && item !== null ? (item.name || '') : String(item);
+    const trimmed = str.trim();
+    if (trimmed.toLowerCase().startsWith(k)) {
+      return trimmed;
+    }
+  }
+
+  for (const item of optionsList) {
+    const str = typeof item === 'object' && item !== null ? (item.name || '') : String(item);
+    const words = str.trim().split(/\s+/);
+    if (words.some((w) => w.toLowerCase().startsWith(k))) {
+      return str.trim();
+    }
+  }
+
+  return null;
+};
+
 export default function AdvocateSurveyWizard({
   isOpen,
   onClose,
@@ -284,13 +308,18 @@ export default function AdvocateSurveyWizard({
       Object.keys(formData).forEach((k) => {
         if (!ADVOCATE_STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
           if (formData[k] !== undefined && formData[k] !== null && formData[k] !== '') {
-            customObj[k] = formData[k];
+            customObj[k] = Array.isArray(formData[k]) ? formData[k].join(', ') : formData[k];
           }
         }
       });
 
+      const formattedData = {};
+      Object.keys(formData).forEach((k) => {
+        formattedData[k] = Array.isArray(formData[k]) ? formData[k].join(', ') : formData[k];
+      });
+
       const payload = {
-        ...formData,
+        ...formattedData,
         case_specialization: Array.isArray(formData.case_specialization) ? formData.case_specialization.join(', ') : (formData.case_specialization || ''),
         custom_answers: JSON.stringify(customObj)
       };
@@ -464,10 +493,29 @@ export default function AdvocateSurveyWizard({
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder="Type 'Yes' or 'No'"
+                placeholder="Type 'Y' for Yes or 'N' for No..."
                 value={currentVal}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'y' || e.key === 'Y') {
+                    e.preventDefault();
+                    handleInputChange('Yes');
+                  } else if (e.key === 'n' || e.key === 'N') {
+                    e.preventDefault();
+                    handleInputChange('No');
+                  } else {
+                    handleKeyDown(e);
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value.toLowerCase().trim();
+                  if (val === 'y' || val.startsWith('ye')) {
+                    handleInputChange('Yes');
+                  } else if (val === 'n' || val.startsWith('no')) {
+                    handleInputChange('No');
+                  } else {
+                    handleInputChange(e.target.value);
+                  }
+                }}
                 autoFocus
               />
               <div className="yes-no-options-grid">
@@ -477,7 +525,7 @@ export default function AdvocateSurveyWizard({
                   onClick={() => handleInputChange('Yes')}
                 >
                   <CheckCircle2 size={18} />
-                  <span>Yes</span>
+                  <span>Yes (Y)</span>
                 </button>
                 <button
                   type="button"
@@ -485,37 +533,88 @@ export default function AdvocateSurveyWizard({
                   onClick={() => handleInputChange('No')}
                 >
                   <X size={18} />
-                  <span>No</span>
+                  <span>No (N)</span>
                 </button>
               </div>
             </div>
-          ) : currentQ.type === 'multi-select' ? (
+          ) : currentQ.type === 'court_type' ? (
+            /* MANAGE COURT TYPES: MULTI-SELECT */
             <div>
-              <div style={{ marginBottom: '10px', fontSize: '12.5px', color: '#64748B' }}>
-                Selected: <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
+              <div style={{ marginBottom: '10px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="wizard-input-box"
+                  placeholder="Type first letter to toggle court type or click below..."
+                  onKeyDown={(e) => {
+                    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) {
+                      handleKeyDown(e);
+                      return;
+                    }
+                    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                      const matched = matchOptionByChar(courtTypes, e.key);
+                      if (matched) {
+                        e.preventDefault();
+                        handleMultiSelectToggle(matched);
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
               </div>
+
+              <div style={{ marginBottom: '10px', fontSize: '12.5px', color: '#64748B' }}>
+                Selected ({Array.isArray(currentVal) ? currentVal.length : (currentVal ? 1 : 0)}): <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
+              </div>
+
               <div className="multi-select-container" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                {(currentQ.options || []).map((opt) => {
-                  const isSel = Array.isArray(currentVal) ? currentVal.includes(opt) : false;
+                {courtTypes.map((c) => {
+                  const name = typeof c === 'object' && c !== null ? c.name : String(c);
+                  const isSel = Array.isArray(currentVal) ? currentVal.includes(name) : false;
                   return (
                     <button
-                      key={opt}
+                      key={name}
                       type="button"
                       className={`selectable-tag ${isSel ? 'selected' : ''}`}
-                      onClick={() => handleMultiSelectToggle(opt)}
+                      onClick={() => handleMultiSelectToggle(name)}
                     >
                       {isSel && <Check size={14} />}
-                      <span>{opt}</span>
+                      <span>{name}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
           ) : currentQ.type === 'advocate_type' ? (
+            /* ADVOCATE TYPES: MULTI-SELECT */
             <div>
+              <div style={{ marginBottom: '10px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="wizard-input-box"
+                  placeholder="Type first letter to toggle advocate type or click below..."
+                  onKeyDown={(e) => {
+                    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) {
+                      handleKeyDown(e);
+                      return;
+                    }
+                    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                      const list = advocateTypes && advocateTypes.length > 0 ? advocateTypes : DEFAULT_ADVOCATE_TYPES;
+                      const matched = matchOptionByChar(list, e.key);
+                      if (matched) {
+                        e.preventDefault();
+                        handleMultiSelectToggle(matched);
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <div style={{ fontSize: '12.5px', color: '#64748B' }}>
-                  Selected: <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
+                  Selected ({Array.isArray(currentVal) ? currentVal.length : (currentVal ? 1 : 0)}): <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
                 </div>
                 {!showAddTypeInline && onAddAdvocateType && (
                   <button
@@ -598,16 +697,84 @@ export default function AdvocateSurveyWizard({
                 })}
               </div>
             </div>
-          ) : currentQ.type === 'choice_text' ? (
+          ) : (currentQ.type === 'custom_multiselect' || currentQ.type === 'multi-select') ? (
+            /* CUSTOM MULTI-SELECT DROPDOWN */
+            <div>
+              <div style={{ marginBottom: '10px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="wizard-input-box"
+                  placeholder="Type first letter to toggle option, or click below..."
+                  onKeyDown={(e) => {
+                    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) {
+                      handleKeyDown(e);
+                      return;
+                    }
+                    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                      const matched = matchOptionByChar(currentQ.options || [], e.key);
+                      if (matched) {
+                        e.preventDefault();
+                        handleMultiSelectToggle(matched);
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ marginBottom: '10px', fontSize: '12.5px', color: '#64748B' }}>
+                Selected ({Array.isArray(currentVal) ? currentVal.length : (currentVal ? 1 : 0)}): <strong>{Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal || 'None')}</strong>
+              </div>
+
+              <div className="multi-select-container" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {(currentQ.options || []).map((opt) => {
+                  const isSel = Array.isArray(currentVal) ? currentVal.includes(opt) : false;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleMultiSelectToggle(opt)}
+                    >
+                      {isSel && <Check size={14} />}
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (currentQ.type === 'custom_choice' || currentQ.type === 'choice_text') ? (
+            /* CUSTOM SINGLE CHOICE WITH FIRST-LETTER AUTO-FILL */
             <div>
               <input
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder={currentQ.placeholder || 'Select or type choice...'}
+                placeholder={currentQ.placeholder || 'Type first letter to auto-fill or click option...'}
                 value={currentVal}
-                onChange={(e) => handleInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) {
+                    handleKeyDown(e);
+                    return;
+                  }
+                  if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                    const matched = matchOptionByChar(choiceOptions, e.key);
+                    if (matched) {
+                      e.preventDefault();
+                      handleInputChange(matched);
+                    }
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = matchOptionByChar(choiceOptions, val);
+                  if (matched && val.length === 1) {
+                    handleInputChange(matched);
+                  } else {
+                    handleInputChange(val);
+                  }
+                }}
                 autoFocus
               />
               <div className="multi-select-container" style={{ marginTop: '12px' }}>
@@ -638,7 +805,7 @@ export default function AdvocateSurveyWizard({
           )}
 
           {/* Question Remark input if has_remark is active */}
-          {(Boolean(currentQ?.has_remark || (currentQ?.note && currentQ.note.includes('[REMARK]')))) && (
+          {Boolean(currentQ?.has_remark) && (
             <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
                 Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:

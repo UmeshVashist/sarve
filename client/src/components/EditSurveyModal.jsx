@@ -645,7 +645,30 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                         </div>
                       )}
 
-                      {Array.isArray(q.options) && q.options.length > 0 && q.type !== 'yesno' && q.type !== 'yesno_text' && (
+                      {(q.type === 'custom_multiselect' || (q.type === 'multi-select' && Array.isArray(q.options) && q.options.length > 0)) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px', maxHeight: '180px', overflowY: 'auto', padding: '6px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          {(q.options || []).map((opt) => {
+                            const curList = Array.isArray(val) ? val : String(val || '').split(', ').filter(Boolean);
+                            const isSel = curList.includes(opt);
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                className={`btn-action-icon ${isSel ? 'view' : ''}`}
+                                style={{ width: 'auto', padding: '4px 10px', fontSize: '11.5px', fontWeight: 600 }}
+                                onClick={() => {
+                                  const nextList = isSel ? curList.filter((x) => x !== opt) : [...curList, opt];
+                                  handleChange(q.key, nextList.join(', '));
+                                }}
+                              >
+                                {isSel ? `✓ ${opt}` : opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {Array.isArray(q.options) && q.options.length > 0 && q.type !== 'yesno' && q.type !== 'yesno_text' && q.type !== 'custom_multiselect' && q.type !== 'multi-select' && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                           {q.options.map((opt) => (
                             <button

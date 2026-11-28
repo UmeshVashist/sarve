@@ -782,6 +782,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         isOpen={isQuestionsOpen}
         onClose={() => setIsQuestionsOpen(false)}
         questions={questions}
+        courtTypes={courtTypes}
         advocateTypes={advocateTypes}
         onUpdateQuestions={handleQuestionsChange}
         onQuestionsUpdated={fetchQuestions}

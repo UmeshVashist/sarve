@@ -1816,7 +1816,73 @@ export default function SurveyWizard({
                 })}
               </div>
             </div>
-          ) : (currentQ.type === 'custom_choice' || isCustomChoiceQ || (Array.isArray(currentQ.options) && currentQ.options.length > 0 && currentQ.type !== 'yesno')) ? (
+          ) : (currentQ.type === 'custom_multiselect' || (currentQ.type === 'multi-select' && !isQ3 && Array.isArray(currentQ.options) && currentQ.options.length > 0)) ? (
+            /* CUSTOM OPTIONS / DROPDOWN MULTI-SELECT */
+            <div>
+              <div style={{ marginBottom: '10px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="wizard-input-box"
+                  placeholder="Type first letter to toggle option, or click options below..."
+                  onKeyDown={(e) => {
+                    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) return;
+                    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                      const matched = matchOptionByChar(currentQ.options || [], e.key);
+                      if (matched) {
+                        e.preventDefault();
+                        handleMultiSelectToggle(matched);
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Selected Badges */}
+              {selectedTypes.length > 0 && (
+                <div style={{ marginBottom: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {selectedTypes.map((opt) => (
+                    <span
+                      key={opt}
+                      className="tag-case-type"
+                      style={{ background: '#1E293B', color: '#FFFFFF', padding: '5px 12px', fontSize: '12.5px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <span>{opt}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleMultiSelectToggle(opt)}
+                        style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 0 }}
+                        title="Remove"
+                      >
+                        <X size={13} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="multi-select-container" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                {(currentQ.options || []).map((opt) => {
+                  const arr = Array.isArray(formData[currentQ.key])
+                    ? formData[currentQ.key]
+                    : (formData[currentQ.key] || '').split(', ').filter(Boolean);
+                  const isSel = arr.includes(opt);
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleMultiSelectToggle(opt)}
+                    >
+                      {isSel && <Check size={14} />}
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (currentQ.type === 'custom_choice' || isCustomChoiceQ || (Array.isArray(currentQ.options) && currentQ.options.length > 0 && currentQ.type !== 'yesno' && currentQ.type !== 'custom_multiselect')) ? (
             /* CUSTOM OPTIONS / SINGLE CHOICE (OPTIONS ADD) WITH FIRST-LETTER AUTO-FILL */
             <div>
               <input
@@ -1857,28 +1923,6 @@ export default function SurveyWizard({
                       onClick={() => handleInputChange(opt)}
                       style={{ padding: '12px 14px', borderRadius: '10px', fontSize: '13.5px', fontWeight: isSel ? 800 : 600 }}
                     >
-                      <span>{opt}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : currentQ.type === 'multi-select' && !isQ3 && Array.isArray(currentQ.options) && currentQ.options.length > 0 ? (
-            <div>
-              <div className="multi-select-container">
-                {currentQ.options.map((opt) => {
-                  const arr = Array.isArray(formData[currentQ.key])
-                    ? formData[currentQ.key]
-                    : (formData[currentQ.key] || '').split(', ').filter(Boolean);
-                  const isSel = arr.includes(opt);
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      className={`selectable-tag ${isSel ? 'selected' : ''}`}
-                      onClick={() => handleMultiSelectToggle(opt)}
-                    >
-                      {isSel && <Check size={14} />}
                       <span>{opt}</span>
                     </button>
                   );

@@ -94,17 +94,21 @@ export default function ManageAdvocateQuestionsModal({
     setEditingQuestion(q);
     const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
 
-    const hasRemarkVal = Boolean(
-      (q.note && q.note.includes('[REMARK]')) ||
-      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : false)
-    );
+    const hasRemarkVal = Boolean(q.has_remark);
     const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+
+    const normalizedType =
+      (q.type === 'custom_multiselect' || q.type === 'multi-select')
+        ? 'custom_multiselect'
+        : (q.type === 'choice_text' || q.type === 'yesno_or_choice')
+        ? 'custom_choice'
+        : (q.type || 'text');
 
     setFormData({
       order_num: q.order_num ?? '',
       label: cleanLabel,
       placeholder: q.placeholder || '',
-      type: q.type || 'text',
+      type: normalizedType,
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
       note: cleanNote,
       required: Boolean(q.required),
@@ -171,8 +175,8 @@ export default function ManageAdvocateQuestionsModal({
               label: '__Advocate Remarks Store__',
               note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
             })
-          }).catch(() => {});
-        } catch (e) {}
+          }).catch(() => { });
+        } catch (e) { }
 
         applyQuestionsUpdate(updatedList, 'Advocate Question updated successfully!');
 
@@ -204,8 +208,8 @@ export default function ManageAdvocateQuestionsModal({
               label: '__Advocate Remarks Store__',
               note: JSON.stringify({ [newKey]: Boolean(formData.has_remark) })
             })
-          }).catch(() => {});
-        } catch (e) {}
+          }).catch(() => { });
+        } catch (e) { }
 
         const updatedList = [...sortedQuestions, newQ];
         applyQuestionsUpdate(updatedList, `New Advocate Question #${orderNum} added successfully!`);
@@ -220,7 +224,7 @@ export default function ManageAdvocateQuestionsModal({
           if (d.success && d.data?.id) {
             newQ.id = d.data.id;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (onQuestionsUpdated) onQuestionsUpdated();
@@ -241,7 +245,7 @@ export default function ManageAdvocateQuestionsModal({
     if (q.id) {
       try {
         await fetch(`${API_BASE_URL}/api/advocate-questions/${q.id}`, { method: 'DELETE' });
-      } catch (e) {}
+      } catch (e) { }
     }
     if (onQuestionsUpdated) onQuestionsUpdated();
   };
@@ -273,7 +277,7 @@ export default function ManageAdvocateQuestionsModal({
           items: renumbered.map((i) => ({ id: i.id, order_num: i.order_num, label: i.label }))
         })
       });
-    } catch (e) {}
+    } catch (e) { }
     if (onQuestionsUpdated) onQuestionsUpdated();
   };
 
@@ -380,23 +384,6 @@ export default function ManageAdvocateQuestionsModal({
         {/* List Tab */}
         {activeTab === 'list' && (
           <div className="review-summary-list" style={{ padding: '20px 28px', maxHeight: '480px', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <span style={{ fontSize: '13px', color: '#64748B' }}>
-                All questions and custom questions configured below automatically export into the Excel report.
-              </span>
-              <button
-                type="button"
-                className="btn-wizard-prev"
-                style={{ padding: '6px 12px', fontSize: '12px', gap: '6px' }}
-                onClick={handleResetDefaults}
-                disabled={saving}
-                title="Reset to 12 default questions"
-              >
-                <RotateCcw size={14} />
-                <span>Reset 12 Defaults</span>
-              </button>
-            </div>
-
             {sortedQuestions.map((q, idx) => (
               <div
                 key={q.id || q.key || idx}
@@ -416,11 +403,20 @@ export default function ManageAdvocateQuestionsModal({
                     <span style={{ fontWeight: 800, color: '#EA580C', fontSize: '13px' }}>#{q.order_num ?? idx + 1}</span>
                     <strong style={{ fontSize: '13.5px', color: '#1E293B' }}>{getAdvocateQuestionLabel(q, idx)}</strong>
                     {q.required && <span style={{ color: '#DC2626', fontSize: '11px', fontWeight: 700 }}>*Required</span>}
-                    {Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]'))) && (
+                    {Boolean(q.has_remark) && (
                       <span style={{ background: '#EDE9FE', color: '#7C3AED', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>+ Remark</span>
                     )}
                     {q.type === 'advocate_type' && (
-                      <span style={{ background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Advocate Types</span>
+                      <span style={{ background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Advocate Types (Multi)</span>
+                    )}
+                    {q.type === 'court_type' && (
+                      <span style={{ background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Court Types (Multi)</span>
+                    )}
+                    {q.type === 'custom_multiselect' && (
+                      <span style={{ background: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Multi-select Dropdown</span>
+                    )}
+                    {q.type === 'custom_choice' && (
+                      <span style={{ background: '#F3E8FF', color: '#6B21A8', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Custom Options</span>
                     )}
                     {q.is_custom ? (
                       <span style={{ background: '#FEF3C7', color: '#B45309', padding: '2px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>Custom</span>
@@ -520,11 +516,12 @@ export default function ManageAdvocateQuestionsModal({
                 >
                   <option value="text">Text (Single line)</option>
                   <option value="number">Number (Digits only)</option>
-                  <option value="textarea">Textarea (Multi-line / Remarks)</option>
                   <option value="yesno">Yes / No</option>
-                  <option value="choice_text">Single Select Choice</option>
-                  <option value="multi-select">Multi-Select Choices</option>
-                  <option value="advocate_type">Advocate Types (Dynamic Multi-Select)</option>
+                  <option value="advocate_type">Manage Advocate Types (Multi-select from Advocate Types)</option>
+                  <option value="court_type">Manage Court Types (Multi-select from Court Types)</option>
+                  <option value="custom_choice">Custom Options / Single Choice (Options Add)</option>
+                  <option value="custom_multiselect">Dropdown / Multi-select (Custom Options Add)</option>
+                  <option value="textarea">Paragraph / Long Textarea</option>
                 </select>
               </div>
 
@@ -542,7 +539,7 @@ export default function ManageAdvocateQuestionsModal({
               </div>
             </div>
 
-            {(formData.type === 'choice_text' || formData.type === 'multi-select') && (
+            {(formData.type === 'custom_choice' || formData.type === 'custom_multiselect' || formData.type === 'choice_text' || formData.type === 'multi-select') && (
               <div style={{ marginBottom: '14px' }}>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
                   Options (comma separated):

@@ -85,13 +85,18 @@ export default function EditAdvocateSurveyModal({
       Object.keys(formData).forEach((k) => {
         if (!ADVOCATE_STANDARD_KEYS.includes(k) && !['id', 'created_at', 'updated_at', 'custom_answers'].includes(k)) {
           if (formData[k] !== undefined && formData[k] !== null && formData[k] !== '') {
-            customObj[k] = formData[k];
+            customObj[k] = Array.isArray(formData[k]) ? formData[k].join(', ') : formData[k];
           }
         }
       });
 
+      const formattedData = {};
+      Object.keys(formData).forEach((k) => {
+        formattedData[k] = Array.isArray(formData[k]) ? formData[k].join(', ') : formData[k];
+      });
+
       const payload = {
-        ...formData,
+        ...formattedData,
         case_specialization: Array.isArray(formData.case_specialization) ? formData.case_specialization.join(', ') : (formData.case_specialization || ''),
         custom_answers: JSON.stringify(customObj)
       };
@@ -154,23 +159,6 @@ export default function EditAdvocateSurveyModal({
                       value={val}
                       onChange={(e) => handleChange(q.key, e.target.value)}
                     />
-                  ) : q.type === 'multi-select' ? (
-                    <div className="multi-select-container">
-                      {(q.options || ['Criminal Defense', 'Bail Applications', 'NDPS Act (Narcotics)', 'Other']).map((opt) => {
-                        const isSel = Array.isArray(formData.case_specialization) && formData.case_specialization.includes(opt);
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            className={`selectable-tag ${isSel ? 'selected' : ''}`}
-                            onClick={() => handleSpecializationToggle(opt)}
-                          >
-                            {isSel && <Check size={14} />}
-                            <span>{opt}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
                   ) : q.type === 'yesno' ? (
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
@@ -190,7 +178,49 @@ export default function EditAdvocateSurveyModal({
                         No
                       </button>
                     </div>
-                  ) : q.type === 'choice_text' ? (
+                  ) : q.type === 'court_type' ? (
+                    <div className="multi-select-container">
+                      {(courtTypes && courtTypes.length > 0 ? courtTypes.map(c => typeof c === 'string' ? c : c.name) : ['District Court', 'Sessions Court', 'High Court', 'Supreme Court']).map((opt) => {
+                        const curList = Array.isArray(val) ? val : (typeof val === 'string' && val.trim() ? val.split(', ').filter(Boolean) : []);
+                        const isSel = curList.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                            onClick={() => {
+                              const updated = isSel ? curList.filter(i => i !== opt) : [...curList, opt];
+                              handleChange(q.key, updated);
+                            }}
+                          >
+                            {isSel && <Check size={14} />}
+                            <span>{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (q.type === 'custom_multiselect' || q.type === 'multi-select') ? (
+                    <div className="multi-select-container">
+                      {(q.options || ['Criminal Defense', 'Bail Applications', 'NDPS Act (Narcotics)', 'Other']).map((opt) => {
+                        const curList = Array.isArray(val) ? val : (typeof val === 'string' && val.trim() ? val.split(', ').filter(Boolean) : []);
+                        const isSel = curList.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            className={`selectable-tag ${isSel ? 'selected' : ''}`}
+                            onClick={() => {
+                              const updated = isSel ? curList.filter(i => i !== opt) : [...curList, opt];
+                              handleChange(q.key, updated);
+                            }}
+                          >
+                            {isSel && <Check size={14} />}
+                            <span>{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (q.type === 'custom_choice' || q.type === 'choice_text') ? (
                     <div>
                       <input
                         type="text"
@@ -248,7 +278,7 @@ export default function EditAdvocateSurveyModal({
                     />
                   )}
 
-                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')))) && (
+                  {Boolean(q.has_remark) && (
                     <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
                         Remark (Optional):
