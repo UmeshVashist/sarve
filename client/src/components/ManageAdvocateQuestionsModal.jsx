@@ -498,8 +498,8 @@ export default function ManageAdvocateQuestionsModal({
                   <option value="yesno">Yes / No</option>
                   <option value="advocate_type">Manage Advocate Types</option>
                   <option value="court_type">Manage Court Types</option>
-                  <option value="custom_choice">Custom Options</option>
-                  <option value="custom_multiselect">Dropdown (Multi-select)</option>
+                  <option value="custom_choice">Custom Options (Single-select)</option>
+                  <option value="custom_multiselect">Custom Options (Multi-select)</option>
                   <option value="textarea">Paragraph / Long Textarea</option>
                 </select>
               </div>
