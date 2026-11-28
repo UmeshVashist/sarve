@@ -83,6 +83,17 @@ function isDifferentDay(d1Str, d2Str) {
 }
 
 export default function OneToOneChatHome({ onBackToDashboard }) {
+  // Responsive mobile detector (Mobile / Tablet / PC adaptive layout)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Main Data States
   const [groups, setGroups] = useState([]);
   const [members, setMembers] = useState([]);
@@ -824,34 +835,36 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '10px 20px',
+        padding: isMobile ? '8px 12px' : '10px 20px',
         backgroundColor: '#FFFFFF',
         borderBottom: '1px solid #E2E8F0',
-        zIndex: 10
+        zIndex: 10,
+        flexWrap: 'wrap',
+        gap: '8px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '14px' }}>
           <button
             onClick={onBackToDashboard}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               background: '#F1F5F9',
               border: '1px solid #CBD5E1',
               borderRadius: '8px',
-              padding: '6px 14px',
-              fontSize: '13px',
+              padding: isMobile ? '5px 10px' : '6px 14px',
+              fontSize: isMobile ? '12px' : '13px',
               fontWeight: 700,
               color: '#334155',
               cursor: 'pointer'
             }}
           >
-            <ArrowLeft size={16} /> Back to Dashboard
+            <ArrowLeft size={15} /> <span>{isMobile ? 'Dashboard' : 'Back to Dashboard'}</span>
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
-              width: '32px',
-              height: '32px',
+              width: isMobile ? '28px' : '32px',
+              height: isMobile ? '28px' : '32px',
               borderRadius: '8px',
               background: '#DCFCE7',
               color: '#16A34A',
@@ -859,41 +872,43 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 800,
-              fontSize: '16px'
+              fontSize: isMobile ? '14px' : '16px'
             }}>
               💬
             </span>
             <div>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                1 to 1 Group Chat
+              <h2 style={{ margin: 0, fontSize: isMobile ? '14px' : '16px', fontWeight: 800, color: '#0F172A' }}>
+                1 to 1 Chat
               </h2>
-              <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>
-                WhatsApp Style Real-Time Multi-Member Collaboration
-              </span>
+              {!isMobile && (
+                <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>
+                  WhatsApp Style Real-Time Multi-Member Collaboration
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '10px' }}>
           {/* Manage All Members Button */}
           <button
             onClick={() => setIsMemberModalOpen(true)}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#EEF2FF',
               color: '#4F46E5',
               border: '1px solid #C7D2FE',
               borderRadius: '8px',
-              padding: '6px 12px',
-              fontSize: '13px',
+              padding: isMobile ? '5px 8px' : '6px 12px',
+              fontSize: isMobile ? '12px' : '13px',
               fontWeight: 700,
               cursor: 'pointer'
             }}
             title="Manage all members (Add, Edit name, Delete)"
           >
-            <Users size={16} /> Manage Members ({members.length})
+            <Users size={15} /> <span>{isMobile ? `(${members.length})` : `Members (${members.length})`}</span>
           </button>
 
           {/* Create Group Button */}
@@ -902,35 +917,36 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               backgroundColor: '#16A34A',
               color: '#FFFFFF',
               border: 'none',
               borderRadius: '8px',
-              padding: '6px 14px',
-              fontSize: '13px',
+              padding: isMobile ? '5px 10px' : '6px 14px',
+              fontSize: isMobile ? '12px' : '13px',
               fontWeight: 700,
               cursor: 'pointer',
               boxShadow: '0 2px 4px rgba(22, 163, 74, 0.2)'
             }}
           >
-            <Plus size={16} /> Create Group
+            <Plus size={15} /> <span>{isMobile ? 'Group' : 'Create Group'}</span>
           </button>
         </div>
       </div>
 
       {/* Main WhatsApp Split Layout */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         
         {/* LEFT SIDEBAR: Groups Directory */}
         <div style={{
-          width: '360px',
-          minWidth: '320px',
-          maxWidth: '400px',
+          width: isMobile ? '100%' : '360px',
+          minWidth: isMobile ? '100%' : '320px',
+          maxWidth: isMobile ? '100%' : '400px',
           backgroundColor: '#FFFFFF',
           borderRight: '1px solid #E2E8F0',
-          display: 'flex',
-          flexDirection: 'column'
+          display: isMobile && activeGroupId ? 'none' : 'flex',
+          flexDirection: 'column',
+          height: '100%'
         }}>
           {/* Search Bar in Sidebar */}
           <div style={{ padding: '12px 14px', borderBottom: '1px solid #F1F5F9', backgroundColor: '#F8FAFC' }}>
@@ -1116,10 +1132,12 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
         {/* RIGHT CHAT AREA */}
         <div style={{
           flex: 1,
-          display: 'flex',
+          display: isMobile && !activeGroupId ? 'none' : 'flex',
           flexDirection: 'column',
           backgroundColor: '#EFEAE2', // WhatsApp Classic warm beige chat canvas
-          position: 'relative'
+          position: 'relative',
+          height: '100%',
+          overflow: 'hidden'
         }}>
           {activeGroup ? (
             <>
@@ -1128,52 +1146,76 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '10px 20px',
+                padding: isMobile ? '8px 12px' : '10px 20px',
                 backgroundColor: '#FFFFFF',
                 borderBottom: '1px solid #E2E8F0',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 zIndex: 5
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px', minWidth: 0 }}>
+                  {/* On Mobile: Back to Groups list button */}
+                  {isMobile && (
+                    <button
+                      onClick={() => setActiveGroupId(null)}
+                      style={{
+                        border: 'none',
+                        background: '#F1F5F9',
+                        borderRadius: '50%',
+                        width: '32px',
+                        height: '32px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: '#334155',
+                        flexShrink: 0
+                      }}
+                      title="Back to group list"
+                    >
+                      <ArrowLeft size={16} />
+                    </button>
+                  )}
+
                   <div style={{
-                    width: '42px',
-                    height: '42px',
+                    width: isMobile ? '36px' : '42px',
+                    height: isMobile ? '36px' : '42px',
                     borderRadius: '50%',
                     backgroundColor: '#EEF2FF',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '20px',
+                    fontSize: isMobile ? '18px' : '20px',
                     flexShrink: 0
                   }}>
                     {activeGroup.logo_url || '💬'}
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h3 style={{ margin: 0, fontSize: '15.5px', fontWeight: 800, color: '#0F172A' }}>
+                      <h3 style={{ margin: 0, fontSize: isMobile ? '14px' : '15.5px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: isMobile ? '130px' : '300px' }}>
                         {activeGroup.name}
                       </h3>
                       <span style={{
-                        fontSize: '11.5px',
+                        fontSize: '11px',
                         fontWeight: 700,
                         backgroundColor: '#DCFCE7',
                         color: '#15803D',
-                        padding: '1px 8px',
-                        borderRadius: '12px'
+                        padding: '1px 7px',
+                        borderRadius: '12px',
+                        flexShrink: 0
                       }}>
-                        {activeGroupMembers.length} Members
+                        {activeGroupMembers.length}
                       </span>
                     </div>
 
                     {/* Member preview string */}
                     <p style={{
                       margin: '2px 0 0 0',
-                      fontSize: '12px',
+                      fontSize: '11.5px',
                       color: '#64748B',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      maxWidth: '650px'
+                      maxWidth: isMobile ? '180px' : '650px'
                     }}>
                       {activeGroupMembers.map(m => m.name).join(', ') || 'No members assigned'}
                     </p>
@@ -1477,7 +1519,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                                   id={`chat-msg-${msg.id}`}
                                   onDoubleClick={() => handleStartReply(msg)}
                                   style={{
-                                    maxWidth: '68%',
+                                    maxWidth: isMobile ? '86%' : '68%',
                                     backgroundColor: isOutgoing ? '#DCF8C6' : '#FFFFFF', // WhatsApp green for sent, white for received
                                     borderRadius: isOutgoing ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
                                     padding: '8px 12px 6px 12px',
@@ -1786,7 +1828,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                   const hasGroupMembers = activeGroupMembers && activeGroupMembers.length > 0;
 
                   return (
-                    <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <form onSubmit={handleSendMessage} style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '6px' : '10px' }}>
                       {/* Custom Upward-Opening Sender Selector Pill */}
                       <div style={{ position: 'relative' }} ref={senderMenuRef}>
                         <button
@@ -1802,13 +1844,13 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
+                            gap: '5px',
                             backgroundColor: hasGroupMembers ? '#FFFFFF' : '#F1F5F9',
                             border: '1px solid #CBD5E1',
                             borderRadius: '24px',
-                            padding: '6px 12px',
+                            padding: isMobile ? '5px 8px' : '6px 12px',
                             cursor: hasGroupMembers ? 'pointer' : 'not-allowed',
-                            fontSize: '12.5px',
+                            fontSize: isMobile ? '11.5px' : '12.5px',
                             fontWeight: 700,
                             color: hasGroupMembers ? (getSenderColor(currentSender) || '#0F172A') : '#94A3B8',
                             outline: 'none',
@@ -1820,13 +1862,13 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                           <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 700 }}>As:</span>
                           {hasGroupMembers ? (
                             <>
-                              <span style={{ maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <span style={{ maxWidth: isMobile ? '65px' : '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {currentSender || activeGroupMembers[0]?.name}
                               </span>
-                              {isSenderMenuOpen ? <ChevronUp size={14} color="#64748B" /> : <ChevronDown size={14} color="#64748B" />}
+                              {isSenderMenuOpen ? <ChevronUp size={13} color="#64748B" /> : <ChevronDown size={13} color="#64748B" />}
                             </>
                           ) : (
-                            <span style={{ color: '#EF4444', fontStyle: 'italic', fontSize: '11.5px' }}>0 Members</span>
+                            <span style={{ color: '#EF4444', fontStyle: 'italic', fontSize: '11px' }}>0 Members</span>
                           )}
                         </button>
 
@@ -1930,14 +1972,14 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                           backgroundColor: '#FFFFFF',
                           borderRadius: '24px',
                           border: '1px solid #CBD5E1',
-                          padding: '0 14px'
+                          padding: isMobile ? '0 10px' : '0 14px'
                         }}
                       >
                         <input
                           ref={inputRef}
                           type="text"
                           className="chat-seamless-input"
-                          placeholder={hasGroupMembers ? "Type a message... Type @ to mention members" : "Add members to this group first to start chatting..."}
+                          placeholder={hasGroupMembers ? (isMobile ? "Type message... (@ to tag)" : "Type a message... Type @ to mention members") : "Add members to group first..."}
                           value={inputText}
                           onChange={handleInputChange}
                           onKeyDown={handleKeyDown}
@@ -1946,8 +1988,8 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                             width: '100%',
                             border: 'none',
                             outline: 'none',
-                            padding: '11px 4px',
-                            fontSize: '13.5px',
+                            padding: isMobile ? '9px 2px' : '11px 4px',
+                            fontSize: isMobile ? '13px' : '13.5px',
                             color: '#111B21',
                             backgroundColor: 'transparent',
                             cursor: hasGroupMembers ? 'text' : 'not-allowed'
@@ -1960,8 +2002,8 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                         type="submit"
                         disabled={!hasGroupMembers || !inputText.trim()}
                         style={{
-                          width: '42px',
-                          height: '42px',
+                          width: isMobile ? '38px' : '42px',
+                          height: isMobile ? '38px' : '42px',
                           borderRadius: '50%',
                           backgroundColor: hasGroupMembers && inputText.trim() ? '#16A34A' : '#94A3B8',
                           color: '#FFFFFF',

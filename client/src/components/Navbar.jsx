@@ -119,21 +119,25 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
             <span className="brand-title">Legal Survey Portal</span>
 
             {/* Active Module Pill */}
-            <span style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '3px 12px',
-              borderRadius: '20px',
-              fontSize: '12.5px',
-              fontWeight: 800,
-              background: currentMod.bg,
-              color: currentMod.color,
-              border: `1.5px solid ${currentMod.border}`,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-            }}>
+            <span
+              className="nav-module-pill"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 800,
+                background: currentMod.bg,
+                color: currentMod.color,
+                border: `1.5px solid ${currentMod.border}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+              }}
+            >
               <IconComponent size={14} />
-              <span>{currentMod.title}</span>
+              <span className="module-title-full">{currentMod.title}</span>
+              <span className="module-title-short">{currentMod.badgeText}</span>
             </span>
           </div>
           <div className="brand-subtitle">{currentMod.subtitle}</div>
@@ -146,8 +150,8 @@ export default function Navbar({ user, currentScreen = 'dashboard', onLogout, on
             <span className="user-avatar">
               <User size={14} />
             </span>
-            <span>{user.username}</span>
-            <span style={{ fontSize: '11px', color: '#16A34A', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span className="user-name-text">{user.username}</span>
+            <span className="user-active-tag" style={{ fontSize: '11px', color: '#16A34A', display: 'flex', alignItems: 'center', gap: '3px' }}>
               <ShieldCheck size={13} /> Active
             </span>
           </div>
