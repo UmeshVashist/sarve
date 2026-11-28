@@ -776,7 +776,7 @@ export default function SurveyWizard({
     }
 
     // Special strict validation for Q9 or custom questions with Yes/No in options
-    if (isQ9 || (!isQ11 && !isQ16 && !isQ23 && !isQ24 && currentQ.type !== 'yesno' && currentQ.type !== 'yesno_text' && Array.isArray(currentQ.options) && currentQ.options.includes('Yes') && currentQ.options.includes('No') && currentQ.type !== 'multi-select')) {
+    if (isQ9 || (!isQ11 && !isQ16 && !isQ23 && currentQ.type !== 'yesno' && currentQ.type !== 'yesno_text' && Array.isArray(currentQ.options) && currentQ.options.includes('Yes') && currentQ.options.includes('No') && currentQ.type !== 'multi-select')) {
       const valStr = String(formData[currentQ.key] ?? currentVal ?? '').trim();
       const lower = valStr.toLowerCase();
 

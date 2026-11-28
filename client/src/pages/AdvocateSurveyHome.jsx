@@ -99,10 +99,17 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     fetchQuestions();
   }, []);
 
+  useEffect(() => {
+    if (isWizardOpen || isQuestionsOpen) {
+      fetchQuestions(true);
+    }
+  }, [isWizardOpen, isQuestionsOpen]);
+
   const fetchQuestions = async (force = false) => {
     try {
       if (force) invalidateCache('/api/advocate-questions');
-      const data = await fetchWithCache(`${API_BASE_URL}/api/advocate-questions`, {}, 60000);
+      const fetchUrl = force ? `${API_BASE_URL}/api/advocate-questions?_t=${Date.now()}` : `${API_BASE_URL}/api/advocate-questions`;
+      const data = await fetchWithCache(fetchUrl, {}, force ? 0 : 60000);
       if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
         // Sync advocate types if store record is in response
         const storeQ = data.data.find(
@@ -290,6 +297,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
           });
         } catch (e) {}
       }
+      invalidateCache('/api/advocate-questions');
       return { success: true };
     } catch (err) {
       console.warn('Central D1 advocate types sync error:', err);
@@ -785,7 +793,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
         courtTypes={courtTypes}
         advocateTypes={advocateTypes}
         onUpdateQuestions={handleQuestionsChange}
-        onQuestionsUpdated={fetchQuestions}
+        onQuestionsUpdated={() => fetchQuestions(true)}
       />
 
       {/* View Detail Modal */}

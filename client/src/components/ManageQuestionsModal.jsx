@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { getQuestionLabel, SURVEY_QUESTIONS } from '../data/questions';
+import { invalidateCache } from '../utils/apiCache';
 
 export default function ManageQuestionsModal({
   isOpen,
@@ -116,8 +117,8 @@ export default function ManageQuestionsModal({
       (q.type === 'custom_multiselect' || q.type === 'multi-select')
         ? 'custom_multiselect'
         : (q.type === 'choice_text' || q.type === 'yesno_or_choice')
-        ? 'custom_choice'
-        : (q.type || 'text');
+          ? 'custom_choice'
+          : (q.type || 'text');
 
     setFormData({
       order_num: q.order_num ?? '',
@@ -184,7 +185,8 @@ export default function ManageQuestionsModal({
           }))
         })
       });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache(apiEndpoint);
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (err) {
       console.warn('API reorder sync warning:', err);
     }
@@ -224,7 +226,8 @@ export default function ManageQuestionsModal({
           }))
         })
       });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache(apiEndpoint);
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (err) {
       console.warn('API reorder sync warning:', err);
     }
@@ -284,19 +287,6 @@ export default function ManageQuestionsModal({
             label: `${newNum}) ${cLabel}`
           };
         });
-
-        // Persist has_remark in Cloudflare D1 store
-        try {
-          fetch(`${API_BASE_URL}${apiEndpoint}/30`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_num: 9999,
-              label: '__Remarks Map Store__',
-              note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
-            })
-          }).catch(() => { });
-        } catch (e) { }
 
         applyQuestionsUpdate(reordered, `Question #${targetIndex + 1} updated successfully!`);
         setActiveTab('list');
@@ -385,19 +375,6 @@ export default function ManageQuestionsModal({
           };
         });
 
-        // Persist has_remark in Cloudflare D1 store
-        try {
-          fetch(`${API_BASE_URL}${apiEndpoint}/30`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_num: 9999,
-              label: '__Remarks Map Store__',
-              note: JSON.stringify({ [customKey]: Boolean(formData.has_remark) })
-            })
-          }).catch(() => { });
-        } catch (e) { }
-
         applyQuestionsUpdate(reordered, `New Question added at #${targetIndex + 1}!`);
         setActiveTab('list');
         setEditingQuestion(null);
@@ -416,7 +393,8 @@ export default function ManageQuestionsModal({
         });
       }
 
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache(apiEndpoint);
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (err) {
       console.error('API sync error:', err);
       setError(err.message || 'Failed to sync with server');
@@ -461,7 +439,8 @@ export default function ManageQuestionsModal({
           }))
         })
       });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache(apiEndpoint);
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (err) {
       console.warn('API delete sync warning:', err);
     }
@@ -476,7 +455,8 @@ export default function ManageQuestionsModal({
 
     try {
       await fetch(`${API_BASE_URL}${apiEndpoint}/reset`, { method: 'POST' });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache(apiEndpoint);
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (err) {
       console.warn('API reset sync warning:', err);
     }
@@ -751,13 +731,13 @@ export default function ManageQuestionsModal({
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                     >
-                      <option value="text">Single Line Text (Input)</option>
-                      <option value="number">Number (e.g. 1, 2, 3)</option>
+                      <option value="text">Single Line Text</option>
+                      <option value="number">Number</option>
                       <option value="yesno">Yes / No</option>
-                      <option value="court_type">Manage Court Types (Single Choice from Court Types)</option>
-                      <option value="case_type">Manage Case Types (Multi-select from Case Types)</option>
-                      <option value="custom_choice">Custom Options / Single Choice (Options Add)</option>
-                      <option value="custom_multiselect">Dropdown / Multi-select (Custom Options Add)</option>
+                      <option value="court_type">Manage Court Types</option>
+                      <option value="case_type">Manage Case Types</option>
+                      <option value="custom_choice">Custom Options</option>
+                      <option value="custom_multiselect">Dropdown (Multi-select)</option>
                       <option value="textarea">Paragraph / Long Textarea</option>
                     </select>
                   </div>

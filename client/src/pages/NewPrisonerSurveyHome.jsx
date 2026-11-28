@@ -97,7 +97,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
   // Ensure latest questions are loaded whenever user opens "+ Add Data" or "Manage Questions"
   useEffect(() => {
     if (isWizardOpen || isQuestionsOpen) {
-      fetchQuestions();
+      fetchQuestions(true);
     }
   }, [isWizardOpen, isQuestionsOpen]);
 
@@ -163,7 +163,8 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
   const fetchQuestions = async (force = false) => {
     try {
       if (force) invalidateCache('/api/new-questions');
-      const data = await fetchWithCache(`${API_BASE_URL}/api/new-questions`, {}, 60000);
+      const fetchUrl = force ? `${API_BASE_URL}/api/new-questions?_t=${Date.now()}` : `${API_BASE_URL}/api/new-questions`;
+      const data = await fetchWithCache(fetchUrl, {}, force ? 0 : 60000);
       if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
         let serverRemarks = {};
         const storeRow = data.data.find(q => q && (q.key === '__remarks_map__' || q.type === 'remarks_store'));
@@ -632,7 +633,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
         questions={questions}
         apiEndpoint="/api/new-questions"
         onUpdateQuestions={handleQuestionsChange}
-        onQuestionsUpdated={fetchQuestions}
+        onQuestionsUpdated={() => fetchQuestions(true)}
       />
 
       {/* View Survey Detail Modal */}

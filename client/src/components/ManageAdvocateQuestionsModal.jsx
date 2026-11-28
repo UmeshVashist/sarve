@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { getAdvocateQuestionLabel, ADVOCATE_SURVEY_QUESTIONS } from '../data/advocateQuestions';
+import { invalidateCache } from '../utils/apiCache';
 
 export default function ManageAdvocateQuestionsModal({
   isOpen,
@@ -101,8 +102,8 @@ export default function ManageAdvocateQuestionsModal({
       (q.type === 'custom_multiselect' || q.type === 'multi-select')
         ? 'custom_multiselect'
         : (q.type === 'choice_text' || q.type === 'yesno_or_choice')
-        ? 'custom_choice'
-        : (q.type || 'text');
+          ? 'custom_choice'
+          : (q.type || 'text');
 
     setFormData({
       order_num: q.order_num ?? '',
@@ -165,19 +166,6 @@ export default function ManageAdvocateQuestionsModal({
           }
           return item;
         });
-        // Persist has_remark in D1 store
-        try {
-          fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_num: 9999,
-              label: '__Advocate Remarks Store__',
-              note: JSON.stringify({ [editingQuestion.key]: Boolean(formData.has_remark) })
-            })
-          }).catch(() => { });
-        } catch (e) { }
-
         applyQuestionsUpdate(updatedList, 'Advocate Question updated successfully!');
 
         if (editingQuestion.id) {
@@ -198,19 +186,6 @@ export default function ManageAdvocateQuestionsModal({
           label: `${orderNum}) ${formData.label.trim()}`
         };
 
-        // Persist has_remark in D1 store
-        try {
-          fetch(`${API_BASE_URL}/api/advocate-questions/17`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              order_num: 9999,
-              label: '__Advocate Remarks Store__',
-              note: JSON.stringify({ [newKey]: Boolean(formData.has_remark) })
-            })
-          }).catch(() => { });
-        } catch (e) { }
-
         const updatedList = [...sortedQuestions, newQ];
         applyQuestionsUpdate(updatedList, `New Advocate Question #${orderNum} added successfully!`);
 
@@ -227,7 +202,8 @@ export default function ManageAdvocateQuestionsModal({
         } catch (e) { }
       }
 
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache('/api/advocate-questions');
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
       setActiveTab('list');
     } catch (err) {
       setError(err.message || 'Failed to save question');
@@ -247,7 +223,8 @@ export default function ManageAdvocateQuestionsModal({
         await fetch(`${API_BASE_URL}/api/advocate-questions/${q.id}`, { method: 'DELETE' });
       } catch (e) { }
     }
-    if (onQuestionsUpdated) onQuestionsUpdated();
+    invalidateCache('/api/advocate-questions');
+    if (onQuestionsUpdated) onQuestionsUpdated(true);
   };
 
   const handleMove = async (index, direction) => {
@@ -278,7 +255,8 @@ export default function ManageAdvocateQuestionsModal({
         })
       });
     } catch (e) { }
-    if (onQuestionsUpdated) onQuestionsUpdated();
+    invalidateCache('/api/advocate-questions');
+    if (onQuestionsUpdated) onQuestionsUpdated(true);
   };
 
   const handleResetDefaults = async () => {
@@ -287,7 +265,8 @@ export default function ManageAdvocateQuestionsModal({
     try {
       applyQuestionsUpdate(ADVOCATE_SURVEY_QUESTIONS, 'Questions reset to default 12 successfully!');
       await fetch(`${API_BASE_URL}/api/advocate-questions/reset`, { method: 'POST' });
-      if (onQuestionsUpdated) onQuestionsUpdated();
+      invalidateCache('/api/advocate-questions');
+      if (onQuestionsUpdated) onQuestionsUpdated(true);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -517,10 +496,10 @@ export default function ManageAdvocateQuestionsModal({
                   <option value="text">Text (Single line)</option>
                   <option value="number">Number (Digits only)</option>
                   <option value="yesno">Yes / No</option>
-                  <option value="advocate_type">Manage Advocate Types (Multi-select from Advocate Types)</option>
-                  <option value="court_type">Manage Court Types (Multi-select from Court Types)</option>
-                  <option value="custom_choice">Custom Options / Single Choice (Options Add)</option>
-                  <option value="custom_multiselect">Dropdown / Multi-select (Custom Options Add)</option>
+                  <option value="advocate_type">Manage Advocate Types</option>
+                  <option value="court_type">Manage Court Types</option>
+                  <option value="custom_choice">Custom Options</option>
+                  <option value="custom_multiselect">Dropdown (Multi-select)</option>
                   <option value="textarea">Paragraph / Long Textarea</option>
                 </select>
               </div>
