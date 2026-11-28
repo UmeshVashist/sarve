@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 import './App.css';
 
-// Code-split heavy page views for 10x faster initial loading & lightweight bundle
-const PrisonerSurveyHome = lazy(() => import('./pages/PrisonerSurveyHome'));
-const NewPrisonerSurveyHome = lazy(() => import('./pages/NewPrisonerSurveyHome'));
-const AdvocateSurveyHome = lazy(() => import('./pages/AdvocateSurveyHome'));
-const WebReviewHome = lazy(() => import('./pages/WebReviewHome'));
-const RaastaFunctionHome = lazy(() => import('./pages/RaastaFunctionHome'));
-const WorkRoleHome = lazy(() => import('./pages/WorkRoleHome'));
-const DocStoreHome = lazy(() => import('./pages/DocStoreHome'));
-const PassMsHome = lazy(() => import('./pages/PassMsHome'));
-const OneToOneChatHome = lazy(() => import('./pages/OneToOneChatHome'));
+// Code-split heavy page views with auto-retry and cache-bust recovery
+const PrisonerSurveyHome = lazyWithRetry(() => import('./pages/PrisonerSurveyHome'));
+const NewPrisonerSurveyHome = lazyWithRetry(() => import('./pages/NewPrisonerSurveyHome'));
+const AdvocateSurveyHome = lazyWithRetry(() => import('./pages/AdvocateSurveyHome'));
+const WebReviewHome = lazyWithRetry(() => import('./pages/WebReviewHome'));
+const RaastaFunctionHome = lazyWithRetry(() => import('./pages/RaastaFunctionHome'));
+const WorkRoleHome = lazyWithRetry(() => import('./pages/WorkRoleHome'));
+const DocStoreHome = lazyWithRetry(() => import('./pages/DocStoreHome'));
+const PassMsHome = lazyWithRetry(() => import('./pages/PassMsHome'));
+const OneToOneChatHome = lazyWithRetry(() => import('./pages/OneToOneChatHome'));
 
 const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes auto-logout
 

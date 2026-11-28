@@ -14,6 +14,22 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught an unhandled error:', error, errorInfo);
     this.setState({ errorInfo });
+
+    const msg = error?.message || String(error || '');
+    const isChunkError =
+      msg.includes('dynamically imported module') ||
+      msg.includes('Importing a module script failed') ||
+      msg.includes('error loading dynamically imported module') ||
+      error?.name === 'ChunkLoadError';
+
+    if (isChunkError && typeof window !== 'undefined') {
+      const lastReload = Number(sessionStorage.getItem('chunk_reload_timestamp') || '0');
+      const now = Date.now();
+      if (now - lastReload > 15000) {
+        sessionStorage.setItem('chunk_reload_timestamp', String(now));
+        window.location.reload();
+      }
+    }
   }
 
   handleResetCacheAndReload = () => {
