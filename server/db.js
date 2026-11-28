@@ -718,11 +718,11 @@ function initDB() {
         order_num: 24,
         key: 'prisoner_psychologic_survey',
         label: '24) Prisoner psychologic according Survey',
-        placeholder: 'Select Yes or No, and add remarks (optional)...',
-        type: 'psychologic_yesno',
+        placeholder: 'Yes or No',
+        type: 'yesno',
         required: 0,
         options: JSON.stringify(['Yes', 'No']),
-        note: 'Note:- Pls select Yes or No (Remarks optional)',
+        note: 'Note:- Pls enter Only Yes or No',
         is_custom: 0
       }
     ];

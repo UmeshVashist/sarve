@@ -108,18 +108,20 @@ export default function ManageQuestionsModal({
     // Strip leading number prefix so user can edit cleanly
     const cleanLabel = (q.label || '').replace(/^\d+[\)\.\-]\s*/, '').trim();
 
-    const hasRemarkVal = Boolean(
-      (q.note && q.note.includes('[REMARK]')) ||
-      (q.has_remark !== undefined && q.has_remark !== null ? q.has_remark : false)
-    );
+    const hasRemarkVal = Boolean(q.has_remark);
 
     const cleanNote = (q.note || '').replace(/\s*\[REMARK\]/g, '').trim();
+
+    const normalizedType =
+      (q.type === 'choice_text' || q.type === 'multi-select' || q.type === 'yesno_or_choice')
+        ? 'custom_choice'
+        : (q.type || 'text');
 
     setFormData({
       order_num: q.order_num ?? '',
       label: cleanLabel,
       placeholder: q.placeholder || '',
-      type: q.type || 'text',
+      type: normalizedType,
       optionsText: Array.isArray(q.options) ? q.options.join(', ') : '',
       note: cleanNote,
       required: Boolean(q.required),
@@ -622,9 +624,16 @@ export default function ManageQuestionsModal({
                       <div className="question-info-area">
                         <div className="question-label-text">{getQuestionLabel(q, idx)}</div>
                         <div className="question-meta-row">
-                          <span className="badge-qtype">{q.type || 'text'}</span>
+                          <span className="badge-qtype">
+                            {q.type === 'court_type' ? 'Court Types' :
+                             q.type === 'case_type' ? 'Case Types' :
+                             (q.type === 'custom_choice' || q.type === 'choice_text') ? 'Custom Options' :
+                             q.type === 'yesno' ? 'Yes / No' :
+                             q.type === 'textarea' ? 'Paragraph' :
+                             q.type === 'number' ? 'Number' : 'Text'}
+                          </span>
                           {q.required ? <span className="badge-required">Required</span> : null}
-                          {Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]'))) ? (
+                          {Boolean(q.has_remark) ? (
                             <span className="badge-qtype" style={{ background: '#EDE9FE', color: '#7C3AED', borderColor: '#DDD6FE', fontWeight: 700 }}>
                               + Remark
                             </span>
@@ -759,9 +768,9 @@ export default function ManageQuestionsModal({
                       <option value="text">Single Line Text (Input)</option>
                       <option value="number">Number (e.g. 1, 2, 3)</option>
                       <option value="yesno">Yes / No</option>
-                      <option value="choice_text">Dropdown / Single Choice</option>
-                      <option value="multi-select">Multi-select Checkbox</option>
+                      <option value="court_type">Manage Court Types (Single Choice from Court Types)</option>
                       <option value="case_type">Manage Case Types (Multi-select from Case Types)</option>
+                      <option value="custom_choice">Custom Options / Single Choice (Options Add)</option>
                       <option value="textarea">Paragraph / Long Textarea</option>
                     </select>
                   </div>
@@ -782,21 +791,21 @@ export default function ManageQuestionsModal({
                   />
                 </div>
 
-                {/* Options if choice or dropdown */}
-                {(formData.type === 'choice_text' || formData.type === 'multi-select' || formData.type === 'yesno_or_choice') && (
+                {/* Options if custom options or choice */}
+                {(formData.type === 'custom_choice' || formData.type === 'choice_text' || formData.type === 'multi-select' || formData.type === 'yesno_or_choice') && (
                   <div className="form-group" style={{ marginTop: '14px' }}>
                     <label className="form-label">
-                      Selectable Options (comma separated)
+                      Selectable Options (comma separated) <span style={{ color: '#EF4444' }}>*</span>
                     </label>
                     <input
                       type="text"
                       className="form-control"
                       value={formData.optionsText}
                       onChange={(e) => setFormData({ ...formData, optionsText: e.target.value })}
-                      placeholder="e.g. Yes, No, Partially, Not Applicable"
+                      placeholder="e.g. Bail, Charge Sheet, Trial, Appeal"
                     />
                     <span style={{ fontSize: '11.5px', color: '#64748B', marginTop: '3px', display: 'block' }}>
-                      Separate multiple options with commas
+                      Comma-separated options add karein. Survey form me option ka pehla word/letter type karte hi auto-fill aur select ho jayega.
                     </span>
                   </div>
                 )}

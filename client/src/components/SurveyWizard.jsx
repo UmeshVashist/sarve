@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw, Trash2, Scale, UserPlus } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, Check, AlertCircle, Edit3, Send, CheckCircle2, ChevronDown, ChevronUp, Search, Plus, RefreshCw, Trash2, Scale, UserPlus, Settings } from 'lucide-react';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
 import CourtTypesModal from './CourtTypesModal';
@@ -30,6 +30,32 @@ const DEFAULT_FALLBACK_CASE_TYPES = [
   { id: 'fb-11', name: 'Economic Offence' },
   { id: 'fb-12', name: 'Other' }
 ];
+
+const matchOptionByChar = (optionsList, keyChar) => {
+  if (!keyChar || typeof keyChar !== 'string' || !Array.isArray(optionsList) || optionsList.length === 0) return null;
+  const k = keyChar.trim().toLowerCase();
+  if (!k) return null;
+
+  // 1. Exact first letter of option
+  for (const item of optionsList) {
+    const str = typeof item === 'object' && item !== null ? (item.name || '') : String(item);
+    const trimmed = str.trim();
+    if (trimmed.toLowerCase().startsWith(k)) {
+      return trimmed;
+    }
+  }
+
+  // 2. First letter of any individual word in option (e.g. 'C' -> 'Family Court')
+  for (const item of optionsList) {
+    const str = typeof item === 'object' && item !== null ? (item.name || '') : String(item);
+    const words = str.trim().split(/\s+/);
+    if (words.some((w) => w.toLowerCase().startsWith(k))) {
+      return str.trim();
+    }
+  }
+
+  return null;
+};
 
 export default function SurveyWizard({
   isOpen,
@@ -67,19 +93,13 @@ export default function SurveyWizard({
   const [advanceAmount, setAdvanceAmount] = useState('');
   const amountInputRef = useRef(null);
 
-  // Question 16: Complete Fees Amount & Remark
+  // Question 16: Complete Fees Amount
   const [feesAmount, setFeesAmount] = useState('');
   const feesAmountInputRef = useRef(null);
-  const [feesRemark, setFeesRemark] = useState('');
-  const feesRemarkInputRef = useRef(null);
 
   // Question 3: Case Type High-speed entry
   const [caseTypeSearch, setCaseTypeSearch] = useState('');
   const [showCaseTypeDropdown, setShowCaseTypeDropdown] = useState(true);
-
-  // Question 24: Psychological survey
-  const [q24Choice, setQ24Choice] = useState('');
-  const [q24Remarks, setQ24Remarks] = useState('');
 
   const inputRef = useRef(null);
 
@@ -91,10 +111,7 @@ export default function SurveyWizard({
       .filter((q) => q && q.key !== '__remarks_map__' && q.type !== 'remarks_store')
       .sort((a, b) => (Number(a.order_num) || 0) - (Number(b.order_num) || 0))
       .map((q) => {
-        const hasRemark = Boolean(
-          (typeof q?.note === 'string' && q.note.includes('[REMARK]')) ||
-          q?.has_remark
-        );
+        const hasRemark = Boolean(q?.has_remark);
         const cleanNote = (q?.note || '').replace(/\s*\[REMARK\]/g, '').trim();
         return {
           ...q,
@@ -111,8 +128,16 @@ export default function SurveyWizard({
   const isCaseTypeQ =
     currentQ?.key === 'case_type' ||
     currentQ?.type === 'case_type' ||
-    (currentQ?.type === 'multi-select' && (!currentQ?.options || currentQ.options.length === 0)) ||
-    (currentQ?.type === 'choice_text' && (!currentQ?.options || currentQ.options.length === 0));
+    (currentQ?.type === 'multi-select' && (!currentQ?.options || currentQ.options.length === 0));
+
+  const isCourtTypeQ =
+    currentQ?.type === 'court_type' ||
+    (currentQ?.key === 'high_court_advocate' && currentQ?.type === 'court_type');
+
+  const isCustomChoiceQ =
+    (currentQ?.type === 'custom_choice' || currentQ?.type === 'choice_text' || currentQ?.type === 'yesno_or_choice') &&
+    Array.isArray(currentQ?.options) &&
+    currentQ.options.length > 0;
 
   const isQ3 = isCaseTypeQ;
   const isQ8 = currentQ?.key === 'advocate_name_number';
@@ -120,7 +145,6 @@ export default function SurveyWizard({
   const isQ11 = currentQ?.key === 'advocate_payment_advance';
   const isQ16 = currentQ?.key === 'complete_fees_total_initially';
   const isQ23 = currentQ?.key === 'priority_money_vs_release';
-  const isQ24 = currentQ?.key === 'prisoner_psychologic_survey';
 
   // Synchronize court types list
   useEffect(() => {
@@ -146,11 +170,8 @@ export default function SurveyWizard({
       setJumpBackToReview(false);
       setAdvanceAmount('');
       setFeesAmount('');
-      setFeesRemark('');
       setCaseTypeSearch('');
       setShowCaseTypeDropdown(true);
-      setQ24Choice('');
-      setQ24Remarks('');
       setAdvocatesList([
         { name: '', fee: '', experience: '', known: '', court_type: localCourtTypes[0]?.name || 'District Court' }
       ]);
@@ -308,57 +329,20 @@ export default function SurveyWizard({
     }
   }, [currentStep, isQ11]);
 
-  // Synchronize Question 16 (Complete Fees Total + Remark)
+  // Synchronize Question 16 (Complete Fees Total)
   useEffect(() => {
     if (isQ16) {
       const raw = String(formData.complete_fees_total_initially || '').trim();
       let amt = '';
-      let rem = '';
       if (raw.toLowerCase().startsWith('yes')) {
-        if (raw.includes('Remark:')) {
-          const rParts = raw.split(/Remark:\s*/i);
-          rem = rParts[1]?.trim() || '';
-          const mainPart = rParts[0].replace(/\|\s*$/, '').trim();
-          const slashParts = mainPart.split('/');
-          if (slashParts.length > 1) {
-            amt = slashParts.slice(1).join('/').trim();
-          }
-        } else {
-          const parts = raw.split('/');
-          if (parts.length > 1) {
-            amt = parts.slice(1).join('/').trim();
-          }
+        const parts = raw.split('/');
+        if (parts.length > 1) {
+          amt = parts.slice(1).join('/').trim();
         }
-      } else if (raw.toLowerCase().startsWith('no')) {
-        if (raw.includes('Remark:')) {
-          rem = raw.split(/Remark:\s*/i)[1]?.trim() || '';
-        } else if (raw.includes('-')) {
-          rem = raw.split(/-+/)[1]?.trim() || '';
-        }
-      } else {
-        rem = raw;
       }
       setFeesAmount(amt);
-      setFeesRemark(rem);
     }
   }, [currentStep, isQ16]);
-
-  // Synchronize Question 24 (Psychological)
-  useEffect(() => {
-    if (isQ24) {
-      const raw = String(formData.prisoner_psychologic_survey || '').trim();
-      if (raw.toLowerCase().startsWith('yes')) {
-        setQ24Choice('Yes');
-        setQ24Remarks(raw.replace(/^yes\s*[-:/]?\s*/i, '').trim());
-      } else if (raw.toLowerCase().startsWith('no')) {
-        setQ24Choice('No');
-        setQ24Remarks(raw.replace(/^no\s*[-:/]?\s*/i, '').trim());
-      } else {
-        setQ24Choice('');
-        setQ24Remarks(raw);
-      }
-    }
-  }, [currentStep, isQ24]);
 
   // Focus input automatically on wizard open and on every step change
   useEffect(() => {
@@ -478,24 +462,17 @@ export default function SurveyWizard({
     String(currentVal).toLowerCase().startsWith('yes')
   );
 
-  const buildQ16Value = (choice, amt, rem) => {
+  const buildQ16Value = (choice, amt) => {
     const cleanAmt = amt ? String(amt).trim() : '';
-    const cleanRem = rem ? String(rem).trim() : '';
-    let res = choice;
     if (choice === 'Yes') {
-      if (cleanAmt) res += ` / ${cleanAmt}`;
-      if (cleanRem) res += ` | Remark: ${cleanRem}`;
-    } else if (choice === 'No') {
-      if (cleanRem) res += ` | Remark: ${cleanRem}`;
-    } else if (cleanRem) {
-      res = cleanRem;
+      return cleanAmt ? `Yes / ${cleanAmt}` : 'Yes';
     }
-    return res;
+    return 'No';
   };
 
   const handleSelectQ16Yes = () => {
     setError('');
-    const formatted = buildQ16Value('Yes', feesAmount, feesRemark);
+    const formatted = buildQ16Value('Yes', feesAmount);
     setFormData((prev) => ({ ...prev, complete_fees_total_initially: formatted }));
     setTimeout(() => {
       feesAmountInputRef.current?.focus();
@@ -505,7 +482,7 @@ export default function SurveyWizard({
   const handleSelectQ16No = () => {
     setError('');
     setFeesAmount('');
-    const formatted = buildQ16Value('No', '', feesRemark);
+    const formatted = buildQ16Value('No', '');
     setFormData((prev) => ({ ...prev, complete_fees_total_initially: formatted }));
   };
 
@@ -513,60 +490,11 @@ export default function SurveyWizard({
     setError('');
     const clean = val.replace(/[^0-9]/g, '');
     setFeesAmount(clean);
-    const formatted = buildQ16Value('Yes', clean, feesRemark);
+    const formatted = buildQ16Value('Yes', clean);
     setFormData((prev) => ({
       ...prev,
       complete_fees_total_initially: formatted
     }));
-  };
-
-  const handleFeesRemarkChange = (val) => {
-    setError('');
-    setFeesRemark(val);
-    const activeChoice = isQ16Yes ? 'Yes' : (q16DisplayVal.toLowerCase() === 'no' ? 'No' : (val.trim() ? 'Yes' : ''));
-    const formatted = buildQ16Value(activeChoice || 'Yes', feesAmount, val);
-    setFormData((prev) => ({
-      ...prev,
-      complete_fees_total_initially: formatted
-    }));
-  };
-
-  // Question 24 Handlers
-  const handleSelectQ24Choice = (choice) => {
-    setError('');
-    const normalized = (choice.toLowerCase() === 'yes' || choice.toLowerCase() === 'y') ? 'Yes' : (choice.toLowerCase() === 'no' || choice.toLowerCase() === 'n') ? 'No' : choice;
-    setQ24Choice(normalized);
-    const combined = q24Remarks.trim() ? `${normalized} - ${q24Remarks.trim()}` : normalized;
-    setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
-  };
-
-  const handleQ24RemarksChange = (val) => {
-    const trimmed = val.trim();
-    const lower = trimmed.toLowerCase();
-
-    // Auto-detect yes/no typed directly into remarks box
-    if (lower === 'yes' || lower === 'y') {
-      handleSelectQ24Choice('Yes');
-      setQ24Remarks('');
-      return;
-    } else if (lower === 'no' || lower === 'n') {
-      handleSelectQ24Choice('No');
-      setQ24Remarks('');
-      return;
-    } else if (lower.startsWith('yes ') || lower.startsWith('yes -') || lower.startsWith('yes-')) {
-      handleSelectQ24Choice('Yes');
-      setQ24Remarks(trimmed.replace(/^yes\s*[-:/]?\s*/i, ''));
-      return;
-    } else if (lower.startsWith('no ') || lower.startsWith('no -') || lower.startsWith('no-')) {
-      handleSelectQ24Choice('No');
-      setQ24Remarks(trimmed.replace(/^no\s*[-:/]?\s*/i, ''));
-      return;
-    }
-
-    setQ24Remarks(val);
-    const activeChoice = q24Choice || (lower.startsWith('yes') ? 'Yes' : lower.startsWith('no') ? 'No' : '');
-    const combined = activeChoice ? (trimmed ? `${activeChoice} - ${trimmed}` : activeChoice) : val;
-    setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
   };
 
   const handleInputChange = (val) => {
@@ -766,12 +694,12 @@ export default function SurveyWizard({
         }
         setFormData((prev) => ({
           ...prev,
-          complete_fees_total_initially: buildQ16Value('Yes', feesAmount, feesRemark)
+          complete_fees_total_initially: buildQ16Value('Yes', feesAmount)
         }));
       } else if (lower === 'n' || lower.startsWith('no')) {
         setFormData((prev) => ({
           ...prev,
-          complete_fees_total_initially: buildQ16Value('No', '', feesRemark)
+          complete_fees_total_initially: buildQ16Value('No', '')
         }));
       } else {
         setError("Please enter or select complete 'Yes' or 'No' only.");
@@ -803,19 +731,6 @@ export default function SurveyWizard({
         setError('Please enter or select only one of: Jail se bahar jaldi jana OR Paise bachana');
         return;
       }
-    }
-
-    // Special strict validation for Question 24 (Prisoner psychologic survey)
-    if (isQ24 || currentQ.type === 'psychologic_yesno') {
-      const choice = (q24Choice || '').trim().toLowerCase();
-      if (!choice || (choice !== 'yes' && choice !== 'no' && choice !== 'y' && choice !== 'n')) {
-        setError("Please enter or select complete 'Yes' or 'No' before proceeding.");
-        return;
-      }
-      const choiceNormalized = (choice === 'yes' || choice === 'y') ? 'Yes' : 'No';
-      setQ24Choice(choiceNormalized);
-      const combined = q24Remarks.trim() ? `${choiceNormalized} - ${q24Remarks.trim()}` : choiceNormalized;
-      setFormData((prev) => ({ ...prev, prisoner_psychologic_survey: combined }));
     }
 
     // Special strict validation for currentQ.type === 'yesno'
@@ -1545,15 +1460,25 @@ export default function SurveyWizard({
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder="Type 'Yes' or 'No'"
+                placeholder="Type 'Y' for Yes or 'N' for No..."
                 value={q11DisplayVal}
                 autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'y' || e.key === 'Y') {
+                    e.preventDefault();
+                    handleSelectQ11Yes();
+                  } else if (e.key === 'n' || e.key === 'N') {
+                    e.preventDefault();
+                    handleSelectQ11No();
+                  }
+                }}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val.toLowerCase().startsWith('no')) {
-                    handleSelectQ11No();
-                  } else if (val.toLowerCase().startsWith('yes')) {
+                  const lower = val.toLowerCase().trim();
+                  if (lower === 'y' || lower.startsWith('ye')) {
                     handleSelectQ11Yes();
+                  } else if (lower === 'n' || lower.startsWith('no')) {
+                    handleSelectQ11No();
                   } else {
                     handleInputChange(val);
                   }
@@ -1566,7 +1491,7 @@ export default function SurveyWizard({
                   onClick={handleSelectQ11Yes}
                 >
                   <CheckCircle2 size={18} />
-                  <span>Yes</span>
+                  <span>Yes (Y)</span>
                 </button>
                 <button
                   type="button"
@@ -1574,7 +1499,7 @@ export default function SurveyWizard({
                   onClick={handleSelectQ11No}
                 >
                   <X size={18} />
-                  <span>No</span>
+                  <span>No (N)</span>
                 </button>
               </div>
 
@@ -1627,15 +1552,25 @@ export default function SurveyWizard({
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder="Type 'Yes' or 'No'"
+                placeholder="Type 'Y' for Yes or 'N' for No..."
                 value={q16DisplayVal}
                 autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'y' || e.key === 'Y') {
+                    e.preventDefault();
+                    handleSelectQ16Yes();
+                  } else if (e.key === 'n' || e.key === 'N') {
+                    e.preventDefault();
+                    handleSelectQ16No();
+                  }
+                }}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val.toLowerCase().startsWith('no')) {
-                    handleSelectQ16No();
-                  } else if (val.toLowerCase().startsWith('yes')) {
+                  const lower = val.toLowerCase().trim();
+                  if (lower === 'y' || lower.startsWith('ye')) {
                     handleSelectQ16Yes();
+                  } else if (lower === 'n' || lower.startsWith('no')) {
+                    handleSelectQ16No();
                   } else {
                     handleInputChange(val);
                   }
@@ -1648,7 +1583,7 @@ export default function SurveyWizard({
                   onClick={handleSelectQ16Yes}
                 >
                   <CheckCircle2 size={18} />
-                  <span>Yes</span>
+                  <span>Yes (Y)</span>
                 </button>
                 <button
                   type="button"
@@ -1656,7 +1591,7 @@ export default function SurveyWizard({
                   onClick={handleSelectQ16No}
                 >
                   <X size={18} />
-                  <span>No</span>
+                  <span>No (N)</span>
                 </button>
               </div>
 
@@ -1690,47 +1625,11 @@ export default function SurveyWizard({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
-                          feesRemarkInputRef.current?.focus();
+                          handleNext();
                         }
                       }}
                       autoFocus
                     />
-                  </div>
-                </div>
-              )}
-
-              {/* Remark input for Q16 (Optional) */}
-              {(isQ16Yes || q16DisplayVal.toLowerCase() === 'no') && (
-                <div
-                  className="animate-fade-in"
-                  style={{
-                    marginTop: '12px',
-                    background: '#F8FAFC',
-                    padding: '14px 18px',
-                    borderRadius: '14px',
-                    border: '1.5px solid #CBD5E1',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                  }}
-                >
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
-                    Fees Remarks (Optional):
-                  </label>
-                  <input
-                    ref={feesRemarkInputRef}
-                    type="text"
-                    className="wizard-input-box"
-                    placeholder="Enter fee remark / notes (optional)..."
-                    value={feesRemark}
-                    onChange={(e) => handleFeesRemarkChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleNext();
-                      }
-                    }}
-                  />
-                  <div style={{ fontSize: '12px', color: '#64748B', marginTop: '6px' }}>
-                    Excel report me: <strong>{buildQ16Value(isQ16Yes ? 'Yes' : 'No', feesAmount, feesRemark)}</strong> show hoga.
                   </div>
                 </div>
               )}
@@ -1769,7 +1668,7 @@ export default function SurveyWizard({
                   style={{ padding: '14px', fontSize: '14.5px', fontWeight: 800, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   <CheckCircle2 size={18} style={{ display: currentVal === 'Jail se bahar jaldi jana' ? 'inline' : 'none' }} />
-                  <span>Jail se bahar jaldi jana</span>
+                  <span>Jail se bahar jaldi jana (J)</span>
                 </button>
                 <button
                   type="button"
@@ -1782,63 +1681,8 @@ export default function SurveyWizard({
                   style={{ padding: '14px', fontSize: '14.5px', fontWeight: 800, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                 >
                   <CheckCircle2 size={18} style={{ display: currentVal === 'Paise bachana' ? 'inline' : 'none' }} />
-                  <span>Paise bachana</span>
+                  <span>Paise bachana (P)</span>
                 </button>
-              </div>
-            </div>
-          ) : isQ24 ? (
-            /* QUESTION 24: PRISONER PSYCHOLOGIC SURVEY (YES / NO OPTION + REMARKS) */
-            <div>
-              <input
-                ref={inputRef}
-                type="text"
-                className="wizard-input-box"
-                placeholder="Type 'Yes' or 'No'"
-                value={q24Choice}
-                autoFocus
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const lower = val.toLowerCase().trim();
-                  if (lower === 'y' || lower === 'yes') {
-                    handleSelectQ24Choice('Yes');
-                  } else if (lower === 'n' || lower === 'no') {
-                    handleSelectQ24Choice('No');
-                  } else {
-                    setError('');
-                    setQ24Choice(val);
-                  }
-                }}
-              />
-              <div className="yes-no-options-grid">
-                <button
-                  type="button"
-                  className={`btn-yes-choice ${String(q24Choice).toLowerCase() === 'yes' ? 'selected' : ''}`}
-                  onClick={() => handleSelectQ24Choice('Yes')}
-                >
-                  <CheckCircle2 size={18} />
-                  <span>Yes</span>
-                </button>
-                <button
-                  type="button"
-                  className={`btn-no-choice ${String(q24Choice).toLowerCase() === 'no' ? 'selected' : ''}`}
-                  onClick={() => handleSelectQ24Choice('No')}
-                >
-                  <X size={18} />
-                  <span>No</span>
-                </button>
-              </div>
-
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Psychological State / Survey Remarks (Optional):
-                </label>
-                <textarea
-                  rows={3}
-                  className="wizard-input-box"
-                  placeholder="Enter psychological state, behavioral remarks..."
-                  value={q24Remarks}
-                  onChange={(e) => handleQ24RemarksChange(e.target.value)}
-                />
               </div>
             </div>
           ) : currentQ.type === 'textarea' ? (
@@ -1857,52 +1701,166 @@ export default function SurveyWizard({
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder="Type 'Yes' or 'No'"
+                placeholder="Type 'Y' for Yes or 'N' for No..."
                 value={currentVal}
-                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'y' || e.key === 'Y') {
+                    e.preventDefault();
+                    handleInputChange('Yes');
+                  } else if (e.key === 'n' || e.key === 'N') {
+                    e.preventDefault();
+                    handleInputChange('No');
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value.toLowerCase().trim();
+                  if (val === 'y' || val.startsWith('ye')) {
+                    handleInputChange('Yes');
+                  } else if (val === 'n' || val.startsWith('no')) {
+                    handleInputChange('No');
+                  } else {
+                    handleInputChange(e.target.value);
+                  }
+                }}
                 autoFocus
               />
               <div className="yes-no-options-grid">
                 <button
                   type="button"
-                  className={`btn-yes-choice ${currentVal.toLowerCase() === 'yes' ? 'selected' : ''}`}
+                  className={`btn-yes-choice ${String(currentVal).toLowerCase() === 'yes' ? 'selected' : ''}`}
                   onClick={() => handleInputChange('Yes')}
                 >
                   <CheckCircle2 size={18} />
-                  <span>Yes</span>
+                  <span>Yes (Y)</span>
                 </button>
                 <button
                   type="button"
-                  className={`btn-no-choice ${currentVal.toLowerCase() === 'no' ? 'selected' : ''}`}
+                  className={`btn-no-choice ${String(currentVal).toLowerCase() === 'no' ? 'selected' : ''}`}
                   onClick={() => handleInputChange('No')}
                 >
                   <X size={18} />
-                  <span>No</span>
+                  <span>No (N)</span>
                 </button>
               </div>
             </div>
-          ) : (currentQ.type === 'choice_text' || currentQ.type === 'yesno_or_choice') && Array.isArray(currentQ.options) && currentQ.options.length > 0 ? (
+          ) : (currentQ.type === 'court_type' || isCourtTypeQ) ? (
+            /* MANAGE COURT TYPES: SINGLE CHOICE DROPDOWN / PILLS WITH FIRST-LETTER AUTO-FILL */
+            <div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="wizard-input-box"
+                  placeholder="Type first letter (e.g. 'D' for District Court, 'H' for High Court) or click below..."
+                  value={currentVal}
+                  onKeyDown={(e) => {
+                    if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) return;
+                    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                      const matched = matchOptionByChar(localCourtTypes, e.key);
+                      if (matched) {
+                        e.preventDefault();
+                        handleInputChange(matched);
+                      }
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const matched = matchOptionByChar(localCourtTypes, val);
+                    if (matched && val.length === 1) {
+                      handleInputChange(matched);
+                    } else {
+                      handleInputChange(val);
+                    }
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCourtTypesModalOpen(true)}
+                  style={{
+                    background: '#F1F5F9',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '12px',
+                    padding: '0 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    color: '#334155',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Manage Court Types"
+                >
+                  <Settings size={15} />
+                  <span>Manage</span>
+                </button>
+              </div>
+
+              <div className="yes-no-options-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                {localCourtTypes.map((c) => {
+                  const name = c.name || c;
+                  const isSel = String(currentVal).toLowerCase() === String(name).toLowerCase();
+                  return (
+                    <button
+                      key={c.id || name}
+                      type="button"
+                      className={`btn-pill-choice ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleInputChange(name)}
+                      style={{ padding: '12px 14px', borderRadius: '10px', fontSize: '13.5px', fontWeight: isSel ? 800 : 600 }}
+                    >
+                      <span>{name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (currentQ.type === 'custom_choice' || isCustomChoiceQ || (Array.isArray(currentQ.options) && currentQ.options.length > 0 && currentQ.type !== 'yesno')) ? (
+            /* CUSTOM OPTIONS / SINGLE CHOICE (OPTIONS ADD) WITH FIRST-LETTER AUTO-FILL */
             <div>
               <input
                 ref={inputRef}
                 type="text"
                 className="wizard-input-box"
-                placeholder={currentQ.placeholder || 'Select option or enter value...'}
+                placeholder={currentQ.placeholder || "Type first letter to auto-fill or click option..."}
                 value={currentVal}
-                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Backspace', 'Delete'].includes(e.key)) return;
+                  if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                    const matched = matchOptionByChar(currentQ.options, e.key);
+                    if (matched) {
+                      e.preventDefault();
+                      handleInputChange(matched);
+                    }
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const matched = matchOptionByChar(currentQ.options, val);
+                  if (matched && val.length === 1) {
+                    handleInputChange(matched);
+                  } else {
+                    handleInputChange(val);
+                  }
+                }}
                 autoFocus
               />
-              <div className="yes-no-options-grid">
-                {currentQ.options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    className={`btn-pill-choice ${String(currentVal).toLowerCase() === String(opt).toLowerCase() ? 'selected' : ''}`}
-                    onClick={() => handleInputChange(opt)}
-                  >
-                    <span>{opt}</span>
-                  </button>
-                ))}
+              <div className="yes-no-options-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginTop: '12px' }}>
+                {(currentQ.options || []).map((opt) => {
+                  const isSel = String(currentVal).toLowerCase() === String(opt).toLowerCase();
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      className={`btn-pill-choice ${isSel ? 'selected' : ''}`}
+                      onClick={() => handleInputChange(opt)}
+                      style={{ padding: '12px 14px', borderRadius: '10px', fontSize: '13.5px', fontWeight: isSel ? 800 : 600 }}
+                    >
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : currentQ.type === 'multi-select' && !isQ3 && Array.isArray(currentQ.options) && currentQ.options.length > 0 ? (
@@ -1966,7 +1924,7 @@ export default function SurveyWizard({
                     onClick={() => handleInputChange('Yes')}
                   >
                     <CheckCircle2 size={18} />
-                    <span>Yes</span>
+                    <span>Yes (Y)</span>
                   </button>
                   <button
                     type="button"
@@ -1974,7 +1932,7 @@ export default function SurveyWizard({
                     onClick={() => handleInputChange('No')}
                   >
                     <X size={18} />
-                    <span>No</span>
+                    <span>No (N)</span>
                   </button>
                 </div>
               )}
@@ -1982,7 +1940,7 @@ export default function SurveyWizard({
           )}
 
           {/* Question Remark input if has_remark is active */}
-          {(Boolean(currentQ?.has_remark || (currentQ?.note && currentQ.note.includes('[REMARK]')))) && (
+          {Boolean(currentQ?.has_remark) && (
             <div className="wizard-remark-container" style={{ marginTop: '16px', background: '#F0FDF4', padding: '12px 14px', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
               <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#166534', marginBottom: '6px' }}>
                 Remark / Additional Notes <span style={{ fontSize: '11.5px', fontWeight: 500, color: '#15803D' }}>(Optional)</span>:

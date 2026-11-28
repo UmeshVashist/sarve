@@ -416,35 +416,18 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                         const isYes = strVal.toLowerCase().startsWith('yes');
                         const isNo = strVal.toLowerCase() === 'no';
                         let currentAmount = '';
-                        let currentRemark = '';
-                        if (strVal.includes('Remark:')) {
-                          const rParts = strVal.split(/Remark:\s*/i);
-                          currentRemark = rParts[1]?.trim() || '';
-                          const mainPart = rParts[0].replace(/\|\s*$/, '').trim();
-                          const slashParts = mainPart.split('/');
-                          if (slashParts.length > 1) {
-                            currentAmount = slashParts.slice(1).join('/').trim();
-                          }
-                        } else {
-                          const slashParts = strVal.split('/');
-                          if (slashParts.length > 1) {
-                            currentAmount = slashParts.slice(1).join('/').trim();
-                          }
+                        const slashParts = strVal.split('/');
+                        if (slashParts.length > 1) {
+                          currentAmount = slashParts.slice(1).join('/').trim();
                         }
 
-                        const updateQ16 = (choice, amt, rem) => {
-                          let res = choice;
+                        const updateQ16 = (choice, amt) => {
                           const cleanAmt = amt ? String(amt).trim() : '';
-                          const cleanRem = rem ? String(rem).trim() : '';
                           if (choice === 'Yes') {
-                            if (cleanAmt) res += ` / ${cleanAmt}`;
-                            if (cleanRem) res += ` | Remark: ${cleanRem}`;
-                          } else if (choice === 'No') {
-                            if (cleanRem) res += ` | Remark: ${cleanRem}`;
-                          } else if (cleanRem) {
-                            res = cleanRem;
+                            handleChange(q.key, cleanAmt ? `Yes / ${cleanAmt}` : 'Yes');
+                          } else {
+                            handleChange(q.key, 'No');
                           }
-                          handleChange(q.key, res);
                         };
 
                         return (
@@ -454,7 +437,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                                 type="button"
                                 className={`btn-action-icon ${isYes ? 'view' : ''}`}
                                 style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
-                                onClick={() => updateQ16('Yes', currentAmount, currentRemark)}
+                                onClick={() => updateQ16('Yes', currentAmount)}
                               >
                                 Yes
                               </button>
@@ -462,7 +445,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                                 type="button"
                                 className={`btn-action-icon ${isNo ? 'delete' : ''}`}
                                 style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
-                                onClick={() => updateQ16('No', '', currentRemark)}
+                                onClick={() => updateQ16('No', '')}
                               >
                                 No
                               </button>
@@ -484,29 +467,12 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                                     value={currentAmount}
                                     onChange={(e) => {
                                       const clean = e.target.value.replace(/[^0-9]/g, '');
-                                      updateQ16('Yes', clean, currentRemark);
+                                      updateQ16('Yes', clean);
                                     }}
                                   />
                                 </div>
-                              </div>
-                            )}
-
-                            {(isYes || isNo) && (
-                              <div style={{ background: '#FFFFFF', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #CBD5E1', marginTop: '8px' }}>
-                                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                                  Fees Remark (Optional):
-                                </label>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  placeholder="Enter any fee remark or note (optional)..."
-                                  value={currentRemark}
-                                  onChange={(e) => {
-                                    updateQ16(isYes ? 'Yes' : 'No', currentAmount, e.target.value);
-                                  }}
-                                />
                                 <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
-                                  Saved in Excel as: <strong>{val || 'Not specified'}</strong>
+                                  Saved in Excel as: <strong>{currentAmount ? `Yes / ${currentAmount}` : 'Yes'}</strong>
                                 </div>
                               </div>
                             )}
@@ -607,53 +573,6 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                         ))}
                       </div>
                     </div>
-                  ) : q.key === 'prisoner_psychologic_survey' ? (
-                    <div>
-                      {(() => {
-                        const strVal = String(val || '').trim();
-                        const isYes = strVal.toLowerCase().startsWith('yes');
-                        const isNo = strVal.toLowerCase().startsWith('no');
-                        const remarks = isYes
-                          ? strVal.replace(/^yes\s*[-:/]?\s*/i, '').trim()
-                          : isNo
-                          ? strVal.replace(/^no\s*[-:/]?\s*/i, '').trim()
-                          : strVal;
-
-                        return (
-                          <div>
-                            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                              <button
-                                type="button"
-                                className={`btn-action-icon ${isYes ? 'view' : ''}`}
-                                style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
-                                onClick={() => handleChange(q.key, remarks ? `Yes - ${remarks}` : 'Yes')}
-                              >
-                                Yes
-                              </button>
-                              <button
-                                type="button"
-                                className={`btn-action-icon ${isNo ? 'delete' : ''}`}
-                                style={{ width: 'auto', padding: '6px 16px', fontSize: '13px', fontWeight: 700 }}
-                                onClick={() => handleChange(q.key, remarks ? `No - ${remarks}` : 'No')}
-                              >
-                                No
-                              </button>
-                            </div>
-                            <textarea
-                              rows={2}
-                              className="form-control"
-                              placeholder="Remarks / Psychological notes..."
-                              value={remarks}
-                              onChange={(e) => {
-                                const newR = e.target.value;
-                                const prefix = isYes ? 'Yes - ' : isNo ? 'No - ' : '';
-                                handleChange(q.key, prefix ? `${prefix}${newR}` : newR);
-                              }}
-                            />
-                          </div>
-                        );
-                      })()}
-                    </div>
                   ) : (
                     <div>
                       <input
@@ -680,6 +599,26 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                           >
                             No
                           </button>
+                        </div>
+                      )}
+
+                      {q.type === 'court_type' && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                          {localCourtTypes.map((c) => {
+                            const name = c.name || c;
+                            const isSel = String(val).toLowerCase() === String(name).toLowerCase();
+                            return (
+                              <button
+                                key={c.id || name}
+                                type="button"
+                                className={`btn-action-icon ${isSel ? 'view' : ''}`}
+                                style={{ width: 'auto', padding: '4px 12px', fontSize: '12px', fontWeight: 600 }}
+                                onClick={() => handleChange(q.key, name)}
+                              >
+                                {name}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -724,7 +663,7 @@ export default function EditSurveyModal({ isOpen, onClose, survey, caseTypes = [
                     </div>
                   )}
 
-                  {(Boolean(q.has_remark || (q.note && q.note.includes('[REMARK]')))) && (
+                  {Boolean(q.has_remark) && (
                     <div style={{ marginTop: '8px', background: '#F0FDF4', padding: '8px 10px', borderRadius: '6px', border: '1px solid #BBF7D0' }}>
                       <label style={{ fontSize: '11.5px', fontWeight: 700, color: '#166534', display: 'block', marginBottom: '3px' }}>
                         Remark (Optional):
