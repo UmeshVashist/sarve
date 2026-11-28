@@ -27,6 +27,7 @@ import ManageQuestionsModal from '../components/ManageQuestionsModal';
 import DownloadFormatModal from '../components/DownloadFormatModal';
 import { SURVEY_QUESTIONS, getQuestionLabel, STANDARD_KEYS } from '../data/questions';
 import { API_BASE_URL } from '../config';
+import { fetchWithCache, invalidateCache } from '../utils/apiCache';
 import { downloadSurveyExcel } from '../utils/exportExcel';
 import { resolveAnswerForRecord } from '../utils/resolveSurveyAnswer';
 import { DEFAULT_CASE_TYPES } from './PrisonerSurveyHome';
@@ -100,11 +101,11 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
     }
   }, [isWizardOpen, isQuestionsOpen]);
 
-  const fetchCourtTypes = async () => {
+  const fetchCourtTypes = async (force = false) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/court-types`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
+      if (force) invalidateCache('/api/court-types');
+      const data = await fetchWithCache(`${API_BASE_URL}/api/court-types`, {}, 60000);
+      if (data && data.success && Array.isArray(data.data)) {
         setCourtTypes(data.data);
       }
     } catch (err) {
@@ -121,7 +122,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
       return data;
     } catch (err) {
@@ -138,7 +139,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
       return data;
     } catch (err) {
@@ -152,20 +153,18 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
       const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
     } catch (err) {
       alert('Failed to delete court type');
     }
   };
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (force = false) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/new-questions?_t=${Date.now()}`, {
-        cache: 'no-store'
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+      if (force) invalidateCache('/api/new-questions');
+      const data = await fetchWithCache(`${API_BASE_URL}/api/new-questions`, {}, 60000);
+      if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
         let serverRemarks = {};
         const storeRow = data.data.find(q => q && (q.key === '__remarks_map__' || q.type === 'remarks_store'));
         if (storeRow && storeRow.note) {
@@ -216,11 +215,11 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
     }
   };
 
-  const fetchCaseTypes = async () => {
+  const fetchCaseTypes = async (force = false) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/case-types`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+      if (force) invalidateCache('/api/case-types');
+      const data = await fetchWithCache(`${API_BASE_URL}/api/case-types`, {}, 60000);
+      if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
         setCaseTypes(data.data);
       }
     } catch (err) {
@@ -254,7 +253,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCaseTypes();
+        fetchCaseTypes(true);
       }
       return data;
     } catch (err) {
@@ -270,7 +269,7 @@ export default function NewPrisonerSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCaseTypes();
+        fetchCaseTypes(true);
       }
     } catch (err) {
       alert('Failed to delete case type');

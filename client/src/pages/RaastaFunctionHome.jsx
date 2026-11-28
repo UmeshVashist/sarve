@@ -13,11 +13,24 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
   const [functions, setFunctions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef(null);
   const [selectedPortalFilter, setSelectedPortalFilter] = useState('');
   const [isPortalsModalOpen, setIsPortalsModalOpen] = useState(false);
   const [isAddFunctionModalOpen, setIsAddFunctionModalOpen] = useState(false);
   const [editingFunction, setEditingFunction] = useState(null);
   const addDataBtnRef = useRef(null);
+
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!val.trim()) {
+      fetchFunctions('', selectedPortalFilter);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchFunctions(val, selectedPortalFilter);
+    }, 250);
+  };
 
   // Fetch Portals from Cloudflare Database
   const fetchPortals = async () => {
@@ -238,15 +251,13 @@ export default function RaastaFunctionHome({ onBackToDashboard }) {
               className="search-input"
               placeholder="Search by portal name, function, or details..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                fetchFunctions(e.target.value, selectedPortalFilter);
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {searchQuery && (
               <button
                 className="search-clear-btn"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                   setSearchQuery('');
                   fetchFunctions('', selectedPortalFilter);
                 }}

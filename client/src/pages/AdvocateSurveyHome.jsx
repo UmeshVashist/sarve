@@ -24,6 +24,7 @@ import EditAdvocateSurveyModal from '../components/EditAdvocateSurveyModal';
 import ManageAdvocateQuestionsModal from '../components/ManageAdvocateQuestionsModal';
 import { ADVOCATE_SURVEY_QUESTIONS, getAdvocateQuestionLabel, DEFAULT_ADVOCATE_TYPES } from '../data/advocateQuestions';
 import { API_BASE_URL } from '../config';
+import { fetchWithCache, invalidateCache } from '../utils/apiCache';
 import { downloadAdvocateExcel, resolveAdvocateAnswer } from '../utils/exportAdvocateExcel';
 
 import { DEFAULT_COURT_TYPES } from '../data/courtTypes';
@@ -98,11 +99,11 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     fetchQuestions();
   }, []);
 
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (force = false) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/advocate-questions?_t=${Date.now()}`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+      if (force) invalidateCache('/api/advocate-questions');
+      const data = await fetchWithCache(`${API_BASE_URL}/api/advocate-questions`, {}, 60000);
+      if (data && data.success && Array.isArray(data.data) && data.data.length > 0) {
         // Sync advocate types if store record is in response
         const storeQ = data.data.find(
           (q) => q.key === '__advocate_types__' || q.type === 'advocate_type_store'
@@ -175,11 +176,11 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
     }
   };
 
-  const fetchCourtTypes = async () => {
+  const fetchCourtTypes = async (force = false) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/court-types`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
+      if (force) invalidateCache('/api/court-types');
+      const data = await fetchWithCache(`${API_BASE_URL}/api/court-types`, {}, 60000);
+      if (data && data.success && Array.isArray(data.data)) {
         setCourtTypes(data.data);
       }
     } catch (err) {
@@ -196,7 +197,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
       return data;
     } catch (err) {
@@ -213,7 +214,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
       return data;
     } catch (err) {
@@ -227,7 +228,7 @@ export default function AdvocateSurveyHome({ onBackToDashboard }) {
       const res = await fetch(`${API_BASE_URL}/api/court-types/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        fetchCourtTypes();
+        fetchCourtTypes(true);
       }
     } catch (err) {
       alert('Failed to delete court type');

@@ -55,6 +55,36 @@ function extractCustomAnswers(data, existingCustom = {}) {
 }
 
 let isD1Initialized = false;
+let areIndexesCreated = false;
+
+async function ensureIndexes(db) {
+  if (areIndexesCreated) return;
+  try {
+    await db.batch([
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_ps_type_id ON prisoner_surveys(prisoner_type, id DESC);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_ps_utct ON prisoner_surveys(utct_no);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_ps_name ON prisoner_surveys(name);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_questions_order ON questions(order_num);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_new_questions_order ON new_prisoner_questions(order_num);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_adv_questions_order ON advocate_questions(order_num);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_adv_surveys_id ON advocate_surveys(id DESC);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_pass_ms_id ON pass_ms_entries(id DESC);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_pass_ms_title ON pass_ms_entries(title);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_doc_store_folder ON doc_store_files(folder_path);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_doc_store_file_id ON doc_store_files(id DESC);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_doc_store_parent ON doc_store_folders(parent_path);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_web_reviews_id ON web_reviews(id DESC);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_web_reviews_website ON web_reviews(website_name);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_raasta_fn_order ON raasta_functions(order_num);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_raasta_fn_portal ON raasta_functions(portal_name);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_work_roles_order ON work_roles(order_num);"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_work_roles_name ON work_roles(role_name);")
+    ]);
+    areIndexesCreated = true;
+  } catch (e) {
+    // Indexes already exist or table still being initialized
+  }
+}
 
 async function ensureD1Database(db) {
   if (isD1Initialized) return;
@@ -66,6 +96,7 @@ async function ensureD1Database(db) {
       if (!chatTableCheck) {
         await ensureChatTables(db);
       }
+      await ensureIndexes(db);
       isD1Initialized = true;
       return;
     }
@@ -950,7 +981,7 @@ export default {
             };
           });
           return new Response(JSON.stringify({ success: true, data }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
           });
         } catch (e) {
           return new Response(JSON.stringify({ success: false, message: e.message }), {
@@ -1133,7 +1164,7 @@ export default {
         const list = await env.DB.prepare('SELECT * FROM case_types ORDER BY name ASC').all();
         return new Response(
           JSON.stringify({ success: true, data: list.results }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' } }
         );
       }
 
@@ -1161,7 +1192,7 @@ export default {
       if (path === '/api/court-types' && method === 'GET') {
         const list = await env.DB.prepare('SELECT * FROM court_types ORDER BY id ASC').all();
         return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
         });
       }
 
@@ -1205,7 +1236,7 @@ export default {
       if (path === '/api/advocate-types' && method === 'GET') {
         const list = await env.DB.prepare('SELECT * FROM advocate_types ORDER BY id ASC').all();
         return new Response(JSON.stringify({ success: true, count: (list.results || []).length, data: list.results || [] }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
         });
       }
 
@@ -2327,7 +2358,7 @@ export default {
             };
           });
           return new Response(JSON.stringify({ success: true, data }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
           });
         } catch (e) {
           return new Response(JSON.stringify({ success: false, message: e.message }), {

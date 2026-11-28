@@ -14,12 +14,25 @@ export default function WebReviewHome({ onBackToDashboard }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef(null);
   const [selectedWebsiteFilter, setSelectedWebsiteFilter] = useState('');
   const [isUrlsModalOpen, setIsUrlsModalOpen] = useState(false);
   const [isAddReviewModalOpen, setIsAddReviewModalOpen] = useState(false);
   const [editingReview, setEditingReview] = useState(null);
   const [viewingReview, setViewingReview] = useState(null);
   const addDataBtnRef = useRef(null);
+
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!val.trim()) {
+      fetchReviews('');
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchReviews(val);
+    }, 250);
+  };
 
   // Fetch URLs from Cloudflare Database
   const fetchUrls = async () => {
@@ -260,15 +273,13 @@ export default function WebReviewHome({ onBackToDashboard }) {
               className="search-input"
               placeholder="Search by website, URL, or review..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                fetchReviews(e.target.value);
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {searchQuery && (
               <button
                 className="search-clear-btn"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                   setSearchQuery('');
                   fetchReviews('');
                 }}

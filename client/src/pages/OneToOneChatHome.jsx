@@ -152,6 +152,19 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
   const inputRef = useRef(null);
   const lastMsgIdRef = useRef(0);
   const pollingTimerRef = useRef(null);
+  const groupSearchTimeoutRef = useRef(null);
+
+  const handleGroupSearchChange = (val) => {
+    setGroupSearch(val);
+    if (groupSearchTimeoutRef.current) clearTimeout(groupSearchTimeoutRef.current);
+    if (!val.trim()) {
+      fetchGroups('');
+      return;
+    }
+    groupSearchTimeoutRef.current = setTimeout(() => {
+      fetchGroups(val);
+    }, 250);
+  };
 
   // Click outside and Esc key listener for 3-dots and sender menus
   useEffect(() => {
@@ -968,10 +981,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
                 className="chat-seamless-input"
                 placeholder="Search groups or chat..."
                 value={groupSearch}
-                onChange={(e) => {
-                  setGroupSearch(e.target.value);
-                  fetchGroups(e.target.value);
-                }}
+                onChange={(e) => handleGroupSearchChange(e.target.value)}
                 style={{
                   width: '100%',
                   border: 'none',
@@ -985,6 +995,7 @@ export default function OneToOneChatHome({ onBackToDashboard }) {
               {groupSearch && (
                 <button
                   onClick={() => {
+                    if (groupSearchTimeoutRef.current) clearTimeout(groupSearchTimeoutRef.current);
                     setGroupSearch('');
                     fetchGroups('');
                   }}

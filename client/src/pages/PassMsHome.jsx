@@ -12,6 +12,7 @@ export default function PassMsHome({ onBackToDashboard }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [revealedRows, setRevealedRows] = useState({});
@@ -58,9 +59,14 @@ export default function PassMsHome({ onBackToDashboard }) {
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (!val.trim()) {
       fetchEntries('');
+      return;
     }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchEntries(val);
+    }, 250);
   };
 
   const handleSearchSubmit = (e) => {
@@ -287,6 +293,7 @@ export default function PassMsHome({ onBackToDashboard }) {
                 type="button"
                 className="btn-clear-search"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                   setSearchQuery('');
                   fetchEntries('');
                 }}

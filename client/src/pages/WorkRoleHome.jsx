@@ -13,11 +13,24 @@ export default function WorkRoleHome({ onBackToDashboard }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef(null);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('');
   const [isRolesModalOpen, setIsRolesModalOpen] = useState(false);
   const [isAddEntryModalOpen, setIsAddEntryModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const addDataBtnRef = useRef(null);
+
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (!val.trim()) {
+      fetchEntries('', selectedRoleFilter);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchEntries(val, selectedRoleFilter);
+    }, 250);
+  };
 
   // Fetch Roles from Cloudflare Database
   const fetchRoles = async () => {
@@ -238,15 +251,13 @@ export default function WorkRoleHome({ onBackToDashboard }) {
               className="search-input"
               placeholder="Search by role name or work/task name..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                fetchEntries(e.target.value, selectedRoleFilter);
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {searchQuery && (
               <button
                 className="search-clear-btn"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                   setSearchQuery('');
                   fetchEntries('', selectedRoleFilter);
                 }}

@@ -40,6 +40,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
   const [stats, setStats] = useState({ total_files: 0, total_size_bytes: 0, total_folders: 1, r2_active: true });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgressMsg, setUploadProgressMsg] = useState('');
   const [statusBanner, setStatusBanner] = useState(null);
@@ -121,9 +122,14 @@ export default function DocStoreHome({ onBackToDashboard }) {
   const handleSearchChange = (e) => {
     const val = e.target.value;
     setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     if (!val.trim()) {
       fetchDocStore(currentFolder, '');
+      return;
     }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchDocStore(currentFolder, val);
+    }, 250);
   };
 
   const handleSearchSubmit = (e) => {
@@ -492,6 +498,7 @@ export default function DocStoreHome({ onBackToDashboard }) {
                 type="button"
                 className="btn-clear-search"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
                   setSearchQuery('');
                   fetchDocStore(currentFolder, '');
                 }}

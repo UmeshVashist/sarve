@@ -280,6 +280,24 @@ function initDB() {
     CREATE INDEX IF NOT EXISTS idx_chat_msg_group ON chat_messages(group_id, id);
     CREATE INDEX IF NOT EXISTS idx_chat_group_m_gid ON chat_group_members(group_id);
     CREATE INDEX IF NOT EXISTS idx_chat_group_m_mid ON chat_group_members(member_id);
+    CREATE INDEX IF NOT EXISTS idx_ps_type_id ON prisoner_surveys(prisoner_type, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_ps_utct ON prisoner_surveys(utct_no);
+    CREATE INDEX IF NOT EXISTS idx_ps_name ON prisoner_surveys(name);
+    CREATE INDEX IF NOT EXISTS idx_questions_order ON questions(order_num);
+    CREATE INDEX IF NOT EXISTS idx_new_questions_order ON new_questions(order_num);
+    CREATE INDEX IF NOT EXISTS idx_adv_questions_order ON advocate_questions(order_num);
+    CREATE INDEX IF NOT EXISTS idx_adv_surveys_id ON advocate_surveys(id DESC);
+    CREATE INDEX IF NOT EXISTS idx_pass_ms_id ON pass_ms_entries(id DESC);
+    CREATE INDEX IF NOT EXISTS idx_pass_ms_title ON pass_ms_entries(title);
+    CREATE INDEX IF NOT EXISTS idx_doc_store_folder ON doc_store_files(folder_path);
+    CREATE INDEX IF NOT EXISTS idx_doc_store_file_id ON doc_store_files(id DESC);
+    CREATE INDEX IF NOT EXISTS idx_doc_store_parent ON doc_store_folders(parent_path);
+    CREATE INDEX IF NOT EXISTS idx_web_reviews_id ON web_reviews(id DESC);
+    CREATE INDEX IF NOT EXISTS idx_web_reviews_website ON web_reviews(website_name);
+    CREATE INDEX IF NOT EXISTS idx_raasta_fn_order ON raasta_functions(order_num);
+    CREATE INDEX IF NOT EXISTS idx_raasta_fn_portal ON raasta_functions(portal_name);
+    CREATE INDEX IF NOT EXISTS idx_work_roles_order ON work_roles(order_num);
+    CREATE INDEX IF NOT EXISTS idx_work_roles_name ON work_roles(role_name);
   `);
 
   // Seed chat members & default group ONLY once in lifetime
